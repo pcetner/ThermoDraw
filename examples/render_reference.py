@@ -9,7 +9,9 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "src"))
 
 from thermodraw import save, symbols, theme  # noqa: E402
 
-OUT = pathlib.Path(__file__).resolve().parents[1] / "build"
+# `out/`, not `build/`: that one is setuptools' scratch directory, and the
+# stale copy of the package it leaves there is not something to write beside.
+OUT = pathlib.Path(__file__).resolve().parents[1] / "out"
 
 
 def main():

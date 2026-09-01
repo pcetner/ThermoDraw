@@ -18,7 +18,9 @@ screenshot and looking — five sequential steps, none of which a script or a
 model can do cheaply. This is one call whose output is text, and whose exit
 status is the answer.
 
-Exit codes: 0 clean, 1 findings, 2 the file could not be read or was invalid.
+Exit codes: 0 clean, 1 findings, 2 no answer — the file could not be read or
+was invalid. Only `check` can exit 1. 2 is also what argparse exits with for a
+bad command line; a script that needs to tell the two apart has stderr.
 
 Stdlib only. SVG and HTML; PNG needs a rasteriser, a rasteriser is a
 dependency, and the library has none.
@@ -32,9 +34,10 @@ from . import theme
 from ._check import ORDER, Finding, check
 from ._describe import describe
 from ._layout import layout
-from .model import Diagram, DiagramError
 from ._page import page
 from ._render import render
+from .io import DECLARATION, save
+from .model import Diagram, DiagramError
 
 
 def _die(message):
@@ -45,10 +48,17 @@ def _die(message):
 
 def _load(path):
     """The diagram at `path`, or exit 2 saying why."""
+    # `utf-8-sig`: PowerShell's Out-File and older Notepads write a BOM, and
+    # the file is no less UTF-8 for it. A file that is not UTF-8 at all used
+    # to escape as a traceback with exit 1 — the code reserved for "findings"
+    # — because UnicodeDecodeError is a ValueError, not an OSError.
     try:
-        text = pathlib.Path(path).read_text(encoding="utf-8")
+        text = pathlib.Path(path).read_text(encoding="utf-8-sig")
     except OSError as exc:
-        _die(f"cannot read {path}: {exc.strerror}")
+        _die(f"cannot read {path}: {exc.strerror or exc}")
+    except UnicodeDecodeError as exc:
+        _die(f"{path} is not UTF-8: {exc.reason} at byte {exc.start}. "
+             "Save it as UTF-8")
     try:
         return Diagram.from_json(text)
     except DiagramError as exc:
@@ -123,10 +133,7 @@ def do_page(args):
     if args.out == "-":
         _soften(sys.stdout).write(out)
         return 0
-    path = pathlib.Path(args.out
-                        or pathlib.Path(args.diagram).with_suffix(".html"))
-    with open(path, "w", encoding="utf-8", newline="\n") as f:
-        f.write(out)
+    path = save(out, args.out or pathlib.Path(args.diagram).with_suffix(".html"))
     print(f"{path} ({len(out):,} bytes)")
     return 0
 
@@ -136,12 +143,13 @@ def do_render(args):
     svg = render(layout(diagram), size=args.size or diagram.size)
     svg = theme.bake(svg, args.mode) if args.mode else theme.with_variables(svg)
 
+    # The same bytes to stdout as to a file. `save` is the library's one
+    # writer and adds the declaration; stdout gets it too. They used to
+    # differ, because this function typed the declaration out a second time.
     if args.out == "-":
-        _soften(sys.stdout).write(svg)
+        _soften(sys.stdout).write(DECLARATION + svg)
         return 0
-    path = pathlib.Path(args.out or pathlib.Path(args.diagram).with_suffix(".svg"))
-    with open(path, "w", encoding="utf-8", newline="\n") as f:
-        f.write('<?xml version="1.0" encoding="UTF-8"?>\n' + svg)
+    path = save(svg, args.out or pathlib.Path(args.diagram).with_suffix(".svg"))
     print(f"{path} ({len(svg):,} bytes)")
     return 0
 

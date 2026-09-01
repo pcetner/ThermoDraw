@@ -308,6 +308,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `layout` with a `TypeError` naming no source). Deliberately nothing else
   about an id: no code parses one out of a string any more, so there is
   nothing to defend.
+- **`theme.bake` rewrote `var(--x)` wherever it found it, labels included.**
+  A label reading "Sink var(--ink)" came out as "Sink #16181d". The
+  substitution now stops at `</style>`, which is the only place the library
+  writes one. Its `#000` fallback for a name it did not know is gone too: a
+  renamed palette key used to come out black-on-black in dark mode while the
+  custom-properties path stayed correct, and only a rendered pixel could tell.
+  Every variable `symbols.CSS` uses is now checked against every palette at
+  import, an unknown one raises with its name, and the `:root` block is
+  generated from `PALETTES` rather than kept as a third and fourth copy by
+  hand. (`--panel` is written `#ffffff` where it was `#fff`; nothing else
+  moves.)
+- **A file that was not UTF-8 crashed the CLI with exit 1**, which is the
+  code that means "findings". `UnicodeDecodeError` is a `ValueError`, not an
+  `OSError`, so `_load`'s handler never saw it — the exact failure `io.py`'s
+  docstring is written about, unhandled on the read side. It exits 2 now and
+  says which byte. Files are read as `utf-8-sig`, because PowerShell writes a
+  BOM and the file is no less UTF-8 for it.
+- **`render -o -` and `render -o file.svg` produced different bytes.** The
+  CLI wrote files itself, typing the XML declaration out a second time,
+  while `io.save` — "the one place in the library that writes a file" — was
+  bypassed. Both paths go through `save` now, and stdout gets the
+  declaration the file always did.
+- **`tools/subset_font.py` was not reproducible.** fontTools stamps
+  `head.modified` with the current time unless told not to, so two runs over
+  the same TTFs gave two different woff2s, in a repository that pins its
+  fonts and its width table to each other byte for byte. Both font tools
+  now say which release of IBM Plex they read, and the next regenerated
+  `_metrics.py` records it. The vendored fonts themselves are unchanged.
 - **The remedies were wrong more often than they were right.** Five agents
   drawing five thermal networks applied them literally, as instructed. Six of
   eighteen worked; three made the drawing worse. Every fault was in the change
@@ -528,6 +556,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   around it. The public names are unchanged: `from thermodraw import render`
   still yields the function. What breaks is `from thermodraw.render import
   PADDING`, which becomes `from thermodraw._render import PADDING`.
+- **`cairosvg` and `pillow` from the `dev` extra**, and the CI job that
+  existed to keep them installable. Neither was imported anywhere; the suite
+  rasterises nothing. The test matrix installs the extra directly now.
+- **Examples no longer write into `build/`**, which is setuptools' scratch
+  directory and holds a stale copy of the package. They write to `out/`.
 - **`core.LEAD`** — referenced nowhere. `symbols.LEAD = 20` is the one in use,
   and `core.LEAD = 34` shadowing it under the same name was the hazard rather
   than the waste.

@@ -63,7 +63,13 @@ def build(src, out):
         path = src / name
         if not path.exists():
             raise SystemExit(f"missing {path}")
-        font = TTFont(path)
+        # Reproducible: fontTools stamps `head.modified` with the current
+        # time by default, so two runs over the same TTFs gave two different
+        # woff2s — in a repository that pins its fonts and its width table to
+        # each other byte for byte.
+        font = TTFont(path, recalcTimestamp=False)
+        version = next((str(r) for r in font["name"].names if r.nameID == 5),
+                       "unknown version")
         options = subset.Options()
         options.flavor = "woff2"
         options.desubroutinize = True
@@ -86,7 +92,10 @@ def build(src, out):
         dest = out / f"thermodraw-sans-{'italic' if style == 'italic' else weight}.woff2"
         font.save(dest)
         made.append((dest, style, weight))
-        print(f"{name:28} -> {dest.name:34} {dest.stat().st_size:>7,} bytes")
+        # The source release is said out loud: the same family at another
+        # version can differ in a glyph or two, and that moves every golden.
+        print(f"{name:28} ({version}) -> {dest.name:34} "
+              f"{dest.stat().st_size:>7,} bytes")
     return made
 
 
@@ -100,4 +109,4 @@ def main(argv=None):
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

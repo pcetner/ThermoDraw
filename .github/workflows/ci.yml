@@ -29,13 +29,9 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Install
-        # Not the full dev extra: cairosvg needs system cairo and pillow needs
-        # wheels for every row of this matrix, and neither is imported by the
-        # suite. The `dev-extra` job below checks that the extra still resolves.
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e .
-          python -m pip install pytest fonttools brotli
+          python -m pip install -e ".[dev]"
 
       - name: Tests
         # No PYTHONUTF8 here on purpose. Windows' cp1252 default is one of the
@@ -52,23 +48,6 @@ jobs:
         # The freshness guards read; if one ever writes, the checkout is dirty
         # and the run should say so rather than pass quietly.
         run: git diff --exit-code
-
-  dev-extra:
-    name: dev extra resolves
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Install the full dev extra
-        # cairosvg, pillow, fonttools, brotli. The test matrix deliberately
-        # installs less; this job is what notices when the extra itself rots.
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install -e ".[dev]"
 
   build:
     name: wheel and sdist
