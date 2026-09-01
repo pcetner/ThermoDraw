@@ -131,6 +131,30 @@ def ellipsis(x, y, a, step=9, r=2.4):
             + '</g>')
 
 
+# How far apart the copies of a group fade, in milliseconds. A whole group
+# appearing at once reads as a dissolve; letting it run from the middle
+# outwards reads as the fan opening, and moves no geometry at all — which is
+# what keeps a toggle from disturbing anything else on the page.
+STAGGER_MS = 26
+
+
+def _variant_groups(variants):
+    """One group per form, with each copy wrapped so it can fade in turn."""
+    out = []
+    for (ref, variant, shown), bucket in variants.items():
+        copies = sorted(k for k in bucket if k is not None)
+        mid = (copies[-1] / 2) if copies else 0.0
+        body = []
+        for key, markup in bucket.items():
+            delay = 0 if key is None else round(abs(key - mid) * STAGGER_MS)
+            body.append(f'<g class="td-copy" style="--d:{delay}ms">'
+                        + "".join(markup) + "</g>")
+        out.append(f'<g id="{variant_id(ref, variant)}" class="td-form"'
+                   + ("" if shown else ' display="none"') + ">"
+                   + "".join(body) + "</g>")
+    return out
+
+
 def variant_id(ref, variant):
     """A stable, content-addressed id for one form of a repeated group.
 
@@ -223,13 +247,18 @@ def compose(placements, size=None, padding=PADDING):
         if p.variant is None:
             into.append(markup)
         else:
-            variants.setdefault((p.ref, p.variant, p.shown), []).append(markup)
+            bucket = variants.setdefault((p.ref, p.variant, p.shown), {})
+            bucket.setdefault(p.copy, []).append(markup)
 
     for p in placements:
         if p.element != "wire":
             continue
         for seg in _segments([tuple(q) for q in p.points]):
-            key = _key(seg)
+            # Keyed per form, not globally. Both forms of a repeated group
+            # share their trunks, and a global key gave the shared segment to
+            # whichever form was emitted first — leaving the other drawn with
+            # nothing joining it to its nodes.
+            key = (_key(seg), p.variant)
             if key in seen or seg[0] == seg[1]:
                 continue
             seen.add(key)
@@ -271,25 +300,31 @@ def compose(placements, size=None, padding=PADDING):
 
     for p in placements:
         lab = p.label
-        if lab is None or not p.shown:
+        if lab is None:
             continue
         if not (lab.user or lab.value or lab.name or lab.extra):
             continue
+        # The form that is not on show still gets its label drawn, into its
+        # own hidden group, so it is there to fade in. It is solved against
+        # the same occupancy — which holds the visible drawing — but it does
+        # not join `rects`, because `check` and `describe` speak about what a
+        # reader is actually looking at.
         report = {}
-        rect = S.annotate(p.at[0], p.at[1], p.angle, labels, user=lab.user,
+        into = labels if p.variant is None or p.shown else []
+        rect = S.annotate(p.at[0], p.at[1], p.angle, into, user=lab.user,
                           name=lab.name, value=lab.value,
                           extra=lab.extra,
                           half=lab.half, half_len=lab.half_len,
-                          side=lab.side, occupied=occupied, owner=p,
+                          side=lab.side,
+                          occupied=occupied if p.shown else None, owner=p,
                           report=report)
-        if rect:
+        if p.variant is not None and not p.shown:
+            bucket = variants.setdefault((p.ref, p.variant, p.shown), {})
+            bucket.setdefault(None, []).extend(into)
+        elif rect:
             rects.append(LabelRect(rect, owner=p, report=report))
 
-    groups = [f'<g id="{variant_id(ref, v)}"'
-              + ("" if shown else ' display="none"') + ">"
-              + "".join(body) + "</g>"
-              for (ref, v, shown), body in variants.items()]
-    parts = wires + glyphs + groups + nodes + labels
+    parts = wires + glyphs + _variant_groups(variants) + nodes + labels
     ink = extent(placements, rects, 0.0)
     box = ((0.0, 0.0, float(size[0]), float(size[1])) if size is not None
            else extent(placements, rects, padding))

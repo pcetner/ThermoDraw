@@ -86,11 +86,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   does no arithmetic, because values are strings and folding a count would
   mean parsing them as numbers.
 
-  Above three the drawing condenses to the outermost two and an ellipsis.
-  Keeping the *outermost* is what makes the toggle free: both forms occupy
-  exactly the same footprint, so swapping never re-fits the canvas and never
-  moves a label. A trunk runs either side before the fan begins, because lanes
-  radiating straight out of a node cross the space its own label wants — every
+  Above three the drawing condenses to two and an ellipsis, taking the room of
+  two rather than of sixteen. Each form is a complete, independently centred
+  drawing of the group — its own copies, its own wire, its own label — so the
+  condensed one is genuinely smaller rather than the full one with holes in
+  it. The canvas is sized for the larger form either way, which is what keeps
+  expanding a group from reflowing everything else on the page.
+
+  A trunk runs either side before the fan begins, because lanes radiating
+  straight out of a node cross the space its own label wants — every
   default-placed group reported `label-adrift` until that was added.
 
 - **`thermodraw page`, and `page(diagram)`.** The same SVG inline in a
@@ -99,9 +103,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and every rasteriser need a static file and none of them run script. SVG was
   never what blocked interactivity — a *file* is, and inline SVG in a page is
   fully scriptable by its host. Both forms ship in the markup with stable
-  content-addressed ids, so the control flips two `display` attributes rather
-  than rebuilding anything, and the script lives in the page and never in the
-  picture.
+  content-addressed ids, so the control swaps a class rather than rebuilding
+  anything, and the script lives in the page and never in the picture.
+
+  The copies fade in from the middle outwards, each with a delay `render` sets
+  from how far it sits off the centre line, so a fan appears to run open. It
+  is a fade and not a transform on purpose: a transform would drag the group's
+  wires off the nodes they connect to.
 
 - **`describe` prints the network.** Which nodes are joined to which, and by
   what — the thing three of five acceptance readers named as its single

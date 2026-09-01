@@ -207,11 +207,22 @@ find yourself doing that again, the occupancy list is the thing to reach for.
 - **An arrangement is never inferred.** Eight 0.0275 K/W paths are 0.0034 in
   parallel and 0.22 in series, a factor of sixty-four, so `count` without
   `arrangement` is a wrong answer waiting to be read. It is refused.
-- **The condensed form keeps the *outermost* copies.** That is the whole
-  reason a viewer can swap forms for free: both occupy exactly the same
-  footprint, so nothing re-fits, no label re-solves, and the checker's verdict
-  holds for whichever one is on show. Keeping the *first two* instead would
-  have made every toggle a re-layout.
+- **Each form is a complete drawing of the group, independently centred.**
+  Not the full one with holes in it: a group of sixteen condensed to two
+  should take the room of two. Each carries its own copies, its own wire and
+  its own label, solved against its own extent, so a condensed group's text
+  sits against what it shows.
+- **The canvas is sized for the larger form.** So a condensed group leaves the
+  room its expansion needs, and expanding it moves that group and nothing
+  else. Sizing to the shown form instead would have made every toggle reflow
+  the whole page, which is a far worse trade than some reserved whitespace.
+- **The motion is a staggered fade, not a transform.** A transform on the
+  group would drag the wires off the nodes they connect to. `render` gives
+  each copy a delay from how far it sits off the centre line, so the fan runs
+  open from the middle outwards while no geometry moves at all.
+- **Wire dedup is keyed per form.** Both forms share their trunks, and a
+  global key handed the shared segment to whichever was emitted first —
+  leaving the other drawn with nothing joining it to its nodes.
 - **A trunk before the fan.** Lanes radiating straight out of a node cross the
   space that node's own label wants, so every default-placed parallel group
   reported `label-adrift`. Forty-four units of clean wire either side fixed
