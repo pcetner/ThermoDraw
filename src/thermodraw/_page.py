@@ -22,10 +22,8 @@ picture it draws, and half its documented targets could not run one anyway.
 """
 import html
 
-from .layout import layout as _layout
-# By name, not `from . import render`: the package rebinds `thermodraw.render`
-# to the render *function*, so importing the module by attribute yields that.
-from .render import PADDING, render, variant_id
+from ._layout import layout as _layout
+from ._render import PADDING, render, variant_id
 from .theme import _VARS, faces_used, font_face
 
 CSS = """

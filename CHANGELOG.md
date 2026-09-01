@@ -475,6 +475,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+- **The `thermodraw.layout`, `.render`, `.check`, `.describe` and `.page`
+  submodules**, renamed `_layout`, `_render`, `_check`, `_describe`, `_page`.
+  `__init__` exported a function under each of those five names, so
+  `import thermodraw.render as r` silently bound the *function* and
+  `r.PADDING` failed a line later — and four modules carried a comment routing
+  around it. The public names are unchanged: `from thermodraw import render`
+  still yields the function. What breaks is `from thermodraw.render import
+  PADDING`, which becomes `from thermodraw._render import PADDING`.
 - **`core.LEAD`** — referenced nowhere. `symbols.LEAD = 20` is the one in use,
   and `core.LEAD = 34` shadowing it under the same name was the hazard rather
   than the waste.

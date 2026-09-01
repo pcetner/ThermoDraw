@@ -13,9 +13,9 @@ import pytest
 
 from thermodraw import (Diagram, DiagramBuilder, DiagramError, check, core,
                         layout)
-from thermodraw.check import (_inside, _obb_gap, _segment_rect_gap, cycles,
+from thermodraw._check import (_inside, _obb_gap, _segment_rect_gap, cycles,
                               wire_graph)
-from thermodraw.render import LabelRect, compose
+from thermodraw._render import LabelRect, compose
 
 HERO = pathlib.Path(__file__).resolve().parents[1] / "examples" / "hero.json"
 
@@ -434,7 +434,7 @@ class TestBreakNode:
         """
         import xml.etree.ElementTree as ET
 
-        from thermodraw.layout import BREAK_GAP, BREAK_WALL, BY_KEY
+        from thermodraw._layout import BREAK_GAP, BREAK_WALL, BY_KEY
 
         glyph = ET.fromstring("<svg>" + BY_KEY["break"].draw(0) + "</svg>")
         half, depth = BREAK_WALL
@@ -488,7 +488,7 @@ class TestASourceGivenNoPlace:
 
     def test_the_arrow_kinds_did_not_move(self):
         """Nothing that was already right is disturbed to fix `flux`."""
-        from thermodraw.layout import BY_KEY, _source_offset
+        from thermodraw._layout import BY_KEY, _source_offset
         for kind in ("diss", "flow"):
             sym = BY_KEY[kind]
             assert _source_offset(sym) == sym.half_len + 5.5
@@ -530,7 +530,7 @@ class TestTheRemedyNamesTheField:
 
     def test_two_labels_are_moved_apart_with_side(self):
         """The pair case, which needs no culprit to be named."""
-        from thermodraw.check import _remedy
+        from thermodraw._check import _remedy
         assert _remedy(None, pair=True) == "set `side` on one of the two"
 
     def test_side_is_not_offered_once_the_solver_has_tried_both(self):
@@ -552,8 +552,8 @@ class TestTheRemedyNamesTheField:
 
     def test_every_remedy_it_can_write_is_ascii(self):
         """Fixed text goes to a cp1252 console. An em dash is a crash there."""
-        from thermodraw.check import _remedy
-        from thermodraw.layout import Placement
+        from thermodraw._check import _remedy
+        from thermodraw._layout import Placement
         for element in ("wire", "symbol", "ground", "node"):
             for ref in ("branch 0 a->b", "source 0 -> a", "node 'a'"):
                 p = Placement(element, ref=ref)
@@ -573,15 +573,15 @@ class TestTheRemedyDoesNotGiveAdviceThatCannotWork:
     def test_a_source_is_never_told_to_move_a_via(self):
         """A source's lead is a wire carrying the source's ref, and a source
         has no `via` at all — the validator refuses the field outright."""
-        from thermodraw.check import _remedy
-        from thermodraw.layout import Placement
+        from thermodraw._check import _remedy
+        from thermodraw._layout import Placement
         text = _remedy(Placement("wire", ref="source 1 -> panel"))
         assert "`via`" not in text
         assert "move source 1 -> panel with `at`" in text
 
     def test_a_branch_is_still_told_to_move_a_via(self):
-        from thermodraw.check import _remedy
-        from thermodraw.layout import Placement
+        from thermodraw._check import _remedy
+        from thermodraw._layout import Placement
         assert "`via`" in _remedy(Placement("wire", ref="branch 0 a->b"))
 
     @pytest.mark.parametrize("ref", ["branch 0 a->b", "source 0 -> a"])
@@ -590,21 +590,21 @@ class TestTheRemedyDoesNotGiveAdviceThatCannotWork:
         the direction taken from the wire", so following this advice laid a
         conduction box diagonally across its own wire — and the checker then
         passed the result."""
-        from thermodraw.check import _remedy
-        from thermodraw.layout import Placement
+        from thermodraw._check import _remedy
+        from thermodraw._layout import Placement
         owner = Placement("symbol", ref=ref)
         assert "`angle`" not in _remedy(None, owner, free=())
 
     def test_angle_is_offered_for_a_node_with_nowhere_left(self):
         """Which is the one element where it means what the remedy says."""
-        from thermodraw.check import _remedy
-        from thermodraw.layout import Placement
+        from thermodraw._check import _remedy
+        from thermodraw._layout import Placement
         text = _remedy(None, Placement("node", ref="node 'a'"), free=())
         assert "`angle`" in text and "label frame" in text
 
     def test_only_sides_the_occupancy_says_are_free_are_named(self):
-        from thermodraw.check import _remedy
-        from thermodraw.layout import Placement
+        from thermodraw._check import _remedy
+        from thermodraw._layout import Placement
         text = _remedy(None, Placement("node", ref="node 'a'"),
                        free=("up", "left"))
         assert 'set `side` to "up" or "left"' in text
@@ -763,8 +763,8 @@ class TestABoundaryNodesOwnLabel:
     @pytest.mark.parametrize("kind,gap,push",
                              [("fixed", 4.0, 0.0), ("break", 0.0, 8.0)])
     def test_the_label_lands_below_the_wall_not_on_it(self, kind, gap, push):
-        from thermodraw.check import ADRIFT
-        from thermodraw.render import bounds
+        from thermodraw._check import ADRIFT
+        from thermodraw._render import bounds
         rect, wall = self.wall_and_label(kind, "down")
         _, top, _, _ = rect
         assert top - bounds(wall)[3] == pytest.approx(gap, abs=0.2)
@@ -824,7 +824,7 @@ class TestRepeatedBranches:
     def test_the_condensed_form_is_smaller(self):
         """The point of condensing: sixteen shown as two should take the room
         of two, not of sixteen."""
-        from thermodraw.render import bounds
+        from thermodraw._render import bounds
 
         def height(variant):
             box = [bounds(p) for p in layout(self.group(16))
@@ -836,7 +836,7 @@ class TestRepeatedBranches:
     def test_the_canvas_still_fits_the_larger_form(self):
         """Which is what keeps the motion local. Expanding a group must not
         reflow everything else on the page, so the room is already there."""
-        from thermodraw.render import bounds
+        from thermodraw._render import bounds
         placements = layout(self.group(16))
         box = compose(placements).box
         for p in placements:
@@ -853,14 +853,14 @@ class TestRepeatedBranches:
 
     def test_both_forms_ship_with_stable_ids(self):
         from thermodraw import render
-        from thermodraw.render import variant_id
+        from thermodraw._render import variant_id
         svg = render(layout(self.group(16)))
         full = variant_id("branch 0 a->b", "full")
         assert f'<g id="{full}" class="td-form" display="none">' in svg
         assert f'<g id="{variant_id("branch 0 a->b", "condensed")}"'                ' class="td-form">' in svg
 
     def test_an_id_does_not_move_when_the_diagram_does(self):
-        from thermodraw.render import variant_id
+        from thermodraw._render import variant_id
         assert variant_id("branch 0 a->b", "full") ==             variant_id("branch 0 a->b", "full")
         assert variant_id("branch 0 a->b", "full") !=             variant_id("branch 1 a->b", "full")
 
@@ -884,7 +884,7 @@ class TestRepeatedBranches:
         assert len([r for r in rects if r.ref == "branch 0 a->b"]) == 1
 
     def test_the_label_says_how_many_and_how_they_combine(self):
-        from thermodraw.describe import describe
+        from thermodraw._describe import describe
         says = {l.ref: l.says for l in describe(self.group(8)).lines}
         assert "8 in parallel" in says["branch 0 a->b"]
         series = {l.ref: l.says
@@ -918,7 +918,7 @@ class TestPhaseNode:
 
     def test_the_glyph_and_the_pipeline_use_the_same_numbers(self):
         from thermodraw import render as _r, symbols as _s
-        from thermodraw.render import PHASE_HALF, PHASE_Y1, PHASE_Y2
+        from thermodraw._render import PHASE_HALF, PHASE_Y1, PHASE_Y2
         assert (PHASE_HALF, PHASE_Y1, PHASE_Y2) ==             (_s.PHASE_HALF, _s.PHASE_Y1, _s.PHASE_Y2)
         glyph = _s.g_phase_node(0)
         for dy in (PHASE_Y1, PHASE_Y2):
@@ -988,7 +988,7 @@ class TestBreakBranch:
 
     def test_the_node_kind_and_the_branch_kind_are_different_symbols(self):
         """One namespace, two positions. The collision is the hazard."""
-        from thermodraw.layout import BRANCH_SYM, BY_KEY
+        from thermodraw._layout import BRANCH_SYM, BY_KEY
         assert BY_KEY["break"] is not BY_KEY[BRANCH_SYM["break"]]
 
 
@@ -1253,7 +1253,7 @@ class TestTheReport:
         assert codes(builder.check()) == codes(check(builder))
 
     def test_findings_come_out_worst_first(self):
-        from thermodraw.check import ORDER
+        from thermodraw._check import ORDER
         found = check(parallel_pair(40), size=(300, 200)).findings
         assert [ORDER[f.severity] for f in found] == \
             sorted(ORDER[f.severity] for f in found)

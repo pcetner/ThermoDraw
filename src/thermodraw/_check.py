@@ -33,10 +33,8 @@ from dataclasses import dataclass, field
 from typing import List, Optional, Tuple
 
 from . import core
-from .layout import layout as _layout
-# By name, not `from . import render`: the package rebinds `thermodraw.render`
-# to the render *function*, so importing the module by attribute yields that.
-from .render import PADDING, _wall_box, compose
+from ._layout import layout as _layout
+from ._render import PADDING, _wall_box, compose
 
 # How far past its own solved clearance a label may be pushed before it is
 # reported. `core.clear_offset` solves the tight placement; the push loop only
