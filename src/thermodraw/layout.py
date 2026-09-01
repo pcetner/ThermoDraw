@@ -181,7 +181,6 @@ TRUNK = 64        # clean wire out of a node before the riser, so a
 PITCH_PAD = 14    # clear space between adjacent parallel lanes
 SERIES_PAD = 18   # clear space between symbols set end to end
 ELLIPSIS_STEP = 9
-ELIDED_LEN = 84   # a stub the width of a symbol box, so it reads as a lane
 
 
 def _lanes(a, b, offsets):
@@ -257,12 +256,9 @@ def _form(b, ref, sym, source, target, centre, angle, label, n, variant,
             out.append(Placement("symbol", at=c, angle=angle, symbol=sym,
                                  ref=ref, copy=k, **tag))
         reach = (abs(offsets[0]) + sym.half_len, sym.half)
-        # Across the wire and spaced along it: the copies a series group
-        # drops sit between the two it shows, so the mark crosses the run.
-        mark = (angle + 90, 2 * abs(offsets[0]), 2 * sym.half + 10)
     else:
         pitch = 2 * sym.half + PITCH_PAD
-        offsets = [-pitch, pitch] if dots else _centred(n, pitch)
+        offsets = [-pitch / 2, pitch / 2] if dots else _centred(n, pitch)
         for k, (route, c) in enumerate(_lanes(source, target, offsets)):
             for run in _split(route, 2, c, sym.half_len):
                 out.append(Placement("wire", points=run, ref=ref, copy=k,
@@ -270,13 +266,14 @@ def _form(b, ref, sym, source, target, centre, angle, label, n, variant,
             out.append(Placement("symbol", at=c, angle=angle, symbol=sym,
                                  ref=ref, copy=k, **tag))
         reach = (sym.half_len, abs(offsets[0]) + sym.half)
-        # Along the lanes and stacked across them, at the lane pitch, so
-        # they read as more lanes rather than as punctuation.
-        mark = (angle, 2 * abs(offsets[0]), ELIDED_LEN)
 
     if dots:
-        out.append(Placement("elided", at=centre, angle=mark[0], ref=ref,
-                             wall=(mark[1], mark[2]), **tag))
+        # Along the branch either way. An ellipsis means "and more of these"
+        # in the direction it runs, so it reads as an omission rather than as
+        # a decoration — which is what stacking it across the lanes looked
+        # like.
+        out.append(Placement("ellipsis", at=centre, angle=angle, ref=ref,
+                             **tag))
 
     # Each form carries its own label, solved against its own extent, so a
     # condensed group's text sits against the two copies it shows rather than

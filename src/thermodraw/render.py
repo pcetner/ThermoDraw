@@ -123,28 +123,19 @@ def _key(seg):
     return (a, b) if a <= b else (b, a)
 
 
-# The mark standing in for the copies a condensed group drops. Three dots
-# were too quiet to read as "there are more of these here": short lane stubs
-# at the lane pitch say it in the drawing's own language, because that is
-# what the dropped copies would look like.
-ELIDED_LEN = 84
-ELIDED_MARKS = 3
+# The mark standing in for the copies a condensed group drops. Three dots,
+# reading along the branch rather than stacked across it: an ellipsis means
+# "and more of these" in the direction it runs, and stacking it perpendicular
+# made it read as a decoration rather than as an omission.
+ELLIPSIS_STEP = 9
+ELLIPSIS_R = 2.4
 
 
-def elided(x, y, a, span, length, n=ELIDED_MARKS):
-    """Short stubs standing in for the copies a condensed group is not drawing.
-
-    Drawn in the same stroke as a lane, at the lane pitch, so they read as
-    more of the same rather than as punctuation. Three dots were too quiet:
-    a reader has to be told there is a branch here, in the drawing's own
-    language.
-    """
-    half = length / 2
-    step = span / (n + 1)
+def ellipsis(x, y, a, step=ELLIPSIS_STEP, r=ELLIPSIS_R):
+    """Three dots where the copies a condensed group drops used to be."""
     return (f'<g transform="{S.xf(x, y, a)}">'
-            + "".join(f'<line class="w" x1="{-half}" y1="{d * step:.1f}" '
-                      f'x2="{half}" y2="{d * step:.1f}"/>'
-                      for d in range(-(n // 2), n - n // 2))
+            + "".join(f'<circle class="fillsym" cx="{d * step}" cy="0" '
+                      f'r="{r}"/>' for d in (-1, 0, 1))
             + '</g>')
 
 
@@ -236,9 +227,9 @@ def bounds(p):
         return S.box_bounds(centre, half, angle)
     if p.element == "phase":
         return S.box_bounds(*_phase_box(p))
-    if p.element == "elided":
-        span, length = p.wall
-        return S.box_bounds(p.at, (length / 2, span / 2), p.angle)
+    if p.element == "ellipsis":
+        reach = ELLIPSIS_STEP + ELLIPSIS_R
+        return S.box_bounds(p.at, (reach, ELLIPSIS_R), p.angle)
     if p.element == "anchor":
         # A label anchor draws nothing; the copies it speaks for are already
         # measured, and counting it again would pad the canvas.
@@ -291,8 +282,8 @@ def compose(placements, size=None, padding=PADDING):
             glyphs.append(ground(p.at[0], p.at[1], p.angle, *_wall(p)))
         elif p.element == "phase":
             glyphs.append(phase_mark(p.at[0], p.at[1]))
-        elif p.element == "elided":
-            emit(p, elided(p.at[0], p.at[1], p.angle, *p.wall), glyphs)
+        elif p.element == "ellipsis":
+            emit(p, ellipsis(p.at[0], p.at[1], p.angle), glyphs)
         elif p.element == "node":
             nodes.append(node(p.at[0], p.at[1], p.radius))
 
