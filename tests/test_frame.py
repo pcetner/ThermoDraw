@@ -251,11 +251,18 @@ def test_no_symbol_draws_outside_what_it_reserves(sym):
 @pytest.mark.parametrize("sym", symbols.SYMBOLS, ids=lambda s: s.key)
 def test_reach_is_set_where_and_only_where_it_is_needed(sym):
     """`reach` exists to correct `half`/`half_len`, not to restate them."""
-    if sym.reach is None:
-        return
     clearance = (sym.half_len, sym.half)
+    ink = drawn_ink(sym)
+    if sym.reach is None:
+        # The "only where" half: no reach means the ink stays inside the
+        # clearance, or the canvas would be clipping it. This branch used to
+        # `return`, so three symbols reported green having asserted nothing.
+        assert all(i <= c + 0.01 for i, c in zip(ink, clearance)), (
+            f"{sym.key} draws {ink} past its clearance {clearance} with no "
+            "reach to say so")
+        return
     assert sym.reach != clearance, "reach repeats the clearance; drop it"
-    assert drawn_ink(sym) > clearance or sym.reach > clearance
+    assert ink > clearance or sym.reach > clearance
 
 
 @pytest.mark.parametrize("angle", [0, 30, 45, 90, 135, 180, 270])

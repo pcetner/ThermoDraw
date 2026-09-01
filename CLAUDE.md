@@ -428,6 +428,14 @@ every changed scene in its message, and a sentence saying why each element
 moved.** "0 elements moved" is checkable in five seconds; a 13KB single-line
 diff is not. Land the instrument before the change, not after.
 
+CI also rewrites every golden from current code and diffs the tree.
+`--update-goldens` writes and then *skips*, so on its own it can never fail,
+and for a while nothing checked that a golden was reproducible at all — the
+font subsetter was not, and a resubset would have moved all of them with no
+job to say so. The same job pattern re-renders the gallery and the README
+images: two gallery renders had gone stale, and the gallery is the evidence
+this file keeps citing.
+
 ## Known sharp edges
 
 - **`LabelRect` has no `__slots__`.** It is a `tuple` subclass so that it

@@ -29,6 +29,53 @@ def test_every_symbol_appears_on_the_page():
         assert sym.note in page, f"{sym.key} note missing"
 
 
+class TestTheSchema:
+    """docs/schema.md is prose with no generator, so it cannot be diffed
+    against the code the way the two HTML pages are. What can be pinned is
+    the vocabulary: every field and every kind the model has appears on the
+    page, and every kind the page lists exists. A documented kind the code
+    refuses is the drift this catches. A sentence with a field's rules
+    backwards is not — and one sat there for a while."""
+
+    TEXT = (ROOT / "docs" / "schema.md").read_text(encoding="utf-8")
+    TOKENS = set(re.findall(r"`([^`\n]+)`", TEXT))
+
+    def test_every_field_is_named(self):
+        from dataclasses import fields
+
+        from thermodraw import model
+        json_name = {"source": "from", "target": "to"}
+        for cls in (model.Node, model.Branch, model.Source, model.Rail):
+            for f in fields(cls):
+                name = json_name.get(f.name, f.name)
+                assert name in self.TOKENS, \
+                    f"{cls.__name__}.{name} is not in schema.md"
+
+    def test_every_kind_and_quantity_is_named(self):
+        from thermodraw import model
+        kinds = model.NODE_KINDS | model.BRANCH_KINDS | model.SOURCE_KINDS
+        for kind in kinds:
+            assert kind in self.TOKENS, f"kind {kind!r} is not in schema.md"
+        for quantity in set(model.QUANTITY.values()):
+            assert quantity in self.TOKENS, \
+                f"quantity {quantity!r} is not in schema.md"
+
+    def test_no_kind_on_the_page_is_unknown_to_the_code(self):
+        from thermodraw import model
+        rows = [line for line in self.TEXT.splitlines()
+                if line.startswith("| `kind` |")]
+        assert len(rows) == 2, "a node row and a branch row"
+        listed = set()
+        for row in rows:
+            listed |= set(re.findall(r"`([a-z]+)`", row.split("|", 2)[2]))
+        known = model.NODE_KINDS | model.BRANCH_KINDS
+        assert listed <= known, listed - known
+        # the source table: one row per kind, its unit in the fourth column
+        sources = set(re.findall(
+            r"^\| `([a-z]+)` \| [^|]* \| `[^`]+` \| `units", self.TEXT, re.M))
+        assert sources == model.SOURCE_KINDS
+
+
 class TestTheDictionary:
     """Dictionary.html is the page for someone who has not drawn one of these
     before: every symbol, what it means, and when to reach for it.

@@ -19,7 +19,7 @@ jobs:
         # 3.9 is the declared floor in pyproject.toml, and the only thing that
         # actually verifies it. Windows is here because the library emits "→"
         # and "″", and a default-encoding write on Windows is cp1252.
-        python-version: ["3.9", "3.10", "3.11", "3.12"]
+        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
 
     steps:
       - uses: actions/checkout@v4
@@ -44,10 +44,91 @@ jobs:
         # in a test summary.
         run: python tools/gen_docs.py --check
 
+      - name: Dictionary is a fresh render
+        # Same reason. It was only inside the test run, so a stale
+        # Dictionary.html was buried in a summary while the reference sheet
+        # got a named step — and the dictionary is the page a reader opens.
+        run: python tools/gen_dictionary.py --check
+
       - name: Nothing was regenerated in place
         # The freshness guards read; if one ever writes, the checkout is dirty
         # and the run should say so rather than pass quietly.
         run: git diff --exit-code
+
+  goldens:
+    name: goldens regenerate from current code
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+
+      - name: Rewrite every golden from current output
+        # `--update-goldens` writes and then skips, so on its own it can never
+        # fail. The diff below is the assertion: a golden that the code cannot
+        # reproduce is exactly the drift goldens exist to detect, and until
+        # this job nothing ever tried.
+        run: python -m pytest -q tests/test_golden.py --update-goldens
+
+      - name: They match what is committed
+        run: git diff --exit-code -- tests/golden
+
+  assets:
+    name: gallery and README images are fresh renders
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+
+      - name: Re-render
+        # The gallery is the project's central evidence, and two of its five
+        # renders had gone stale with nothing to say so. Same guard for the
+        # six README images.
+        run: |
+          python examples/render_demo.py
+          for f in examples/gallery/*/*.json; do
+            thermodraw render "$f" -o "${f%.json}.svg"
+          done
+
+      - name: They match what is committed
+        run: git diff --exit-code -- docs/assets examples/gallery
+
+  types:
+    name: the py.typed promise holds
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+
+      - name: mypy
+        # The wheel ships py.typed and the build job asserts it is there;
+        # nothing ever checked the types behind it. Default strictness, which
+        # is clean. `--check-untyped-defs` is the next step and finds 91 more
+        # today, most of them the `**who` keyword spreads in `_layout.py`.
+        run: python -m mypy src/thermodraw
 
   build:
     name: wheel and sdist

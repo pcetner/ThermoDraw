@@ -167,8 +167,11 @@ def test_a_diagram_must_be_an_object():
 
 
 # ------------------------------------------------------------- the promise
-def test_nothing_malformed_reaches_the_renderer():
-    """Whatever validate accepts, layout and render must survive."""
+def test_bad_input_is_refused_before_layout_sees_it():
+    """Every one of these is refused by `Diagram.from_dict` on its own. An
+    earlier version wrapped each in `render(layout(...))` and claimed to show
+    the renderer survives — but nothing ever reached the renderer, so it
+    showed that `from_dict` raises, which the tests above already do."""
     bad = [
         {"nodes": [{"id": "a", "at": {"x": 0}}]},
         {"nodes": [{"id": "a", "at": ["0", "0"]}]},
@@ -182,4 +185,23 @@ def test_nothing_malformed_reaches_the_renderer():
     ]
     for data in bad:
         with pytest.raises(DiagramError):
-            render(layout(Diagram.from_dict(data)))
+            Diagram.from_dict(data)
+
+
+@pytest.mark.parametrize("data", [
+    {"nodes": []},
+    {"nodes": [{"id": "a", "at": [0, 0]}]},
+    {"nodes": list(PAIR)},
+    {"nodes": list(PAIR),
+     "branches": [{"from": "a", "to": "b", "kind": "break"}]},
+    {"nodes": [{"id": "a", "at": [0, 0], "kind": "corner"},
+               {"id": "b", "at": [220, 0]}],
+     "branches": [{"from": "a", "to": "b", "kind": "cond"}]},
+    {"nodes": list(PAIR), "units": {"P": "W"},
+     "sources": [{"to": "a", "kind": "diss", "value": "5"}]},
+], ids=["empty", "one node", "two nodes, nothing between",
+        "a break with no label", "a corner", "a source and no branch"])
+def test_whatever_validate_accepts_renders(data):
+    """The actual promise: an accepted diagram survives layout and render,
+    however little is in it."""
+    render(layout(Diagram.from_dict(data)))
