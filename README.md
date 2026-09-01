@@ -46,26 +46,45 @@ pip install -e .
 
 ## Use
 
+A diagram is data. Write it, or have a model write it, and render it:
+
 ```python
-from thermodraw import save, symbols, theme
+from thermodraw import Diagram, layout, render, save, theme
 
-svg = symbols.diagonal_demo()
+d = Diagram.from_json(open("hero.json").read())
+svg = render(layout(d))
 
-save(theme.with_variables(svg), "web.svg")    # follows the reader's light/dark
-save(theme.bake(svg, "light"), "word.svg")    # colours resolved for Word
+save(theme.with_variables(svg), "web.svg")   # follows the reader's light/dark
+save(theme.bake(svg, "light"), "word.svg")   # colours and font resolved
+```
+
+Or build it in Python:
+
+```python
+from thermodraw import DiagramBuilder
+
+d = (DiagramBuilder(R="K/W", T="°C", P="W")
+     .node("j", "Junction", 112, at=(200, 150), sub="j")
+     .node("c", "Case", 78, at=(424, 150), sub="c")
+     .branch("j", "c", "cond", "Die attach", "0.35")
+     .source("j", "diss", "Switching loss", 45, sub="d"))
+open("out.svg", "w", encoding="utf-8").write(d.svg("light"))
 ```
 
 ```bash
 python examples/render_demo.py       # the three images above
 python examples/render_reference.py  # every symbol at every 45°
+pytest                               # 100 tests
 ```
 
 ## More
 
+[`docs/schema.md`](docs/schema.md) — the whole format, written to be pasted into a prompt.
 [`docs/symbol-reference.html`](docs/symbol-reference.html) — every symbol at eight orientations, with the reasoning.
 [`CLAUDE.md`](CLAUDE.md) — the design record.
 
-Alpha: the symbol vocabulary is settled, the network layer is not built yet.
-Symbols are placed at coordinates you supply.
+Alpha. The symbol vocabulary is settled and labels, wire runs and canvas size
+are solved for you. Node coordinates are still yours to supply; solving for
+those is the network layer, which changes one stage and nothing in the schema.
 
-MIT.
+MIT. The bundled subset of IBM Plex Sans is [OFL-1.1](src/thermodraw/fonts/OFL.txt).

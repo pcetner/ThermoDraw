@@ -257,7 +257,7 @@ SYMBOLS = [
 ]
 
 
-def strip(sym):
+def strip(sym, fluid=False):
     body = []
     for i, a in enumerate(ANGLES):
         cx, cy = CW * i + CW / 2, CH / 2 - 8
@@ -270,14 +270,14 @@ def strip(sym):
         if i:
             body.append(f'<line class="tick" x1="{CW*i}" y1="10" '
                         f'x2="{CW*i}" y2="{CH-20}"/>')
-    return canvas(CW * len(ANGLES), CH, "".join(body))
+    return canvas(CW * len(ANGLES), CH, "".join(body), fluid)
 
 
 REGION_SLOTS = ["top left", "top", "top right", "left", "centre", "right",
                 "bottom left", "bottom", "bottom right"]
 
 
-def region_grid():
+def region_grid(fluid=False):
     cw, ch, cols, pad = 232, 158, 3, 11
     rows = (len(REGION_SLOTS) + cols - 1) // cols
     body = []
@@ -300,10 +300,10 @@ def region_grid():
             f'<text class="reg-lbl" x="{tx:.1f}" y="{ty:.1f}" text-anchor="{anch}">Heatsink</text>',
             f'<text class="ang" x="{ox+cw/2}" y="{oy+ch-12}" text-anchor="middle">{nm}</text>',
         ]
-    return canvas(cw * cols, ch * rows, "".join(body))
+    return canvas(cw * cols, ch * rows, "".join(body), fluid)
 
 
-def diagonal_demo():
+def diagonal_demo(fluid=False):
     W, H = 800, 320
     body = []
     pts = [(80, 252), (268, 156), (452, 156), (616, 60)]
@@ -326,4 +326,4 @@ def diagonal_demo():
         body.append(f'<circle class="node-open" cx="{x}" cy="{y}" r="5.5"/>')
         S.annotate(x, y, 0, body, user=u, name=n, value=None,
                    half=5.5, half_len=5.5)
-    return canvas(W, H, "".join(body))
+    return canvas(W, H, "".join(body), fluid)

@@ -137,3 +137,18 @@ def test_canvas_sizes_itself_to_its_contents():
 def test_explicit_size_still_works():
     svg = render(layout(hero()), size=(1060, 470))
     assert 'viewBox="0 0 1060 470"' in svg
+
+
+def test_a_value_without_a_unit_is_refused():
+    """Units are fixed per diagram; a bare number is the failure to catch."""
+    with pytest.raises(DiagramError, match="render bare"):
+        Diagram.from_dict({
+            "units": {"T": "°C"},
+            "nodes": [{"id": "a", "at": [0, 0]}, {"id": "b", "at": [220, 0]}],
+            "branches": [{"from": "a", "to": "b", "kind": "cond",
+                          "value": "0.35"}]})
+
+
+def test_unknown_quantity_in_units_is_refused():
+    with pytest.raises(DiagramError, match="not a quantity"):
+        Diagram.from_dict({"units": {"Z": "m"}, "nodes": []})
