@@ -399,6 +399,57 @@ class TestTheRemedyNamesTheField:
         assert _remedy(None, pair=True).isascii()
 
 
+class TestABoundaryNodesOwnLabel:
+    """`side: "down"` on a boundary node aims the label at its own wall.
+
+    An acceptance reader called that a trap and avoided it. It is not one:
+    a boundary node's `half` is a clearance number, and it already reserves
+    the wall's depth. The page now says so, so this pins it.
+    """
+
+    @staticmethod
+    def wall_and_label(kind, side):
+        b = (DiagramBuilder(T="C", R="K/W")
+             .node("a", "Hot", "120", at=(0, 0))
+             .node("b", "Cold", "40", kind=kind, at=(300, 0), side=side)
+             .branch("a", "b", "cond", "Slab", "0.35"))
+        placements = layout(b.build())
+        scene = compose(placements)
+        rect = [r for r in scene.rects if r.ref == "node 'b'"][0]
+        wall = [p for p in placements if p.element == "ground"][0]
+        return rect, wall
+
+    # The two kinds differ, and the difference is worth pinning. A `fixed`
+    # node's half of 22 already covers a wall that ends at 25, so the label is
+    # solved clear of it and never pushed. A `break`'s wall stands further
+    # off and ends at 37, so the solver pushes the label the last 8 units.
+    #
+    # 8 is exactly ADRIFT, and the finding triggers on strictly more, so this
+    # sits one hair under the threshold and is reported by nothing. That is
+    # the right answer — it is legible, and a rule that fired here would fire
+    # on every break node anyone draws — but it is an accident of two
+    # constants, so it is written down rather than left to be rediscovered.
+    @pytest.mark.parametrize("kind,gap,push",
+                             [("fixed", 4.0, 0.0), ("break", 0.0, 8.0)])
+    def test_the_label_lands_below_the_wall_not_on_it(self, kind, gap, push):
+        from thermodraw.check import ADRIFT
+        from thermodraw.render import bounds
+        rect, wall = self.wall_and_label(kind, "down")
+        _, top, _, _ = rect
+        assert top - bounds(wall)[3] == pytest.approx(gap, abs=0.2)
+        assert rect.clear, "printed over the wall"
+        assert rect.used - rect.solved == pytest.approx(push, abs=0.2)
+        assert rect.used - rect.solved <= ADRIFT, "now reported, so document it"
+
+    @pytest.mark.parametrize("kind", ["fixed", "break"])
+    def test_and_the_checker_agrees(self, kind):
+        b = (DiagramBuilder(T="C", R="K/W")
+             .node("a", "Hot", "120", at=(0, 0))
+             .node("b", "Cold", "40", kind=kind, at=(300, 0), side="down")
+             .branch("a", "b", "cond", "Slab", "0.35"))
+        assert not codes(check(b))
+
+
 class TestBreakBranch:
     """A break you can connect something to.
 

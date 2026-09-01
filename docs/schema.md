@@ -33,6 +33,12 @@ The quantities are `R`, `C`, `T`, `P`, `q` and `q″`. `radin` and `flow` are
 both powers and share `q`; a heat **flux** is per unit area, so it is measured
 in something else and reads `q″`.
 
+That last key is the letter `q` followed by **U+2033 DOUBLE PRIME** (″). It is
+one character, and it is not two apostrophes, not two quote marks, and not
+`"`. Getting it wrong is a JSON syntax error at best and an unknown-quantity
+error at worst; the error lists the keys it accepts, printing the character
+as `q\u2033` where the terminal cannot show it.
+
 Every `value` is a **string**, not a number: you get exactly the digits you
 typed, so `"2.10"` stays `2.10` and does not become `2.1`.
 
@@ -71,10 +77,17 @@ position.
 
 The wall is always drawn flat below the node, at every orientation. `angle`
 does not turn it, and neither does anything else; it decides which way the
-label goes and nothing more. The hero's `"angle": 90` on its ambient node
-sends that label out to the right instead of straight up, where the branch
-arriving from the left would have crowded it. Reach for it when a label wants
-to be somewhere `side` alone cannot put it.
+label goes and nothing more. `"side": "down"` on a boundary node aims the
+label at that node's own wall, and never prints on it: on a `fixed` node the
+clearance already covers the wall, and on a `break`, whose wall stands
+further off, the solver pushes the label the rest of the way. The `break`
+case ends up snug against the wall, so prefer `up` or an `angle` there if you
+want air around the text.
+
+Reach for `angle` when a label wants to be somewhere `side` alone cannot put
+it — the hero's `"angle": 90` on its ambient node sends that label out to the
+right rather than straight up, where the branch arriving from the left would
+have crowded it.
 
 A `fixed` node may sit anywhere. The hero puts its ambient node at the rail's
 own `y` because that is where the diagram's cold end belongs, not because the
@@ -138,8 +151,16 @@ unit area).
 and `flow` share `units.q` because both are powers. `flux` has its own, so a
 diagram can carry a heat rate in `W` and a heat flux in `W/cm²` at once.
 
-`at` and `angle` place the arrow; by default it comes in horizontally from the
-left and its head lands on the node. `side` moves its label, as above.
+`at` is the **centre of the symbol**, not its head or its tail, exactly as it
+is on a branch. `angle` turns it: `0` is the default, pointing right, so the
+arrow comes in horizontally from the left; `90` points down, which puts the
+symbol above the node. A lead is drawn from the symbol to the node whatever
+you choose, so `at` only has to be roughly right. Left out, the source is
+placed to the left of its node with enough room for its own label. `side`
+moves that label, as above.
+
+The arrow always points **into** the node — a source is heat arriving. There
+is no kind for heat leaving; annotate the branch it leaves by instead.
 
 ## Rail
 

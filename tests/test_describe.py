@@ -54,6 +54,46 @@ class TestItSaysWhatIsThere:
     def test_it_gives_the_nodes_their_kinds_and_places(self):
         assert ("amb", "fixed", (936, 372)) in describe(hero()).nodes
 
+    def test_it_says_what_each_label_reads(self):
+        """The geometry cannot tell a mass on the right node from one on the
+        wrong node: both draw the same box, and only the words differ.
+
+        Found by the acceptance test — with positions alone, hanging the
+        41 J/K capacitance off the wrong node gave byte-identical output.
+        """
+        says = {l.ref: l.says for l in describe(hero()).lines}
+        assert says["branch 4 j->rail"] == "Die | C_j = 0.9 J/K"
+        assert says["node 'amb'"] == "Still air | T_amb = 40 °C"
+        assert says["source 0 -> j"] == "Switching loss | P_d = 45 W"
+
+    def test_a_subscript_is_read_back_rather_than_left_as_markup(self):
+        from thermodraw.describe import label_text
+        from thermodraw.layout import Label
+        assert label_text(Label(user="Die", name='C<tspan dy="4">j</tspan>',
+                                value="0.9 J/K")) == "Die | C_j = 0.9 J/K"
+        assert label_text(Label(user="Fins &#8594; air")) == "Fins → air"
+        assert label_text(None) == ""
+
+    def test_it_says_where_the_rail_is(self):
+        """`rail.reference` does nothing but record which node the rail is,
+        so this is the only place it can ever be checked against intent."""
+        assert describe(hero()).rail == ("amb", 372, (200, 936))
+        assert "rail: y 372, span (200, 936), reference 'amb'" \
+            in describe(hero()).text()
+
+    def test_a_diagram_with_no_rail_says_nothing_about_one(self):
+        d = DiagramBuilder(T="C").node("a", "Only", "20", at=(0, 0)).build()
+        assert describe(d).rail is None
+        assert "rail:" not in describe(d).text()
+
+    def test_an_absent_span_is_reported_as_the_one_that_will_be_drawn(self):
+        d = (DiagramBuilder(T="C", C="J/K")
+             .node("a", "A", "20", at=(0, 0))
+             .node("b", "B", "30", at=(400, 0))
+             .rail("a", 300)
+             .branch("a", "rail", "cap", "Mass", "5").build())
+        assert describe(d).rail == ("a", 300, (0, 400))
+
     def test_the_parallel_pair_is_visible_rather_than_only_graded(self):
         """The note `check` raises, readable straight off the description."""
         sides = {l.ref: l.side for l in describe(hero()).lines}
@@ -61,9 +101,24 @@ class TestItSaysWhatIsThere:
 
 
 class TestItReadsInATerminal:
-    def test_the_text_is_ascii(self):
-        """Same reason as the report: a Windows console is cp1252."""
-        assert describe(ladder()).text().isascii()
+    def test_the_fixed_text_is_ascii(self):
+        """Same rule as the report: a Windows console is cp1252.
+
+        The diagram's own words are the diagram's own, exactly as node ids
+        are in a finding — quoting them is the job. What must not carry an
+        em dash is the scaffolding, which is what this asserts by using a
+        diagram whose every label and unit is ASCII.
+        """
+        d = (DiagramBuilder(R="K/W", T="C")
+             .node("a", "Hot", "120", at=(0, 0))
+             .node("b", "Cold", "40", kind="fixed", at=(300, 0))
+             .source("a", "diss", "Loss", at=(-120, 0))
+             .branch("a", "b", "cond", "Slab", "0.35").build())
+        assert describe(d).text().isascii()
+
+    def test_a_diagram_that_is_not_ascii_still_describes(self):
+        """`__main__` softens stdout, so the text itself need not be."""
+        assert "Fins → air" in describe(hero()).text()
 
     def test_no_line_is_padded_past_its_content(self):
         assert not [l for l in describe(hero()).text().splitlines()

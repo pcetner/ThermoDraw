@@ -22,7 +22,9 @@ ASCII only, like the report: this goes to a terminal, and a Windows console is
 cp1252. Ids and labels come from the file and can carry anything, which is why
 `__main__` also softens stdout.
 """
+import html
 import math
+import re
 from collections import Counter
 from dataclasses import dataclass, field
 from typing import Dict, List, Tuple
@@ -42,6 +44,27 @@ COMPASS = [((0.0, -1.0), "above"), ((0.0, 1.0), "below"),
 
 # How close a direction must be to one of the eight to borrow its name.
 NEAR = 0.96
+
+# `core.sym_text` sets a subscript as a `<tspan>`. Read back as `R_cond`, so
+# the description says what the reader will see rather than what the SVG says.
+_TSPAN = re.compile(r"<tspan[^>]*>(.*?)</tspan>")
+_TAG = re.compile(r"<[^>]+>")
+
+
+def label_text(label):
+    """The two lines of one label, as the reader would read them.
+
+    Without this a description cannot tell a 41 J/K mass hung on the right
+    node from one hung on the wrong node: the geometry is identical and only
+    the words differ. Which makes it the one thing worth printing, for a tool
+    whose question is whether this is the diagram you meant.
+    """
+    if label is None:
+        return ""
+    stated = " = ".join(x for x in (label.name, label.value) if x)
+    parts = [x for x in (label.user, stated) if x]
+    plain = _TAG.sub("", _TSPAN.sub(r"_\1", " | ".join(parts)))
+    return html.unescape(plain)
 
 
 def side_word(side):
@@ -64,6 +87,7 @@ class Line:
     at: Tuple[float, float]
     side: str
     size: Tuple[float, float]
+    says: str = ""
     pushed: float = 0.0
     flipped: bool = False
     clear: bool = True
@@ -76,9 +100,10 @@ class Line:
             notes.append(f"pushed {self.pushed:.0f}")
         if not self.clear:
             notes.append("OVERLAPS")
-        tail = ("   " + ", ".join(notes)) if notes else ""
+        notes.append(self.says)
+        tail = "   ".join(n for n in notes if n)
         return (f"  {self.ref:<22.22s} {self.kind:<15.15s} {self.side:<12s}"
-                f" {self.size[0]:>4.0f}x{self.size[1]:<.0f}{tail}")
+                f" {self.size[0]:>4.0f}x{self.size[1]:<4.0f} {tail}").rstrip()
 
 
 @dataclass
@@ -91,6 +116,11 @@ class Description:
     lines: List[Line] = field(default_factory=list)
     nodes: List[Tuple[str, str, Tuple[float, float]]] = field(
         default_factory=list)
+    # The rail is a wire like any other in the placements, so it vanished into
+    # the count. `rail.reference` is documented as inert — it records which
+    # node the rail *is* and does nothing — which makes this the only place it
+    # could ever be checked against what was meant.
+    rail: Tuple[str, float, Tuple[float, float]] = None
 
     def text(self):
         out = [f"{self.source}: canvas {self.canvas[0]:.0f} x "
@@ -101,6 +131,10 @@ class Description:
                             [f"{k} x{v}"
                              for k, v in sorted(self.counts.items())] or ["none"])
 
+        if self.rail:
+            ref, y, (x0, x1) = self.rail
+            out += ["", f"rail: y {y:.0f}, span ({x0:.0f}, {x1:.0f}), "
+                        f"reference {ref!r}"]
         if self.nodes:
             out += ["", "nodes:"]
             out += [f"  {i:<14.14s} {k:<8s} at ({x:.0f}, {y:.0f})"
@@ -117,8 +151,11 @@ class Description:
             "counts": dict(self.counts),
             "nodes": [{"id": i, "kind": k, "at": list(a)}
                       for i, k, a in self.nodes],
+            "rail": None if not self.rail else {
+                "reference": self.rail[0], "y": self.rail[1],
+                "span": list(self.rail[2])},
             "labels": [{"ref": l.ref, "kind": l.kind, "at": list(l.at),
-                        "side": l.side, "width": l.size[0],
+                        "side": l.side, "says": l.says, "width": l.size[0],
                         "height": l.size[1], "pushed": l.pushed,
                         "flipped": l.flipped, "clear": l.clear}
                        for l in self.lines],
@@ -170,7 +207,9 @@ def describe(diagram, size=None, padding=PADDING, source="diagram"):
         lines.append(Line(
             ref=rect.ref or "?", kind=_kind(owner) if owner else "?",
             at=(left + bw / 2, top + bh / 2), side=side_word(rect.side),
-            size=(bw, bh), pushed=round(rect.used - rect.solved, 1),
+            size=(bw, bh),
+            says=label_text(owner.label if owner else None),
+            pushed=round(rect.used - rect.solved, 1),
             flipped=rect.flipped, clear=rect.clear))
 
     return Description(
@@ -178,4 +217,9 @@ def describe(diagram, size=None, padding=PADDING, source="diagram"):
         canvas=(round(bx1 - bx0, 1), round(by1 - by0, 1)),
         counts=dict(Counter(_kind(p) for p in placements)),
         lines=lines,
-        nodes=[(n.id, n.kind, tuple(n.at)) for n in diagram.nodes if n.at])
+        nodes=[(n.id, n.kind, tuple(n.at)) for n in diagram.nodes if n.at],
+        rail=None if not diagram.rail else (
+            diagram.rail.reference, diagram.rail.y,
+            tuple(diagram.rail.span) if diagram.rail.span else
+            (min(xs), max(xs)) if (xs := [n.at[0] for n in diagram.nodes
+                                          if n.at]) else (0.0, 0.0)))

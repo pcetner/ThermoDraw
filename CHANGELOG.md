@@ -43,6 +43,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   is directly visible in it, both labels reading "above", rather than only
   being graded by a note.
 
+  It prints what each label reads, not only where it sits. Without that a
+  description cannot tell a 41 J/K mass hung on the right node from one hung
+  on the wrong node — the geometry is identical and only the words differ,
+  which makes the words the one thing worth printing. It also prints the
+  rail: `rail.reference` is documented as inert, recording which node the
+  rail *is* and doing nothing, so this is the only place it can ever be
+  checked against what was meant.
+
   It reports; it does not judge, and always exits 0. Keeping the judgement in
   `check` alone is why that command's summary line can stay one trustworthy
   sentence. Like `check`, it reads `render.compose`'s own `Scene` rather than
@@ -168,6 +176,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **The command line softens output with `backslashreplace`, not `replace`.**
+  The quantity for a heat flux is `q` followed by U+2033, and on a cp1252
+  console the old setting printed `units names 'q?'` — an error naming a key
+  the reader cannot copy, about a character they had most likely just
+  mistyped. It now prints `q″`, which is ugly and recoverable.
+
 - **Every quantity is its own symbol, `q″` included.** `radin` and `flow` are
   both powers and share `units.q`; a heat flux is per unit area, is not
   measured in the same thing, and now reads `units["q″"]`. They shared one
@@ -197,6 +211,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   remedy now depends on the culprit: a `via` waypoint for a wire, `at` for a
   symbol or a node, `side` for two labels, and `angle` once the solver has
   tried both sides of the branch.
+
+- `docs/schema.md`, from a third acceptance run — a fan-out topology rather
+  than a ladder, drawn from the page alone, clean on the first `check`. Three
+  things it had to guess at and now does not: that the flux units key is `q`
+  followed by U+2033 and not two quote marks; that `at` on a source is the
+  centre of the symbol, that `angle` turns it, and that a source arrow always
+  points *into* its node, there being no kind for heat leaving; and what
+  `"side": "down"` does on a boundary node, which is safe but snug on a
+  `break`. `tests/test_check.py` pins that last one, including the detail
+  that the 8-unit push it costs is exactly `ADRIFT` and so is reported by
+  nothing.
 
 - `docs/schema.md` gains a **Seeing what got drawn** section for `describe`,
   documents the `break` branch kind, and corrects two things: the sources
