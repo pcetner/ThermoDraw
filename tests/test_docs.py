@@ -238,3 +238,16 @@ class TestTheDictionary:
         assert "watts" in text, "a rate is never defined"
         assert any(k == "flow-branch" for k, _, _ in gen_dictionary.SHAPES), \
             "chevrons are a third of the shapes and go unmentioned"
+
+    def test_the_source_definition_admits_outbound_heat(self):
+        """The category panel is the first definition a reader meets, and it
+        said heat arrives. `flow` and `flux` may point away, and the Sources
+        lede further down already said so, so the prominent one was the wrong
+        one."""
+        from thermodraw import model as M
+        sys.path.insert(0, str(ROOT / "tools"))
+        import gen_dictionary
+
+        assert M.OUTWARD_KINDS, "no outbound source kinds left to describe"
+        definition = gen_dictionary.WHERE["source"][2].lower()
+        assert "leaving" in definition or "out of" in definition, definition
