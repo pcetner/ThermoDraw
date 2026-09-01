@@ -1,14 +1,41 @@
 """ThermoDraw — thermal network diagrams for Python.
 
-    from thermodraw import save, symbols, theme
+A diagram is data. You write it, or an LLM writes it, and three pure stages
+turn it into a document:
 
-    svg = symbols.diagonal_demo()
-    save(theme.bake(svg, "light"), "out.svg")
+    dict / JSON  ->  Diagram  ->  placements  ->  SVG
+                      model      layout        render
 
-Design notes and the reasoning behind each symbol live in CLAUDE.md.
+    from thermodraw import Diagram, layout, render, save
+
+    d = Diagram.from_json(open("diagram.json").read())
+    save(render(layout(d)), "out.svg")
+
+`DiagramBuilder` is sugar over the same data, and `symbols` still places one
+symbol at a time for anything the model does not yet cover.
+
+The schema is docs/schema.md. Design notes and the reasoning behind each
+symbol are in CLAUDE.md.
 """
-from . import core, io, symbols, theme
+from . import core, io, layout as _layout_mod, model, render as _render_mod
+from . import symbols, theme
+from .builder import DiagramBuilder
 from .io import save
+from .layout import Placement, layout
+from .model import Branch, Diagram, DiagramError, Node, Rail, Source
+from .render import render
+from .symbols import SYMBOLS, Symbol
 
-__version__ = "0.1.0"
-__all__ = ["core", "io", "save", "symbols", "theme"]
+__version__ = "0.2.0"
+__all__ = [
+    # the data
+    "Diagram", "Node", "Branch", "Source", "Rail", "DiagramError",
+    # the pipeline
+    "layout", "render", "Placement", "DiagramBuilder",
+    # the vocabulary
+    "Symbol", "SYMBOLS",
+    # output
+    "save", "theme",
+    # still public, for placing one symbol at a time
+    "symbols", "core", "model", "io",
+]

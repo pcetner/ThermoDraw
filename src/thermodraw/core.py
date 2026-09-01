@@ -204,6 +204,7 @@ def annotate(cx, cy, a, out, user=None, name=None, value=None, half=10,
                        f'text-anchor="start">{txt}</text>')
             x += measure(txt, sz, CLASS_FACE.get(cls, "regular")) + RUN_GAP
         y += lh
+    return left, top, bw, bh
 
 
 # ------------------------------------------------------------------ textures
