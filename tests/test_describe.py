@@ -98,7 +98,9 @@ class TestItSaysWhatIsThere:
         from thermodraw._layout import Label
         assert label_text(Label(user="Die", name='C<tspan dy="4">j</tspan>',
                                 value="0.9 J/K")) == "Die | C_j = 0.9 J/K"
-        assert label_text(Label(user="Fins &#8594; air")) == "Fins → air"
+        # A label is text, not markup: an entity the author typed is reported
+        # as typed, because that is what the drawing shows too.
+        assert label_text(Label(user="Fins &#8594; air")) == "Fins &#8594; air"
         assert label_text(None) == ""
 
     def test_it_says_where_the_rail_is(self):

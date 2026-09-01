@@ -489,9 +489,14 @@ diff is not. Land the instrument before the change, not after.
 - **The width table and the vendored font must be regenerated together.**
   They are two halves of one measurement; `tests/test_fonts.py` pins them to
   each other.
-- **HTML entities count as one glyph** in `core.text_w` via `_ENT`. Removing
-  that regex silently breaks any label using one — it caused a 40 px phantom
-  gap in the heat-flux label.
+- **A label is text, not markup.** `core.build_block` escapes what the
+  author wrote — `&`, `<`, `>`, `"` — and `core.sym_text` escapes a subscript
+  before wrapping it in the one `<tspan>` a label legitimately carries. Both
+  run before measurement, so `core.text_w` unescapes and measures the glyph
+  that will be drawn. Until this, a label of "Fins & fans" produced a
+  document no conforming parser would open, and a label could put a
+  `<script>` into `thermodraw page` output. A regex that counted every
+  entity as one double-prime-wide glyph went with it.
 - **Subscripts are pre-centred manually** (`core.measure`) because rasterisers
   disagree on `<tspan>` metrics under `text-anchor="middle"`. Do not switch to
   a plain centred `<text>` with a tspan inside.

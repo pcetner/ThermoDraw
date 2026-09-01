@@ -22,7 +22,6 @@ ASCII only, like the report: this goes to a terminal, and a Windows console is
 cp1252. Ids and labels come from the file and can carry anything, which is why
 `__main__` also softens stdout.
 """
-import html
 import math
 import re
 from collections import Counter
@@ -46,7 +45,6 @@ NEAR = 0.96
 # `core.sym_text` sets a subscript as a `<tspan>`. Read back as `R_cond`, so
 # the description says what the reader will see rather than what the SVG says.
 _TSPAN = re.compile(r"<tspan[^>]*>(.*?)</tspan>")
-_TAG = re.compile(r"<[^>]+>")
 
 
 def label_text(label):
@@ -66,8 +64,10 @@ def label_text(label):
     for x in getattr(label, "extra", ()):
         if x:
             parts.append(x if isinstance(x, str) else " = ".join(x))
-    plain = _TAG.sub("", _TSPAN.sub(r"_\1", " | ".join(parts)))
-    return html.unescape(plain)
+    # The author's text, as written. Escaping happens in `core.build_block`,
+    # downstream of the `Label` this reads, so there is nothing to undo — and
+    # a `<` an author typed is a `<` here, as it is in the drawing.
+    return _TSPAN.sub(r"_\1", " | ".join(parts))
 
 
 def side_word(side):

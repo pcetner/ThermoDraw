@@ -263,6 +263,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A label is text, not markup.** Nothing escaped what an author wrote
+  before it reached `<text>`, so a label of "Fins & fans" produced a document
+  that no conforming XML parser would open — Word, cairosvg and librsvg among
+  them — and a label of `</svg><script>…` became live script in `thermodraw
+  page` output. The page's *title* had been escaped and tested from the start;
+  the labels, subscripts, values and units all went round it.
+
+  `core.build_block` now escapes the author's strings, and `core.sym_text`
+  escapes a subscript before wrapping it in the one `<tspan>` a label
+  legitimately carries. Both run ahead of measurement, and `core.text_w`
+  unescapes before it sums advances, so the solver clears the glyph the
+  renderer draws. That replaced a regex that counted every entity as one
+  double-prime-wide glyph — dead while no label carried an entity, and a third
+  of an em wrong the moment one did. `describe` reports a label as the author
+  typed it, which is also what the drawing now shows; it used to unescape.
+
+  No golden moved: nothing in the corpus had ever put `&`, `<` or `"` in a
+  label, which is the kind of input this library was built to receive and had
+  never been given.
 - **The remedies were wrong more often than they were right.** Five agents
   drawing five thermal networks applied them literally, as instructed. Six of
   eighteen worked; three made the drawing worse. Every fault was in the change
