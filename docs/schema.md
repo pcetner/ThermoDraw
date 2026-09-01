@@ -179,11 +179,14 @@ it means eight of that, not eight sharing it. The library does no arithmetic:
 values are strings so `"2.10"` stays `2.10`, and folding a count would mean
 parsing them as numbers.
 
-More than three and the drawing **condenses**: the outermost two are drawn
-and an ellipsis stands where the rest would be. Both forms are in the file,
-and `thermodraw page` gives you a control to swap between them. Because the
-condensed form keeps the *outermost* copies, the two occupy the same
-footprint, so swapping never moves anything else on the page.
+More than three and the drawing **condenses**: two are drawn close together
+with an ellipsis between them, taking the room of two rather than of sixteen.
+Both forms are in the file, and `thermodraw page` gives you a control to swap
+between them, with the copies fading in from the middle outwards.
+
+The canvas is sized for the *larger* form either way, so a condensed group
+leaves the room its expansion will need. That is deliberate: expanding one
+group then moves that group and nothing else on the page.
 
 A repeated branch is drawn as a fan between its two nodes, so it cannot also
 take `via`.

@@ -784,10 +784,11 @@ class TestABoundaryNodesOwnLabel:
 class TestRepeatedBranches:
     """`count` draws the repetition, and condenses it above three.
 
-    The design point that makes the toggle cheap: the condensed form keeps
-    the *outermost* copies, so both forms occupy the same footprint. Swapping
-    never re-fits the canvas and never moves a label, which is why both can
-    ship in one file and the viewer only flips `display`.
+    Each form is a complete, independently centred drawing of the group, so
+    the condensed one is genuinely smaller rather than the full one with
+    holes in it. The canvas is still sized to the larger of the two, which is
+    what keeps the motion isolated: expanding a group moves that group and
+    nothing else on the page.
     """
 
     @staticmethod
@@ -799,10 +800,17 @@ class TestRepeatedBranches:
                         count=n, arrangement=arrangement).build())
 
     @pytest.mark.parametrize("n", [2, 3, 4, 8, 16])
-    def test_every_copy_is_drawn(self, n):
-        syms = [p for p in layout(self.group(n)) if p.symbol is not None]
+    def test_every_copy_is_drawn_in_the_full_form(self, n):
+        syms = [p for p in layout(self.group(n))
+                if p.symbol is not None and p.variant in (None, "full")]
         assert len(syms) == n
         assert len({p.copy for p in syms}) == n, "copies are not distinguished"
+
+    @pytest.mark.parametrize("n", [4, 8, 16])
+    def test_the_condensed_form_draws_two(self, n):
+        syms = [p for p in layout(self.group(n))
+                if p.symbol is not None and p.variant == "condensed"]
+        assert len(syms) == 2
 
     @pytest.mark.parametrize("n,condensed", [(2, False), (3, False),
                                              (4, True), (16, True)])
@@ -813,24 +821,43 @@ class TestRepeatedBranches:
         hidden = [p for p in placements if not p.shown]
         assert bool(hidden) is condensed
 
-    def test_the_two_forms_have_the_same_footprint(self):
-        """Which is the whole reason a viewer can swap them for free."""
+    def test_the_condensed_form_is_smaller(self):
+        """The point of condensing: sixteen shown as two should take the room
+        of two, not of sixteen."""
+        from thermodraw.render import bounds
+
+        def height(variant):
+            box = [bounds(p) for p in layout(self.group(16))
+                   if p.element == "symbol" and p.variant == variant]
+            return max(b[3] for b in box) - min(b[1] for b in box)
+
+        assert height("condensed") < height("full") / 4
+
+    def test_the_canvas_still_fits_the_larger_form(self):
+        """Which is what keeps the motion local. Expanding a group must not
+        reflow everything else on the page, so the room is already there."""
         from thermodraw.render import bounds
         placements = layout(self.group(16))
-        shown = [bounds(p) for p in placements if p.shown and p.element != "anchor"]
-        every = [bounds(p) for p in placements if p.element != "anchor"]
-        assert (min(b[1] for b in shown) == pytest.approx(
-            min(b[1] for b in every)))
-        assert (max(b[3] for b in shown) == pytest.approx(
-            max(b[3] for b in every)))
+        box = compose(placements).box
+        for p in placements:
+            if p.element == "anchor":
+                continue
+            x0, y0, x1, y1 = bounds(p)
+            assert box[1] <= y0 and y1 <= box[3], f"{p.ref} {p.variant}"
+
+    def test_each_form_carries_its_own_label(self):
+        """Solved against its own extent, so a condensed group's text sits
+        against the two copies it shows and not the sixteen it does not."""
+        from thermodraw import render
+        assert render(layout(self.group(16))).count("Die attach") == 2
 
     def test_both_forms_ship_with_stable_ids(self):
         from thermodraw import render
         from thermodraw.render import variant_id
         svg = render(layout(self.group(16)))
         full = variant_id("branch 0 a->b", "full")
-        assert f'<g id="{full}" display="none">' in svg
-        assert f'<g id="{variant_id("branch 0 a->b", "condensed")}">' in svg
+        assert f'<g id="{full}" class="td-form" display="none">' in svg
+        assert f'<g id="{variant_id("branch 0 a->b", "condensed")}"'                ' class="td-form">' in svg
 
     def test_an_id_does_not_move_when_the_diagram_does(self):
         from thermodraw.render import variant_id

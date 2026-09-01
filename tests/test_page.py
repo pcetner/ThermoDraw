@@ -61,10 +61,19 @@ class TestTheControls:
         assert f'data-hides="{variant_id("branch 0 a->b", "condensed")}"' in html
 
     def test_the_hidden_form_is_in_the_file_already(self):
-        """Which is what makes the swap two attributes and not a rebuild."""
+        """Which is what makes the swap a class change, not a rebuild."""
         html = page(repeated(8))
         assert f'<g id="{variant_id("branch 0 a->b", "full")}" ' \
-               'display="none">' in html
+               'class="td-form" display="none">' in html
+
+    def test_each_copy_can_fade_in_its_own_time(self):
+        """A whole group appearing at once reads as a dissolve. Running it
+        from the middle outwards reads as the fan opening, and moves no
+        geometry, so nothing else on the page is disturbed."""
+        delays = sorted({int(d) for d in
+                         re.findall(r"--d:(\d+)ms", page(repeated(8)))})
+        assert delays[0] == 0 and len(delays) > 3
+        assert delays[-1] < 200, "a short animation, not a performance"
 
     def test_a_group_small_enough_to_draw_gets_no_button(self):
         assert "<button" not in page(repeated(3))

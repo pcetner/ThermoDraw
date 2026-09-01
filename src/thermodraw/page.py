@@ -47,20 +47,40 @@ button:hover{border-color:var(--ink-2)}
 button[aria-pressed="true"]{border-color:var(--accent);color:var(--accent)}
 button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 @media (prefers-reduced-motion:no-preference){button{transition:border-color .15s}}
+
+/* The two forms of a repeated group. Only the group's own ink moves: the
+   canvas is already sized for the larger form, so expanding one disturbs
+   nothing else on the page. Each copy carries its own delay, set by `render`
+   from how far it sits off the centre line, so the fan runs open from the
+   middle outwards instead of appearing all at once. */
+.td-form{transition:opacity .16s linear}
+.td-copy{opacity:1;transition:opacity .32s cubic-bezier(.2,.75,.3,1) var(--d,0ms)}
+.td-form.td-off{opacity:0;pointer-events:none}
+.td-form.td-off .td-copy{opacity:0;transition-delay:0ms}
+@media (prefers-reduced-motion:reduce){
+  .td-form,.td-copy{transition:none}
+}
 """
 
 SCRIPT = """
+// The hidden form ships with display="none" so a static renderer that never
+// runs this draws one form and only one. Swap that for a class the moment
+// there is a script to animate it: `display` cannot be transitioned.
+const show = (g, on) => g && g.classList.toggle('td-off', !on);
 for (const b of document.querySelectorAll('button[data-shows]')) {
+  for (const id of [b.dataset.shows, b.dataset.hides]) {
+    const g = document.getElementById(id);
+    if (!g) continue;
+    const off = g.getAttribute('display') === 'none';
+    g.removeAttribute('display');
+    g.classList.toggle('td-off', off);
+  }
   b.addEventListener('click', () => {
     const on = b.getAttribute('aria-pressed') !== 'true';
     b.setAttribute('aria-pressed', String(on));
     b.textContent = on ? b.dataset.less : b.dataset.more;
-    for (const [id, want] of [[b.dataset.shows, on],
-                              [b.dataset.hides, !on]]) {
-      const g = document.getElementById(id);
-      if (g) { want ? g.removeAttribute('display')
-                    : g.setAttribute('display', 'none'); }
-    }
+    show(document.getElementById(b.dataset.shows), on);
+    show(document.getElementById(b.dataset.hides), !on);
   });
 }
 """
