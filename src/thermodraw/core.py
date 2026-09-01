@@ -20,16 +20,24 @@ by the library and naming physics. On T, C, P and q it is identity, set by the
 caller and empty by default. A subscript on an R names a mechanism; a
 subscript on a T names a place.
 """
+import hashlib
 import math
 import re
 
 SW = 1.8
-_uid = [0]
 
 
-def uid(p="c"):
-    _uid[0] += 1
-    return f"{p}{_uid[0]}"
+def uid(prefix, *parts):
+    """An element id derived from the element's own parameters.
+
+    This was a global counter, which meant the same diagram rendered twice in
+    one process produced different bytes — nothing that a golden-file test can
+    survive, and noisy diffs for any committed asset. Hashing the parameters
+    instead makes a render a pure function of its input, and identical
+    elements collapse onto one definition for free.
+    """
+    key = "|".join(repr(v) for v in parts)
+    return f"{prefix}-{hashlib.blake2s(key.encode(), digest_size=4).hexdigest()}"
 
 
 # --------------------------------------------------------------- text metrics
@@ -199,11 +207,28 @@ LEAD = 34
 
 
 def clip_rect(w, h, x=None, y=None):
-    i = uid("clip")
     x = -w / 2 if x is None else x
     y = -h / 2 if y is None else y
+    i = uid("clip", w, h, x, y)
     return i, (f'<clipPath id="{i}"><rect x="{x}" y="{y}" '
                f'width="{w}" height="{h}"/></clipPath>')
+
+
+_DEFS = re.compile(r"<defs>(.*?)</defs>", re.S)
+
+
+def hoist_defs(body):
+    """Move every <defs> block to the front, keeping one copy of each.
+
+    Ids are content-addressed, so two identical clip rects now produce the
+    same id by design. Emitting each definition once keeps ids unique in the
+    document — duplicates are invalid SVG even when renderers tolerate them —
+    and drops the repeated boilerplate.
+    """
+    seen = dict.fromkeys(_DEFS.findall(body))
+    if not seen:
+        return body
+    return f'<defs>{"".join(seen)}</defs>' + _DEFS.sub("", body)
 
 
 def _rules(R, step, angle):

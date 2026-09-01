@@ -47,12 +47,12 @@ pip install -e .
 ## Use
 
 ```python
-from thermodraw import symbols, theme
+from thermodraw import save, symbols, theme
 
 svg = symbols.diagonal_demo()
 
-open("web.svg", "w").write(theme.with_variables(svg))   # follows light/dark
-open("word.svg", "w").write(theme.bake(svg, "light"))   # colours resolved
+save(theme.with_variables(svg), "web.svg")    # follows the reader's light/dark
+save(theme.bake(svg, "light"), "word.svg")    # colours resolved for Word
 ```
 
 ```bash
