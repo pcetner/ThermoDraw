@@ -115,6 +115,16 @@ class TestTheScriptStaysOutOfTheSvg:
     def test_the_page_has_exactly_one(self):
         assert page(repeated(8)).count("<script") == 1
 
+    def test_a_label_cannot_add_a_second(self):
+        """The title was escaped from the start and the labels were not, and
+        a label reaching the page as markup is a script in the document."""
+        d = (DiagramBuilder(T="°C")
+             .node("a", "</svg><script>alert(1)</script>", 20,
+                   at=(0, 0), sub="a"))
+        html = page(d)
+        assert html.count("<script") == 1
+        assert "&lt;/svg&gt;&lt;script&gt;" in html
+
     def test_the_script_is_after_the_markup_it_drives(self):
         html = page(repeated(8))
         assert html.index("<button") < html.index("<script")

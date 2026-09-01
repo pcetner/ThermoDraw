@@ -22,6 +22,7 @@ subscript on a T names a place.
 """
 import collections
 import hashlib
+import html
 import math
 import re
 
@@ -51,11 +52,13 @@ def uid(prefix, *parts):
 CLASS_FACE = {"user": "semibold", "lbl": "italic"}
 
 
-_ENT = re.compile(r"&(#\d+|#x[0-9a-fA-F]+|[a-zA-Z]+);")
-
-
 def text_w(s, size, face="regular"):
-    s = _ENT.sub("\u2033", s)
+    # Measured after unescaping, so an `&amp;` that `escape` produced is
+    # measured as the one `&` glyph the renderer will draw. This replaced a
+    # regex that mapped every entity to a double-prime's advance \u2014 dead while
+    # no label carried an entity, and wrong by a third of an em the moment
+    # one did.
+    s = html.unescape(s)
     table, fallback = _WIDTHS[face], _FALLBACK[face]
     return sum(table.get(c, fallback) for c in s) * size
 
@@ -69,10 +72,30 @@ def measure(s, size, face="regular"):
     return text_w(base, size, face) + text_w(inner, size * 0.7, face)
 
 
+def escape(s):
+    """Text as XML character data: `&`, `<`, `>` and `"` become entities.
+
+    A label is text, not markup. This is the one place that turns what an
+    author wrote into what the document carries, and it runs before
+    measurement, so the solver and the renderer see the same string. The
+    apostrophe is left alone: it needs no escaping in character data, and
+    `o'clock` should read in the source as it was written.
+    """
+    return html.escape(s, quote=False).replace('"', "&quot;")
+
+
 def sym_text(base, subscript=None):
+    """`base` with an optional subscript.
+
+    The base is the library's own symbol letter. The subscript is the
+    author's, and is escaped here because this is where it enters markup —
+    the `<tspan>` around it is the one piece of markup a label legitimately
+    carries.
+    """
     if not subscript:
         return base
-    return f'{base}<tspan dy="4" font-size="0.7em">{subscript}</tspan>'
+    return (f'{base}<tspan dy="4" font-size="0.7em">'
+            f'{escape(subscript)}</tspan>')
 
 
 # ------------------------------------------------------------------ transform
@@ -331,9 +354,14 @@ def build_block(user=None, name=None, value=None, extra=(),
     names itself — "8 in parallel" cannot be read as a quantity — so it
     stays a plain string.
     """
+    # The author's strings are escaped here and nowhere else, ahead of the
+    # measurement `annotate` does on these lines. `name` and a pair's first
+    # element are not: they come from `sym_text`, which escaped its subscript
+    # on the way in and wrapped it in the library's own <tspan>.
     lines = []
     if user:
-        lines.append([(user, usize, "user")])
+        lines.append([(escape(user), usize, "user")])
+    value = escape(value) if value else value
     if name and value:
         lines += _stated(name, value, size, vsize)
     elif name:
@@ -344,13 +372,13 @@ def build_block(user=None, name=None, value=None, extra=(),
         if not line:
             continue
         if isinstance(line, str):
-            lines.append([(line, vsize, "val")])
+            lines.append([(escape(line), vsize, "val")])
             continue
         pair = tuple(line)
         if len(pair) != 2:
             raise ValueError(
                 f"an extra is prose or a (symbol, value) pair; got {pair!r}")
-        lines += _stated(pair[0], pair[1], size, vsize)
+        lines += _stated(pair[0], escape(pair[1]), size, vsize)
     return lines
 
 
