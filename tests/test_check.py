@@ -157,6 +157,83 @@ class TestNodesTooClose:
             f.code for f in check(b).findings if f.where == "branch 0 n0->n1"]
 
 
+class TestNetworkInPieces:
+    """A drawing can be severed in half and pass everything else.
+
+    Two of the five gallery diagrams are: a two-phase loop whose halves are
+    joined only by a `flow` annotation at each end, and a stack whose Peltier
+    stage is drawn the same way. Nothing in either file relates the two
+    arrows except that the same number was typed twice.
+    """
+
+    @staticmethod
+    def two_halves(join=None):
+        b = (DiagramBuilder(R="K/W", T="C", q="W")
+             .node("hot", "Hot", "70", at=(0, 0))
+             .node("warm", "Warm", "50", at=(300, 0))
+             .node("mid", "Middle", "40", at=(600, 0))
+             .node("cool", "Cool", "30", at=(1000, 0))
+             .node("cold", "Cold", "20", at=(1300, 0))
+             .branch("hot", "warm", "cond", "Stack", "0.4")
+             .branch("warm", "mid", "cond", "Plate", "0.3")
+             .branch("cool", "cold", "conv", "Air", "0.9"))
+        if join:
+            b.branch("mid", "cool", join, "Carried", "0.2")
+        return b
+
+    def test_two_halves_joined_by_nothing_are_reported(self):
+        found = one(check(self.two_halves()), "network-in-pieces")
+        assert found.severity == "warning"
+        assert "nothing joins 'cold', 'cool'" in found.message
+        assert found.where == "cold", "the orphan, not the main body"
+
+    def test_the_remedy_names_why_a_source_cannot_join_them(self):
+        """Which is the actual gap the two gallery diagrams ran into."""
+        found = one(check(self.two_halves()), "network-in-pieces")
+        assert "a source has one end" in found.remedy
+
+    def test_a_branch_between_them_clears_it(self):
+        assert "network-in-pieces" not in codes(check(self.two_halves("cond")))
+
+    def test_a_break_branch_also_clears_it(self):
+        """It carries no heat, and it is still an explicit statement about
+        this pair. Excluding it would warn about every standoff ever drawn,
+        which is a rule an author learns to ignore."""
+        b = (DiagramBuilder(T="C")
+             .node("cell", "Cell", "44", at=(0, 0))
+             .node("case", "Case", "30", at=(340, 0))
+             .branch("cell", "case", "break", "Nylon standoff"))
+        assert "network-in-pieces" not in codes(check(b))
+
+    def test_the_hero_is_not_condemned_by_its_own_wire_graph(self):
+        """The obvious formulation is barred. The hero's wire graph is in two
+        pieces — a source's lead and a node's boundary stub are legitimately
+        separate ink — so this has to be a question about nodes and branches.
+        """
+        d = Diagram.from_json(HERO.read_text(encoding="utf-8"))
+        placements = layout(d)
+        edges = wire_graph(placements)
+        adj = {}
+        for a, b in edges:
+            adj.setdefault(a, set()).add(b)
+            adj.setdefault(b, set()).add(a)
+        seen, parts = set(), 0
+        for v in adj:
+            if v in seen:
+                continue
+            stack, group = [v], set()
+            while stack:
+                u = stack.pop()
+                if u in group:
+                    continue
+                group.add(u)
+                stack += [w for w in adj[u] if w not in group]
+            seen |= group
+            parts += 1
+        assert parts == 2, "the premise of this test"
+        assert "network-in-pieces" not in codes(check(d))
+
+
 class TestLabelCollision:
     """The push loop can give up, and always could, without saying so.
 
@@ -480,9 +557,73 @@ class TestTheRemedyNamesTheField:
         for element in ("wire", "symbol", "ground", "node"):
             for ref in ("branch 0 a->b", "source 0 -> a", "node 'a'"):
                 p = Placement(element, ref=ref)
-                for exhausted in (False, True):
-                    assert _remedy(p, exhausted).isascii()
+                for owner in (None, Placement("node", ref="node 'a'"), p):
+                    for free in ((), ("up", "left")):
+                        assert _remedy(p, owner, free).isascii()
         assert _remedy(None, pair=True).isascii()
+
+
+class TestTheRemedyDoesNotGiveAdviceThatCannotWork:
+    """Five agents applied these literally. Six of eighteen worked.
+
+    Every fault below was in the change that claimed each finding "names the
+    schema field that fixes it", and three agents hit them independently.
+    """
+
+    def test_a_source_is_never_told_to_move_a_via(self):
+        """A source's lead is a wire carrying the source's ref, and a source
+        has no `via` at all — the validator refuses the field outright."""
+        from thermodraw.check import _remedy
+        from thermodraw.layout import Placement
+        text = _remedy(Placement("wire", ref="source 1 -> panel"))
+        assert "`via`" not in text
+        assert "move source 1 -> panel with `at`" in text
+
+    def test_a_branch_is_still_told_to_move_a_via(self):
+        from thermodraw.check import _remedy
+        from thermodraw.layout import Placement
+        assert "`via`" in _remedy(Placement("wire", ref="branch 0 a->b"))
+
+    @pytest.mark.parametrize("ref", ["branch 0 a->b", "source 0 -> a"])
+    def test_angle_is_never_offered_for_a_label_that_is_not_a_nodes(self, ref):
+        """The schema gives `angle` three meanings. On a branch it "overrides
+        the direction taken from the wire", so following this advice laid a
+        conduction box diagonally across its own wire — and the checker then
+        passed the result."""
+        from thermodraw.check import _remedy
+        from thermodraw.layout import Placement
+        owner = Placement("symbol", ref=ref)
+        assert "`angle`" not in _remedy(None, owner, free=())
+
+    def test_angle_is_offered_for_a_node_with_nowhere_left(self):
+        """Which is the one element where it means what the remedy says."""
+        from thermodraw.check import _remedy
+        from thermodraw.layout import Placement
+        text = _remedy(None, Placement("node", ref="node 'a'"), free=())
+        assert "`angle`" in text and "label frame" in text
+
+    def test_only_sides_the_occupancy_says_are_free_are_named(self):
+        from thermodraw.check import _remedy
+        from thermodraw.layout import Placement
+        text = _remedy(None, Placement("node", ref="node 'a'"),
+                       free=("up", "left"))
+        assert 'set `side` to "up" or "left"' in text
+        assert '"down"' not in text and '"right"' not in text
+
+    def test_a_node_hemmed_in_by_its_own_branches_is_not_sent_into_them(self):
+        """The case that turned a warning into an error. A node fanning four
+        ways has every side taken, and the checker held the occupancy that
+        proved it while recommending two of them."""
+        b = DiagramBuilder(R="K/W", T="°C").node("a", "Junction", "110",
+                                                 at=(0, 0))
+        for x, y, n in [(300, 0, "e"), (-300, 0, "w"),
+                        (0, 300, "s"), (0, -300, "n")]:
+            b.node(n, f"Side {n}", "60", at=(x, y))
+            b.branch("a", n, "cond", f"Path {n}", "0.4")
+        for f in check(b).findings:
+            if f.where == "node 'a'":
+                assert "set `side`" not in f.remedy, f.remedy
+                assert "`angle`" in f.remedy
 
 
 class TestHeatLeavingANode:

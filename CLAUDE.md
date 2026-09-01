@@ -225,6 +225,12 @@ find yourself doing that again, the occupancy list is the thing to reach for.
   `layout._split` cuts a hole in every branch, so each symbol needs a
   synthetic edge across it, and a capacitance meets the middle of the rail
   without sharing a vertex, so every edge is split at every vertex on it.
+- **A bare `T` is not a statement.** A node with no value and no subscript
+  drew a lone italic `T` and nothing objected, so two readers fell back to
+  `corner`, which draws nothing and loses the name. Interior junctions between
+  series layers routinely have no temperature of their own. A subscript is
+  enough to make it meaningful — a diagram may be symbolic throughout — but
+  nothing at all is not.
 - **The report opens with a positive line.** An agent needs a signal that says
   *good*, not merely an absence of output — silence is also what a crashed
   checker produces.
@@ -245,6 +251,34 @@ find yourself doing that again, the occupancy list is the thing to reach for.
   because labels stack at different heights and a ladder at 180 sums to 187
   and is fine; the push alone under-explains, because a waypoint crowds a
   label just as hard and moving the nodes would not help.
+- **Advice that names a direction is worth nothing unless the direction is
+  free.** The checker recommended sides while holding the `Occupancy` that
+  proved them blocked — telling a node to try left or right when those were
+  where its branches left. Five readers applied these remedies literally and
+  six of eighteen worked; three made the drawing worse. `core.free_sides` asks
+  the same question `annotate` asks of a candidate, of all four sides, from
+  the same `clear_offset`/`_corner`/`free` primitives, so a second copy of the
+  placement arithmetic cannot drift from the placement.
+- **`angle` is only ever offered for a node's label.** The schema gives it
+  three meanings: on a node it moves the label and nothing else, on a branch
+  it overrides the direction taken from the wire, on a source it aims the
+  arrow. Recommending it for a branch label laid the conduction box diagonally
+  across its own wire — and the checker then passed the result, which makes it
+  the worst kind of bad advice: the kind that appears to work.
+- **A remedy must name a field the element actually has.** A source's lead is
+  a wire carrying the source's ref, and the wire branch of the remedy offered
+  a `via`. Sources have none; the validator refuses the field outright.
+- **A finding that its own remedy can silence is worse than no finding.**
+  `parallel-pair-same-side` skipped any pair whose sides were both set
+  explicitly, so doing the thing it asked for bought a clean report whether or
+  not it helped. What matters is where the labels landed, not how they got
+  there. A note is already something you are free to ignore.
+- **Connectivity is a question about the network, not about the ink.** Two of
+  five gallery diagrams were severed in half and passed everything. The hero's
+  *wire* graph is in two pieces — a source's lead and a node's boundary stub
+  are separate ink — so `network-in-pieces` works over nodes joined by
+  branches. A `break` branch counts: the finding is for a path someone meant
+  to draw, and a break is an explicit statement that nothing flows.
 - **A remedy names the field that fixes *this* case.** Both label findings
   carried one fixed string offering `side`, `angle` and `via` whatever was in
   the way, which leaves the author to work out which applies — and sometimes

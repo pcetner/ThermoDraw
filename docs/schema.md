@@ -14,6 +14,7 @@ svg = render(layout(Diagram.from_json(text)))
 ```jsonc
 {
   "title":  "optional, not drawn",
+  "size":   [1042, 431],
   "units":  {"R": "K/W", "C": "J/K", "T": "°C", "P": "W", "q": "W", "q″": "W/cm²"},
   "nodes":    [ ... ],
   "branches": [ ... ],
@@ -38,6 +39,12 @@ one character, and it is not two apostrophes, not two quote marks, and not
 `"`. Getting it wrong is a JSON syntax error at best and an unknown-quantity
 error at worst; the error lists the keys it accepts, printing the character
 as `q\u2033` where the terminal cannot show it.
+
+`size` is `[width, height]`, and you almost never want it. Left out, the
+canvas is measured from the drawing and the margins come out equal on all four
+sides. Set it and the canvas is fixed instead, which is how ink ends up off the
+page — the two findings `off-canvas` and `frame-off-centre` exist only for
+diagrams that set it.
 
 Every `value` is a **string**, not a number: you get exactly the digits you
 typed, so `"2.10"` stays `2.10` and does not become `2.1`.
@@ -69,6 +76,13 @@ A place with a temperature.
 draws the same wall with no stub — the visible gap is the whole distinction,
 and it is topological rather than decorative. `corner` draws nothing and
 exists only to route a wire.
+
+A node with **no `value` and no `sub`** draws its label alone and no `T` at
+all. Interior junctions between series layers routinely have no temperature of
+their own, and a lone italic `T` states nothing. Give it a `sub` and you get
+`T_mid` with no number, which is what a symbolic diagram wants; give it
+neither and the symbol is simply left out. Use `corner` only when you want no
+label either.
 
 A `break` has no temperature to state, so `sub` and `value` are usually left
 off and the label alone is drawn. To tie one to the thing it is bolted to,
@@ -107,7 +121,7 @@ A path heat takes between two nodes.
 | `kind` | `cond`, `conv`, `rad`, `contact`, `cap`, `break` |
 | `label` | the words above the box |
 | `sub` | **only** for `cap`, where the subscript names a place |
-| `value` | unit appended from `units.R` (or `units.C` for `cap`) |
+| `value` | unit appended from `units.R` (or `units.C` for `cap`). Optional: a path with no number draws its label alone |
 | `via` | `[[x, y], ...]` waypoints, for a path that is not a straight line |
 | `at` | where the box sits. Defaults to the middle of the longest run |
 | `angle` | overrides the direction taken from the wire |
@@ -267,6 +281,11 @@ you need them. The choice is **symmetric about 180°** — `180` puts the label
 above just as `0` does, and `270` puts it right just as `90` does — because a
 label is never set upside down. And `side` overrides `angle` entirely.
 
+Notice what the table does not contain. Symmetry about 180° means a node's
+label reaches above, left and right and **never below**; no `angle` sends it
+down. `side: "down"` is the only thing that gets there, and it is safe even on
+a boundary node, whose wall is below it.
+
 Reach for `angle` when `side` runs out. `side` offers four directions, and a
 node fanning three ways with a capacitance below it and a source coming in has
 five attachments for four slots. Only `angle` reaches the diagonals.
@@ -288,7 +307,7 @@ to be.
 
 ## Checking a diagram
 
-The two habits above are no longer advice. They are checks, and so are seven
+The two habits above are no longer advice. They are checks, and so are eight
 other things that used to need a browser:
 
 ```bash
@@ -316,6 +335,7 @@ beside `.svg()`.
 | `label-collision` | error | text printed over something else |
 | `symbols-overlap` | error | two symbols in the same place |
 | `off-canvas` | error | the drawing runs past a `size` you fixed |
+| `network-in-pieces` | warning | some nodes have no path of branches to the rest |
 | `nodes-too-close` | warning | two nodes closer than the labels on the run between them need, with both numbers |
 | `label-adrift` | warning | a label shoved out past its own clearance to get around something, and now reads as belonging to that instead |
 | `label-in-a-corridor` | warning | a label inside a loop of the network, close enough to both paths to belong to either |
@@ -329,6 +349,11 @@ advance, because they are the ones a first draft hits:
 - `label-adrift` almost always means a `via` rising straight out of a node.
   Move the turn sideways first — that is the habit above, and it is what the
   finding will tell you.
+- `network-in-pieces` is the one to read carefully, because a severed network
+  looks fine. A source has **one end**, so a `flow` or `flux` annotation
+  cannot join two nodes however suggestively you place two of them: heat
+  carried from one node to another by a moving fluid has no branch kind yet,
+  and this finding is what tells you the drawing did not say what you meant.
 - `nodes-too-close` is the other half of that. Every finding names what is
   *nearest* the crowded label, and on a short run that is a wire — so if you
   are being told to move a `via` and it is not helping, look for this one: it

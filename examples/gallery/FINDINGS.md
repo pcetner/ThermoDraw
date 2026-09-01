@@ -19,9 +19,20 @@ which is where an author actually needs them.
 
 Every claim below was reproduced against the library before being written down.
 
+> **Since this was written, §1 to §5 have been fixed.** Each section below is
+> left as the agents found it, because the record of what went wrong is worth
+> more than a tidy list of what is now right. Where a fix landed it is marked
+> **[fixed]**, and the last section says what changed.
+>
+> Two consequences worth knowing before you read on. `04-immersion` and
+> `05-laser-diode` **now report a warning** where they used to be clean: the
+> new connectivity check finds exactly the severed network their agents had to
+> describe in prose. That is the check working, not a regression. And the
+> remedy strings quoted below no longer exist in that form.
+
 ---
 
-## 1. The remedies are wrong more often than they are right
+## 1. The remedies are wrong more often than they are right — [fixed]
 
 All four of these were introduced in the same change that claimed each finding
 "names the schema field that fixes it". Three agents hit them independently.
@@ -56,7 +67,7 @@ warning into an error.
 **`parallel-pair-same-side` has no fixed point with three parallel paths.**
 Two sides, three branches: the remedy cannot be satisfied. It should say so.
 
-## 2. Two false cleans
+## 2. Two false cleans — [fixed]
 
 **Setting `side` silences `parallel-pair-same-side` whether or not it helped.**
 The check skips any pair where neither label is `auto`, so following its own
@@ -76,7 +87,7 @@ nothing. Interior junctions between series layers — four of them in 02, one in
 05 — have no temperature to state. Both agents were forced to `corner`, which
 draws nothing and loses the name. Found independently by 02 and 05.
 
-## 3. Nothing checks that the network is connected
+## 3. Nothing checks that the network is connected — [fixed]
 
 04 drew a two-phase loop whose two halves are joined only by two `flow`
 annotations pointing at each other. The result is a thermal network **severed
@@ -85,9 +96,13 @@ to nothing indoors, likewise unremarked.
 
 The obvious fix is barred: the hero's own *wire* graph has two components
 (sizes 3 and 24), so a check on wire connectivity would condemn the flagship.
-The right formulation is a graph over **nodes joined by branches** — which also
-earns a distinction for free, since a `break` branch connects two nodes
-mechanically while carrying no heat.
+The right formulation is a graph over **nodes joined by branches**.
+
+A `break` branch counts, though it carries no heat. Excluding it was tempting
+— the two sides of a standoff really are thermally apart — and wrong: this
+finding is for a path the author *meant* to draw and did not, and a break is
+the opposite, an explicit statement that nothing flows. Excluding it warns
+about every standoff ever drawn.
 
 Nothing checks energy balance either. 01's heat pipe is drawn with a
 resistance that contradicts the temperatures printed either side of it by a
@@ -104,7 +119,7 @@ But it prints `wire x19` and not one coordinate, and it never states what is
 connected to what. 02 put it best: *the one question `describe` exists to
 answer is the one it doesn't.*
 
-## 5. The documentation
+## 5. The documentation — [fixed]
 
 - **`size` is never defined.** It appears in `docs/schema.md` only inside the
   check-codes table, as a field two findings tell you to adjust, in a page
@@ -119,6 +134,31 @@ answer is the one it doesn't.*
 - **`angle`'s three meanings are never set beside each other**, and the
   consequence that a node label cannot be sent *below* the line by `angle`
   alone is never stated. Four of 01's six rounds were about that one fact.
+
+---
+
+## What was fixed
+
+- **`angle` is offered only for a node's label**, the one element where it
+  means what the remedy said. `via` is never offered on a source, which has no
+  such field. `side` is offered only for directions `core.free_sides` says are
+  actually free — the checker now asks the occupancy it is holding.
+- **`parallel-pair-same-side` no longer skips a pair whose sides were set
+  explicitly**, so its own remedy can no longer buy a clean report by silencing
+  it.
+- **A node with no value and no sub draws no `T`.** Interior junctions stop
+  needing to be `corner`s.
+- **`network-in-pieces`** is new: a graph over nodes joined by branches, so the
+  hero's two-piece wire graph is not condemned. Its remedy names why a source
+  cannot join two nodes.
+- **A waypoint on a rail branch now frees the space it promised.** The rail end
+  drops from the last waypoint rather than from the node, which makes the
+  sentence in §5 true rather than merely corrected.
+- **`size` is defined**, branch `value` is documented as optional, and the
+  Angles section now says outright that no `angle` sends a node's label below
+  the line.
+
+§6 is untouched. Nothing there was fixed, and nothing there is cheap.
 
 ---
 

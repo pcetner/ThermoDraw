@@ -84,7 +84,7 @@ note: [parallel-pair-same-side] branch 2 s->amb and branch 3 s->amb run
       -> set `side` to "down" on the lower of the two
 ```
 
-Nine checks on how the drawing reads — text over text, a label shoved out
+Ten checks on how the drawing reads — text over text, a label shoved out
 past the thing it names, a wire through a symbol, ink off the page. Exit 0
 clean, 1 with findings. Every finding names the schema field that fixes it.
 
@@ -111,7 +111,7 @@ thermodraw` from a checkout.
 ```bash
 python examples/render_demo.py       # the three images above
 python examples/render_reference.py  # every symbol at every 45°
-pytest                               # 356 tests
+pytest                               # 368 tests
 ```
 
 ## More

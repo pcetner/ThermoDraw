@@ -141,6 +141,18 @@ def _rect_of(rect):
     return (left + bw / 2, top + bh / 2), (bw / 2, bh / 2)
 
 
+def _free_sides(scene, rect):
+    """Which page sides this label could actually be moved to."""
+    owner = rect.owner
+    lab = getattr(owner, "label", None)
+    if owner is None or lab is None or scene.occupancy is None:
+        return ()
+    left, top, bw, bh = rect
+    return tuple(core.free_sides(owner.at[0], owner.at[1], owner.angle,
+                                 lab.half_len, lab.half, bw, bh,
+                                 scene.occupancy, owner))
+
+
 def _obb_gap(c1, h1, a1, c2, h2, a2):
     """Separation between two oriented boxes.
 
@@ -210,45 +222,69 @@ def _name(p):
     return ref
 
 
-def _remedy(culprit, exhausted=False, pair=False):
+def _kind_of(p):
+    """Which of the three things a placement is, for advice that differs."""
+    if p is None:
+        return "?"
+    if p.element == "node":
+        return "node"
+    return "source" if str(p.ref or "").startswith("source") else "branch"
+
+
+def _move(p):
+    """How you move this particular thing, in the field that moves it."""
+    ref, kind = p.ref or "it", _kind_of(p)
+    if p.element == "wire":
+        # A source's lead is a wire carrying the source's ref, and a source
+        # has no `via` at all — the validator refuses the field outright. The
+        # old string offered one anyway.
+        return (f"move {ref} with `at`" if kind == "source"
+                else f"move a `via` waypoint on {ref} so it does not run "
+                     "past this label")
+    if p.element == "symbol":
+        where = "further from its node" if kind == "source" else \
+            "along its branch"
+        return f"move {ref} {where} with `at`"
+    return f"move {ref} with `at`"
+
+
+def _remedy(culprit, owner=None, free=(), pair=False):
     """The schema field that fixes *this* case, not a list of all of them.
 
-    Both label findings used to carry one fixed string offering `side`,
-    `angle` and `via` whatever was in the way, which leaves the author to
-    work out which applies — and sometimes they cannot, because the right
-    answer was not in the list. A source crowding its node is moved with
-    `at`, and nothing ever said so. An acceptance agent was told to "set
-    `side`" at a node that already had all four sides taken.
+    `free` is which of the four sides the occupancy says are actually
+    available, from `core.free_sides`. Naming a side without asking was the
+    single worst thing this function did: it told a node to try left or right
+    when those were the directions its two branches left in, and on a vertical
+    branch it named the two sides that lie *along* the wire. Following it
+    turned warnings into errors. The checker held the object that proved the
+    advice wrong at the moment it gave it.
 
-    `exhausted` is the push loop having run, which happens only when every
-    candidate side was blocked. It is not `report["flipped"]`: when the flip
-    fails too, `annotate` falls back to the first candidate and leaves that
-    False, so the one case where the advice matters most is the one it does
-    not mark.
+    `angle` is only ever offered for a **node**. The schema's own tables give
+    it three meanings: on a node it "moves the label and nothing else", on a
+    branch it "overrides the direction taken from the wire", and on a source
+    it aims the arrow. Recommending it for a branch label rotated the
+    conduction box to lie diagonally across its own wire — and the checker
+    then passed the result, which makes it the worst kind of bad advice: the
+    kind that appears to work.
     """
+    options = []
     if pair:
-        options = ["set `side` on one of the two"]
-    elif culprit is None:
-        options = ["set `side` on this label"]
-    elif culprit.element == "wire":
-        options = [f"move a `via` waypoint on {culprit.ref} so it does not "
-                   "run past this label", "set `side` on this label"]
-    elif culprit.element == "symbol":
-        where = ("further from its node" if culprit.ref.startswith("source")
-                 else "along its branch")
-        options = [f"move {culprit.ref} {where} with `at`",
-                   "set `side` on this label"]
-    else:                       # a node, or the boundary wall belonging to one
-        options = [f"move {culprit.ref} with `at`", "set `side` on this label"]
-    if exhausted:
-        # `_sides` tries exactly two directions, the normals of the branch.
-        # Saying "set `side`" bare is advice the solver has already taken.
-        # Naming the other two, and `angle` for what lies between them, is not.
-        options = [o for o in options if not o.startswith("set `side`")]
-        options += ["set `side` to one of the two the solver does not try "
-                    "(it tries only the sides of the branch)",
-                    "`angle` for a direction between those four"]
-    return ", or ".join(options)
+        options.append("set `side` on one of the two")
+    elif culprit is not None:
+        options.append(_move(culprit))
+
+    if free:
+        options.append("set `side` to "
+                       + " or ".join(f'"{s}"' for s in free))
+    elif owner is not None:
+        # No side is free, so naming one is worse than saying nothing. What
+        # is left depends on what the label belongs to.
+        if _kind_of(owner) == "node":
+            options.append("`angle`, which turns a node's label frame and is "
+                           "the only thing that reaches a diagonal")
+        else:
+            options.append(_move(owner) + " to take its label with it")
+    return ", or ".join(options) or "move the two apart with `at`"
 
 
 # --------------------------------------------------------------- the network
@@ -423,7 +459,7 @@ def _collisions(scene, out):
         out.append(Finding(
             "label-collision", "error", rect.ref or "a label",
             f"{rect.ref}: its label is printed over {what}",
-            remedy=_remedy(culprit, exhausted=rect.used > rect.solved,
+            remedy=_remedy(culprit, rect.owner, _free_sides(scene, rect),
                            pair=is_pair),
             at=centre))
 
@@ -457,7 +493,8 @@ def _adrift(scene, placements, out):
             "label-adrift", "warning", rect.ref or "a label",
             f"{rect.ref}: its label was pushed {rect.used - rect.solved:.0f} "
             f"past its own clearance to get around {_name(culprit)}{closer}",
-            remedy=_remedy(culprit, exhausted=rect.used > rect.solved),
+            remedy=_remedy(culprit, rect.owner,
+                           _free_sides(scene, rect)),
             at=centre))
 
 
@@ -537,6 +574,71 @@ def _crowded_run(scene, placements, out):
                    f"spacing, not the symbol, which is only "
                    f"{2 * p.symbol.half_len:.0f} wide",
             at=tuple(p.at)))
+
+
+def _islands(placements, out):
+    """Whether the network is actually one network.
+
+    A two-phase loop drawn with a `flow` annotation at each end looks joined
+    and is not: nothing in the file relates the two arrows except that the
+    same number was typed twice. The drawing came back clean with its network
+    severed in half, and a house left its roof wired to nothing indoors. Both
+    passed every other check here.
+
+    Over **nodes joined by branches**, not over wire segments. The hero's own
+    wire graph is in two pieces — sizes 3 and 24 — because a source's lead and
+    a node's boundary stub are legitimately separate bits of ink, so a check
+    on wire connectivity would condemn the flagship. Connectivity is a
+    question about the network, and the network is nodes and branches.
+
+    A `break` branch **does** count, though it carries no heat. It was
+    tempting to exclude it — the two sides of a standoff really are thermally
+    apart — but that is the wrong question. This finding exists to catch a
+    path the author meant to draw and did not. A break is the opposite: an
+    explicit statement that nothing flows here. Excluding it warns about every
+    standoff ever drawn, which is a rule an author learns to ignore.
+    """
+    adj = {p.ref[6:-1]: set() for p in placements
+           if p.element == "node" and (p.ref or "").startswith("node '")}
+    for p in placements:
+        if p.symbol is None or not (p.ref or "").startswith("branch "):
+            continue
+        ends = p.ref.split(" ", 2)[-1].split("->")
+        if len(ends) != 2:
+            continue
+        for end in ends:
+            adj.setdefault(end, set())
+        adj[ends[0]].add(ends[1])
+        adj[ends[1]].add(ends[0])
+    if len(adj) < 2:
+        return
+
+    seen, groups = set(), []
+    for start in sorted(adj):
+        if start in seen:
+            continue
+        stack, group = [start], set()
+        while stack:
+            v = stack.pop()
+            if v in group:
+                continue
+            group.add(v)
+            stack += [w for w in adj[v] if w not in group]
+        seen |= group
+        groups.append(group)
+    if len(groups) < 2:
+        return
+
+    groups.sort(key=lambda g: (-len(g), sorted(g)))
+    for group in groups[1:]:
+        named = ", ".join(f"{v!r}" for v in sorted(group))
+        out.append(Finding(
+            "network-in-pieces", "warning", sorted(group)[0],
+            f"nothing joins {named} to the rest of the network",
+            remedy="connect it with a branch. If a `flow` or `flux` source is "
+                   "standing in for a path that carries heat between two "
+                   "nodes, it cannot join them: a source has one end",
+            at=None))
 
 
 def _corridor(scene, edges, rings, out):
@@ -704,6 +806,14 @@ def _parallel_pairs(placements, scene, out):
     the hero's own convection/radiation pair, which is the published README
     image. A rule that condemns the flagship is a rule an author learns to
     ignore, and then ignores when it is right.
+
+    It used to skip any pair where neither label was `auto`, on the reasoning
+    that an explicit side is the author's decision. The effect was that
+    setting `side` — which is exactly what this finding tells you to do —
+    removed the pair from the check whether or not it had helped, so the
+    documented remedy bought a clean report either way. A false clean is worse
+    than a missing check, and a note is already something you are free to
+    ignore. What matters is where the labels actually landed, not how.
     """
     by_rect = {id(r.owner): r for r in scene.rects}   # Placement is unhashable
     pairs = defaultdict(list)
@@ -718,8 +828,6 @@ def _parallel_pairs(placements, scene, out):
             for pb in group[i + 1:]:
                 ra, rb = by_rect.get(id(pa)), by_rect.get(id(pb))
                 if ra is None or rb is None or ra.side != rb.side:
-                    continue
-                if "auto" not in (pa.label.side, pb.label.side):
                     continue
                 out.append(Finding(
                     "parallel-pair-same-side", "note", pa.ref,
@@ -754,6 +862,7 @@ def check(diagram, size=None, padding=PADDING, source="diagram"):
     _collisions(scene, findings)
     _adrift(scene, placements, findings)
     _crowded_run(scene, placements, findings)
+    _islands(placements, findings)
     edges = wire_graph(placements)
     _corridor(scene, edges, cycles(edges), findings)
     _symbols_overlap(placements, findings)

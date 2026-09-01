@@ -135,7 +135,16 @@ def _source_offset(sym):
 
 
 def _rail_point(diagram, node_id, other):
-    """Where a branch meets the rail: straight below the node it leaves."""
+    """Where a branch meets the rail: straight below wherever it came from.
+
+    `other` is the last waypoint if the branch has any, and the node itself
+    otherwise. It used to be the node either way, which made
+    `docs/schema.md`'s promise — that waypoints on a capacitance are "how you
+    free up the space directly under a node that already has too much
+    attached to it" — false: the route detoured and came back to the same
+    place. Buying a 480-unit diagonal for nothing cost one reader a full
+    re-layout.
+    """
     return (other[0], diagram.rail.y)
 
 
@@ -156,10 +165,12 @@ def layout(diagram):
         # the rail end depends on the other end, so resolve the node first
         if b.source == M.RAIL:
             target = _endpoint(diagram, b.target, (0, 0))
-            source = _rail_point(diagram, b.source, target)
+            near = tuple(b.via[0]) if b.via else target
+            source = _rail_point(diagram, b.source, near)
         else:
             source = _endpoint(diagram, b.source, (0, 0))
-            target = _endpoint(diagram, b.target, source)
+            near = tuple(b.via[-1]) if b.via else source
+            target = _endpoint(diagram, b.target, near)
         route = [source] + [tuple(p) for p in b.via] + [target]
 
         index = _point_on(route, b.at) if b.at else _longest(route)
@@ -232,9 +243,18 @@ def layout(diagram):
         sym = BY_KEY.get(n.kind)
         half = sym.half if sym else 5.5
         half_len = sym.half_len if sym else 5.5
+        # `T` with no number after it is not a statement about anything, and
+        # interior junctions between series layers routinely have no
+        # temperature of their own. It rendered as a lone italic T and the
+        # checker said nothing, so two readers fell back to `corner`, which
+        # draws nothing and loses the name. A subscript is enough to make it
+        # meaningful — a diagram may be symbolic throughout — but a bare T
+        # is not.
+        names = n.value is not None or bool(n.sub)
         out.append(Placement(
             "node", at=at, angle=n.angle, ref=ref,
-            label=Label(user=n.label, name=S.S_("T", n.sub),
+            label=Label(user=n.label,
+                        name=S.S_("T", n.sub) if names else None,
                         value=diagram.value_text(n.kind, n.value),
                         half=half, half_len=half_len,
                         side=n.side)))
