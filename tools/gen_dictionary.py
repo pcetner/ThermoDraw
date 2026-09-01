@@ -44,9 +44,10 @@ PAGE = ROOT / "Dictionary.html"
 # now sits once, at the top, on the panel you pick a symbol from — and the
 # entries carry no badge at all, because the sticky heading above them already
 # says which group is being read.
-WHERE = {"node": ("Node", "nodes", "A place that has a temperature."),
+WHERE = {"node": ("Node", "nodes",
+                  "A point in the network. Most have a temperature."),
          "branch": ("Path", "branches",
-                    "A route heat takes between two places."),
+                    "A connection between two points in the network."),
          "source": ("Source", "sources",
                     "Heat entering or leaving the network at one place.")}
 CATEGORIES = ("node", "branch", "source")
@@ -95,8 +96,8 @@ ENTRIES = {
     "break": dict(
         where="node",
         what="A boundary the network touches mechanically but not thermally. "
-             "It is the fixed node with its connecting stub taken away, and "
-             "that gap is the only difference between the two: nothing "
+             "It is drawn like a fixed node with its connecting stub taken "
+             "away, and that gap is what tells the two apart: nothing "
              "crosses here. With no heat path there is usually no "
              "temperature worth stating, so most break nodes carry a label "
              "and no value.",
@@ -139,9 +140,10 @@ ENTRIES = {
              "because radiation needs no material to travel through, so the "
              "wave arrows cross it on their own. The outline is dashed as a "
              "warning: this is the one path whose heat flow is not "
-             "proportional to the temperature difference. It rises with the "
-             "fourth power of temperature, so one resistance value only "
-             "holds near the temperatures it was worked out at.",
+             "proportional to the temperature difference. It goes as the "
+             "difference between the fourth powers of the two temperatures, "
+             "so one resistance value only holds near the pair of "
+             "temperatures it was worked out at.",
         use="The warmth on your face from a fire across the room, which "
             "reaches you without heating the air in between.",
         code={"from": "fire", "to": "you", "kind": "rad",
@@ -187,7 +189,7 @@ ENTRIES = {
         use="The flattened copper tube inside a laptop, carrying heat from "
             "the chip out to the fan with almost no temperature drop.",
         code={"from": "chip", "to": "fins", "kind": "pipe",
-              "label": "Heat pipe", "value": "0.0018"}),
+              "label": "Heat pipe", "value": "0.10"}),
     "mixed": dict(
         where="branch",
         what="One number covering more than one mechanism, or a mechanism you "
@@ -204,8 +206,9 @@ ENTRIES = {
         where="branch",
         what="Thermal mass: how much heat it takes to raise something one "
              "degree, in joules per kelvin. It stores heat rather than "
-             "conducting it, so it hangs from a node down to the reference "
-             "rail instead of lying between two places. It matters only "
+             "passing it on, so it is hung from a node down to the "
+             "reference rail rather than carrying heat to a second place. "
+             "It matters only "
              "while things are changing. Once everything has settled it "
              "carries nothing.",
         use="A cast-iron pan: slow to heat up, and just as slow to cool down "
@@ -310,10 +313,11 @@ LEDES = {
         "A place in the network. A few have their temperature held "
         "by something outside; most do not.",
     "Paths: what the heat crosses":
-        "Four mechanisms, four interiors. The pattern inside the box names "
-        "what the heat is passing through.",
+        "The three ways heat moves, and the resistance of a join between "
+        "two solids. The pattern inside the box names what the heat is "
+        "passing through.",
     "Paths: shape, phase, mechanism, storage":
-        "Paths the four basic mechanisms cannot describe on their own.",
+        "Paths the first four cannot describe on their own.",
     "Paths that carry a rate, or carry nothing":
         "Two paths that state no resistance. One carries a rate, the "
         "other carries nothing at all.",
