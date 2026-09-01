@@ -22,5 +22,9 @@ dependencies = []
 [project.optional-dependencies]
 dev = ["pytest", "cairosvg", "pillow"]
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src", "examples", "tests"]
+
 [tool.setuptools.packages.find]
 where = ["src"]

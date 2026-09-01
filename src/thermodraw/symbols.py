@@ -33,7 +33,8 @@ LEAD = 20
 
 def canvas(w, h, body):
     return (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {w} {h}" '
-            f'width="100%" role="img"><style>{CSS}</style>{body}</svg>')
+            f'width="100%" role="img"><style>{CSS}</style>'
+            f'{S.hoist_defs(body)}</svg>')
 
 
 def leads(hb, L=LEAD):

@@ -1,13 +1,14 @@
 """ThermoDraw — thermal network diagrams for Python.
 
-    from thermodraw import symbols, theme
+    from thermodraw import save, symbols, theme
 
     svg = symbols.diagonal_demo()
-    open("out.svg", "w").write(theme.bake(svg, "light"))
+    save(theme.bake(svg, "light"), "out.svg")
 
 Design notes and the reasoning behind each symbol live in CLAUDE.md.
 """
-from . import core, symbols, theme
+from . import core, io, symbols, theme
+from .io import save
 
 __version__ = "0.1.0"
-__all__ = ["core", "symbols", "theme"]
+__all__ = ["core", "io", "save", "symbols", "theme"]

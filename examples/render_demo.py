@@ -17,7 +17,7 @@ import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "src"))
 
-from thermodraw import core as S, symbols as sym, theme  # noqa: E402
+from thermodraw import core as S, save, symbols as sym, theme  # noqa: E402
 
 OUT = pathlib.Path(__file__).resolve().parents[1] / "docs" / "assets"
 
@@ -207,8 +207,7 @@ def main():
     for name, fn in SCENES.items():
         svg = sized(fn())
         for mode in ("light", "dark"):
-            (OUT / f"{name}-{mode}.svg").write_text(
-                theme.bake(svg, mode), encoding="utf-8")
+            save(theme.bake(svg, mode), OUT / f"{name}-{mode}.svg")
     print(f"wrote {2 * len(SCENES)} files to {OUT}")
 
 
