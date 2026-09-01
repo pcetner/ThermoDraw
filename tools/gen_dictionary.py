@@ -73,8 +73,8 @@ ENTRIES = {
         what="A place in the network that has a temperature, with nothing "
              "holding it there. Its temperature is whatever the paths meeting "
              "at it settle on, which usually makes it the thing you are "
-             "trying to work out. Most nodes are free ones, and it is the "
-             "default &mdash; leave <code>kind</code> out and you get this.",
+             "trying to work out. Most nodes are free ones. It is also the "
+             "default, so leaving <code>kind</code> out gives you this.",
         use="The outside of a mug of tea. Nothing sets its temperature "
             "directly; it lands wherever the tea and the room leave it.",
         code={"id": "mug", "kind": "free", "label": "Mug surface",
@@ -102,9 +102,9 @@ ENTRIES = {
     "phase": dict(
         where="node",
         what="A temperature held constant by a change of phase rather than by "
-             "a boundary, so it takes the constant-temperature marking &mdash; "
-             "two short rules beneath &mdash; and no wall. While the phase "
-             "change lasts, heat crosses it with no temperature rise at all.",
+             "a boundary. It takes the constant-temperature marking, two "
+             "short rules beneath, and no wall. While the phase change "
+             "lasts, heat crosses it with no temperature rise at all.",
         use="A pan of boiling water. It sits at 100&nbsp;&deg;C however far "
             "you turn the hob up; the extra heat makes steam instead.",
         code={"id": "boil", "kind": "phase", "label": "Boiling water",
@@ -121,22 +121,23 @@ ENTRIES = {
               "value": "0.35"}),
     "conv": dict(
         where="branch",
-        what="Heat leaving a surface into a moving fluid. Streamlines say a "
-             "fluid is passing, and they turn with the block because flow "
-             "along the path is what they mean. The faster the fluid moves "
-             "and the more surface it touches, the smaller the resistance.",
-        use="A hot drink cooling into the air around it &mdash; and cooling "
-            "faster when you blow across the top.",
+        what="Heat leaving a surface into a moving fluid. The streamlines "
+             "inside the box are the fluid passing over the surface. The "
+             "faster it moves and the more surface it touches, the smaller "
+             "the resistance.",
+        use="A hot drink cooling into the air around it, and cooling faster "
+            "when you blow across the top.",
         code={"from": "mug", "to": "room", "kind": "conv",
               "label": "Mug → Room air", "value": "1.80"}),
     "rad": dict(
         where="branch",
         what="Heat leaving a surface as thermal radiation. The box is empty "
-             "and the wave arrows cross it unaided, because radiation needs "
-             "no medium. The dashed outline is redundant coding for the one "
-             "path that is not linear in temperature &mdash; it goes as the "
-             "fourth power &mdash; so a reader notices before trusting any "
-             "superposition.",
+             "because radiation needs no material to travel through, so the "
+             "wave arrows cross it on their own. The outline is dashed as a "
+             "warning: this is the one path whose heat flow is not "
+             "proportional to the temperature difference. It rises with the "
+             "fourth power of temperature, so one resistance value only "
+             "holds near the temperatures it was worked out at.",
         use="The warmth on your face from a fire across the room, which "
             "reaches you without heating the air in between.",
         code={"from": "fire", "to": "you", "kind": "rad",
@@ -146,9 +147,9 @@ ENTRIES = {
         what="The resistance of two solids pressed together. No two surfaces "
              "are perfectly flat, so they touch only in places and heat is "
              "held up at the join. Each half is hatched in the opposite "
-             "direction with a seam between them &mdash; the drafting "
-             "convention for two parts meeting in section. Without the "
-             "opposing hatch it would read as one solid block.",
+             "direction with a seam between them, which is the drafting "
+             "convention for two parts meeting in section. Hatched the "
+             "same way, it would read as one solid block.",
         use="A saucepan sitting on a hotplate. The two never quite meet, and "
             "the gap costs you a temperature drop.",
         code={"from": "hob", "to": "pan", "kind": "contact",
@@ -172,9 +173,9 @@ ENTRIES = {
              "temperature. Inside it a fluid boils at the hot end and "
              "condenses at the cold one, which is what the opposed arrows "
              "show: vapour out along one face, liquid back along the other. "
-             "It still takes a resistance, because the real thing has a small "
-             "one; what it stops doing is wearing solid-conduction hatching "
-             "on a device that is not conducting.",
+             "It is still drawn as a box with a resistance, because a real "
+             "one does have a small resistance. The arrows say the heat is "
+             "carried by boiling and condensing rather than by conduction.",
         use="The flattened copper tube inside a laptop, carrying heat from "
             "the chip out to the fan with almost no temperature drop.",
         code={"from": "chip", "to": "fins", "kind": "pipe",
@@ -182,11 +183,11 @@ ENTRIES = {
     "mixed": dict(
         where="branch",
         what="One number covering more than one mechanism, or a mechanism you "
-             "do not wish to name. The interior is empty, and in a vocabulary "
-             "where the texture names the mechanism that emptiness is a "
-             "statement rather than an omission. It is the only path whose "
-             "subscript you set, because it is the only one the library "
-             "cannot name for you.",
+             "do not wish to name. The box is left empty. Since the pattern "
+             "inside a box is what names the mechanism, an empty box means "
+             "the mechanism is deliberately not stated, not that it was "
+             "forgotten. It is the only path whose subscript you set, "
+             "because it is the only one the library cannot name for you.",
         use="A double-glazed window, sold as a single figure that already has "
             "conduction and convection rolled together.",
         code={"from": "inside", "to": "outside", "kind": "mixed",
@@ -196,8 +197,8 @@ ENTRIES = {
         what="Thermal mass: the heat a thing has to take in before its "
              "temperature will rise. It stores rather than conducts, so it "
              "hangs from a node down to the reference rail instead of lying "
-             "between two places. It matters only while things are changing "
-             "&mdash; once everything has settled it carries nothing.",
+             "between two places. It matters only while things are "
+             "changing. Once everything has settled it carries nothing.",
         use="A cast-iron pan: slow to heat up, and just as slow to cool down "
             "again.",
         unit="J/K",
@@ -206,13 +207,13 @@ ENTRIES = {
 
     "flow-branch": dict(
         where="branch",
-        what="Heat moved bodily from one place to another because a fluid is "
-             "moving and taking the heat with it. It carries a rate, not a "
-             "resistance. Chevrons rather than a box: the interior of a box "
-             "states what the heat is crossing, and here nothing is crossed "
-             "&mdash; the medium is going. It is the only directed path, so "
+        what="Heat moved from one place to another because a fluid is "
+             "moving and carrying it. It states a rate, not a resistance. "
+             "It is drawn as chevrons in the line rather than as a box "
+             "because nothing is being crossed: the fluid itself is what "
+             "travels. It is the only path with a direction, so "
              "<code>from</code> and <code>to</code> are the way the heat "
-             "travels, and <code>angle</code> is refused on one.",
+             "goes, and <code>angle</code> is refused on one.",
         use="Hot water pumped from a boiler to a radiator. The heat travels "
             "because the water does.",
         code={"from": "boiler", "to": "radiator", "kind": "flow",
@@ -232,9 +233,9 @@ ENTRIES = {
     "diss": dict(
         where="source",
         what="Heat appearing at a place because something there is making it. "
-             "An arrow rather than a two-terminal element, because heat "
-             "generated somewhere does not travel to that place from anywhere "
-             "&mdash; it simply appears. It always points inward.",
+             "It is an arrow rather than a box, because heat generated at a "
+             "place does not travel to it from anywhere else. It simply "
+             "appears there, so the arrow always points inward.",
         use="A light bulb, which turns most of the power it draws straight "
             "into heat.",
         code={"to": "bulb", "kind": "diss", "label": "Bulb power",
@@ -294,15 +295,16 @@ CORNER = dict(
 # attached to the wrong set of symbols.
 LEDES = {
     "Nodes":
-        "A place, and what &mdash; if anything &mdash; holds its temperature "
-        "there.",
+        "A place in the network. A few have their temperature held "
+        "by something outside; most do not.",
     "Paths: what the heat crosses":
         "Four mechanisms, four interiors. The pattern inside the box names "
         "what the heat is passing through.",
     "Paths: shape, phase, mechanism, storage":
         "Paths the four basic mechanisms cannot describe on their own.",
     "Paths that carry a rate, or carry nothing":
-        "Boxes resist; these two do not.",
+        "Two paths that state no resistance. One carries a rate, the "
+        "other carries nothing at all.",
     "Sources":
         "Heat entering or leaving one place, from outside the network.",
 }
@@ -420,18 +422,31 @@ def _slug(title):
     return re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")
 
 
-# The one rule that generates the whole vocabulary, and the two symbols that
-# show it. Drawn bare — no label, no value — because the point being made is
-# about the shape, and a worked example would be the thing a reader looked at
-# instead. `cond` and `diss` appear again below with their own examples; this
-# is the primer, not an entry.
+# The three shapes a path or a source can take, and the symbols that show
+# them. Drawn without labels, because the point here is the shape.
+#
+# Each panel has to answer the question its own picture raises. The first
+# draft showed a hatched box and never said why it was hatched, and never
+# said what a rate is; chevrons, which are a third of the vocabulary's
+# shapes, went unmentioned entirely.
+#
+# `cond`, `diss` and `flow-branch` appear again below with worked examples.
+# This is the primer, not an entry.
 SHAPES = [
     ("cond", "A box is a resistance",
-     "Heat crosses it and comes out colder. The pattern inside says what it "
-     "is crossing, which is why the outline never has to change shape."),
+     "Heat crosses it and comes out colder. The resistance is how much "
+     "temperature drop each watt costs, in kelvin per watt. The pattern "
+     "inside names what the heat is crossing: hatching for solid material, "
+     "streamlines for a moving fluid, wave arrows for radiation."),
     ("diss", "An arrow is a rate",
-     "It states how much heat is arriving or being carried, and says nothing "
-     "about how hard it was to get there."),
+     "A rate is heat per unit time, in watts. An arrow states how much heat "
+     "arrives at one place, or leaves it, and states no resistance at all. "
+     "Which end of the arrow touches the place decides which of the two it "
+     "is."),
+    ("flow-branch", "Chevrons carry a rate",
+     "Chevrons in a line are heat moving from one place to another because a "
+     "fluid is moving and carrying it. Nothing is crossed, so there is no box "
+     "and no resistance to give, only the rate."),
 ]
 
 
@@ -439,20 +454,20 @@ def shapes(by_key):
     """The reading rule, as its own section rather than a footnote.
 
     It spent one revision as a single line under the contents, which is the
-    wrong weight for the thing every other page on this site is downstream
-    of: a reader who has this cannot misread any symbol badly, and a reader
-    who does not has to learn nineteen drawings one at a time.
+    wrong weight for the thing every other entry depends on: a reader holding
+    it cannot badly misread any symbol here, and a reader without it learns
+    nineteen drawings one at a time.
     """
     out = ['<section id="grp-shapes"><div class="section-head">'
-           "<h2>Boxes and arrows</h2>"
-           '<p class="lede">Two shapes carry the whole vocabulary. Everything '
-           "below is one or the other.</p></div>"
+           "<h2>Boxes, arrows and chevrons</h2>"
+           '<p class="lede">Three shapes. A box states a resistance. Arrows '
+           "and chevrons state a rate.</p></div>"
            '<div class="shapes">']
     for key, head, body in SHAPES:
         card = symbols.card(by_key[key], fluid=True, user=None, name=None,
                             value=None)
         out.append(f'<div class="shape"><figure>{card}</figure>'
-                   f"<div><h3>{head}</h3><p>{body}</p></div></div>")
+                   f"<h3>{head}</h3><p>{body}</p></div>")
     out.append("</div></section>")
     return "".join(out)
 
