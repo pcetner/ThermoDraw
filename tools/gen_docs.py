@@ -1,0 +1,62 @@
+"""Regenerate the symbol reference from the library.
+
+    python tools/gen_docs.py
+
+docs/symbol-reference.html is CLAUDE.md's visual specification, and it had no
+generator: 165KB of hand-assembled inline SVG that could drift from the code
+without anything noticing, and had — it was labelled draft 5 against core.py's
+draft 4. The prose lives in the template beside it; the figures and the
+per-symbol notes come from here, so the page cannot go stale again.
+
+tests/test_docs.py asserts the committed page matches a fresh run.
+"""
+import argparse
+import pathlib
+import sys
+
+ROOT = pathlib.Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src"))
+
+from thermodraw import symbols  # noqa: E402
+
+TEMPLATE = ROOT / "docs" / "symbol-reference.template.html"
+PAGE = ROOT / "docs" / "symbol-reference.html"
+
+
+def rot(sym):
+    """One symbol: its name, the reasoning, and eight orientations."""
+    return (f'<div class="rot"><h4>{sym.name}</h4><p>{sym.note}</p>'
+            f'<figure>{symbols.strip(sym, fluid=True)}</figure></div>')
+
+
+def build():
+    page = TEMPLATE.read_text(encoding="utf-8")
+    page = page.replace("{{SYMBOLS}}",
+                        "\n".join(rot(s) for s in symbols.SYMBOLS))
+    page = page.replace("{{REGION_GRID}}", symbols.region_grid(fluid=True))
+    page = page.replace("{{DIAGONAL_DEMO}}", symbols.diagonal_demo(fluid=True))
+    return page
+
+
+def main(argv=None):
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--check", action="store_true",
+                    help="exit non-zero if the page is out of date")
+    args = ap.parse_args(argv)
+
+    fresh = build()
+    if args.check:
+        current = PAGE.read_text(encoding="utf-8") if PAGE.exists() else ""
+        if current != fresh:
+            print("docs/symbol-reference.html is stale; run tools/gen_docs.py")
+            return 1
+        print("docs/symbol-reference.html is up to date")
+        return 0
+    with open(PAGE, "w", encoding="utf-8", newline="\n") as f:
+        f.write(fresh)
+    print(f"{len(symbols.SYMBOLS)} symbols -> {PAGE} ({len(fresh):,} bytes)")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

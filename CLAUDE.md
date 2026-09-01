@@ -16,13 +16,26 @@ The symbol vocabulary is settled. The network layer is not built yet.
 
 ```
 src/thermodraw/
-  core.py      text metrics, transforms, the label solver, textures
+  model.py     the diagram as data — what you write, what an LLM emits
+  layout.py    model -> placements. The one stage the network layer replaces
+  render.py    placements -> SVG. Pure, deterministic, sizes its own canvas
+  builder.py   sugar over model.py, holding no state the data cannot express
+  core.py      text metrics, transforms, the label solver, occupancy, textures
   symbols.py   the twelve symbols, plus sheet renderers
-  theme.py     CSS variables for web, baked literals for Word/slides
+  theme.py     CSS variables for web, baked literals and fonts for Word/slides
+  _metrics.py  generated character widths — do not edit
+  fonts/       the vendored subset, OFL-1.1
+tools/
+  gen_metrics.py  width tables from the real font
+  subset_font.py  the vendored faces
+  gen_docs.py     regenerates the symbol reference
 examples/
+  hero.json              the README diagram, as data
+  render_demo.py         the three README images
   render_reference.py    renders every symbol at every 45°
 docs/
-  symbol-reference.html  the design record — open this first
+  schema.md              the format, written to be pasted into a prompt
+  symbol-reference.html  the design record — open this first (generated)
 ```
 
 `docs/symbol-reference.html` is the visual specification. It shows every
@@ -34,6 +47,23 @@ before changing any glyph.
 These were argued out over several rounds. Each exists for a reason, and
 several reverse an earlier decision that turned out to be wrong. Do not
 change them without understanding what problem they solved.
+
+### The pipeline
+
+- **A diagram is data, and the data is the representation.** `dict -> Diagram
+  -> placements -> SVG`, three pure stages with a builder as sugar over the
+  first. Anything the builder can say is expressible as a dict, so a diagram
+  from JSON is indistinguishable from one built in Python. The reason is that
+  you should be able to describe a network to a model and have it emit
+  something drawable; `docs/schema.md` exists to be pasted into a prompt.
+- **`layout` is the seam.** It reads the coordinates you supply today and will
+  solve for the ones you omit in 0.3. Nothing either side of it changes, and
+  no diagram written now stops working.
+- **Rendering is a pure function of its input.** Element ids are derived from
+  the element's own parameters, not a counter. A counter meant the same
+  diagram rendered twice in one process produced different bytes, which no
+  golden-file test survives. Identical clip paths now collapse onto one
+  definition, so `canvas` hoists `<defs>` and keeps one copy of each.
 
 ### Symbols
 
@@ -103,6 +133,18 @@ bounding box clips a rotated symbol's corner long before the glyphs would, so
 the search kept pushing. Solving directly is what brought the labels in
 tight. **Do not replace this with an iterative search.**
 
+`clear_offset` clears a label from *its own* symbol and nothing else, which is
+correct and is why it stays. Everything else on the page is `core.Occupancy`:
+placed labels, drawn wires, other symbols. A label skips its own symbol
+through `owner`, so the tight solve is never second-guessed by a bounding box.
+`annotate` tries the automatic side, then the opposite one — a blocked label
+steps across the branch rather than drifting off it — and only pushes outward
+if both are taken. `side="up"/"down"/"left"/"right"` overrides the choice.
+
+Before this existed, the demo was fixed by hand: moving coordinates, and
+inflating `half` — a clearance parameter — into a "push harder" knob. If you
+find yourself doing that again, the occupancy list is the thing to reach for.
+
 ## Known sharp edges
 
 - **Text widths are measured**, not estimated. `core._metrics` is generated
@@ -139,12 +181,12 @@ tight. **Do not replace this with an iterative search.**
 
 In rough priority order:
 
-1. **The network layer.** Everything currently places one symbol at a time at
-   coordinates you supply. What is wanted: declare nodes and branches, get a
-   laid-out diagram. A ladder walking left to right with capacitances dropping
-   to a common rail covers most cases; branches and parallel paths need
-   routing. This is the largest remaining piece and the only genuinely hard
-   one.
+1. **The network layer.** `layout` computes the coordinates you leave out.
+   The model, the schema and the render are in place; what is missing is the
+   solver. A ladder walking left to right with capacitances dropping to a
+   common rail covers most cases; parallel paths are expressed with explicit
+   `via` waypoints today and need routing. This is the largest remaining piece
+   and the only genuinely hard one.
 2. **A spreading resistance symbol** — the one gap in the vocabulary. The
    natural glyph under the current scheme is hatching that fans from a point
    rather than running parallel, reading as heat diverging into a larger

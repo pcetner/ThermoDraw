@@ -150,6 +150,20 @@ class Diagram:
                 elif end not in seen:
                     raise DiagramError(
                         f"branch {b.source}-{b.target}: no node named {end!r}")
+        known = set(QUANTITY.values())
+        for quantity in self.units:
+            if quantity not in known:
+                raise DiagramError(
+                    f"units names {quantity!r}, which is not a quantity here; "
+                    "expected one of " + ", ".join(sorted(known)))
+        # Units are fixed per diagram and given once per quantity, so they
+        # cannot be mixed. What can still go wrong is a value with no unit
+        # at all, which renders as a bare number.
+        for owner, kind, value in self._valued():
+            if value is not None and not self.unit(kind):
+                raise DiagramError(
+                    f"{owner} has the value {value!r} but units has no entry "
+                    f"for {QUANTITY[kind]!r}, so it would render bare")
         for s in self.sources:
             if s.kind not in SOURCE_KINDS:
                 raise DiagramError(
@@ -158,6 +172,15 @@ class Diagram:
             if s.target not in seen:
                 raise DiagramError(f"source: no node named {s.target!r}")
         return self
+
+    def _valued(self):
+        for n in self.nodes:
+            if n.kind != "corner":
+                yield f"node {n.id!r}", n.kind, n.value
+        for b in self.branches:
+            yield f"branch {b.source}-{b.target}", b.kind, b.value
+        for s in self.sources:
+            yield f"source at {s.target}", s.kind, s.value
 
     def to_dict(self):
         """JSON-shaped, using from/to rather than the Python-safe names."""
