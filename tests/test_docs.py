@@ -161,3 +161,33 @@ class TestTheDictionary:
             svg = gen_dictionary.plate(by_key[key], spec)
             unit = spec.get("unit") or by_key[key].value.split(" ", 1)[1]
             assert f'{spec["code"]["value"]} {unit}'.split()[-1] in svg
+
+    def test_the_contents_defines_each_category_once(self):
+        """The three words the page is organised around are defined on the
+        panel whose symbols they cover. They used to be a badge on all
+        nineteen entries, which repeated the words and defined none of them.
+        """
+        page = (ROOT / "Dictionary.html").read_text(encoding="utf-8")
+        sys.path.insert(0, str(ROOT / "tools"))
+        import gen_dictionary
+
+        for where in gen_dictionary.CATEGORIES:
+            label, _, definition = gen_dictionary.WHERE[where]
+            assert page.count(f"<h4>{label}</h4>") == 1, label
+            assert definition in page, label
+        assert 'class="badge"' not in page
+
+    def test_every_symbol_is_listed_under_exactly_one_category(self):
+        from thermodraw import symbols
+        page = (ROOT / "Dictionary.html").read_text(encoding="utf-8")
+        keys = [s.key for s in symbols.SYMBOLS] + ["corner"]
+        for key in keys:
+            assert page.count(f'<a href="#sym-{key}">') == 1, key
+
+    def test_each_group_heading_can_pin_itself(self):
+        """The heading stays named at the top of the window for as long as its
+        own group is being read, which is what replaced the badges."""
+        page = (ROOT / "Dictionary.html").read_text(encoding="utf-8")
+        from thermodraw import symbols
+        assert page.count('<div class="section-head">') == len(symbols.GROUPS)
+        assert "position:sticky" in page
