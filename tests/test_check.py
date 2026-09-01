@@ -781,6 +781,97 @@ class TestABoundaryNodesOwnLabel:
         assert not codes(check(b))
 
 
+class TestRepeatedBranches:
+    """`count` draws the repetition, and condenses it above three.
+
+    The design point that makes the toggle cheap: the condensed form keeps
+    the *outermost* copies, so both forms occupy the same footprint. Swapping
+    never re-fits the canvas and never moves a label, which is why both can
+    ship in one file and the viewer only flips `display`.
+    """
+
+    @staticmethod
+    def group(n, arrangement="parallel", span=720):
+        return (DiagramBuilder(R="K/W", T="C")
+                .node("a", "Junction", "72", at=(0, 0))
+                .node("b", "Spreader", "61", at=(span, 0))
+                .branch("a", "b", "cond", "Die attach", "0.0275",
+                        count=n, arrangement=arrangement).build())
+
+    @pytest.mark.parametrize("n", [2, 3, 4, 8, 16])
+    def test_every_copy_is_drawn(self, n):
+        syms = [p for p in layout(self.group(n)) if p.symbol is not None]
+        assert len(syms) == n
+        assert len({p.copy for p in syms}) == n, "copies are not distinguished"
+
+    @pytest.mark.parametrize("n,condensed", [(2, False), (3, False),
+                                             (4, True), (16, True)])
+    def test_above_three_condenses(self, n, condensed):
+        placements = layout(self.group(n))
+        dots = [p for p in placements if p.element == "ellipsis"]
+        assert bool(dots) is condensed
+        hidden = [p for p in placements if not p.shown]
+        assert bool(hidden) is condensed
+
+    def test_the_two_forms_have_the_same_footprint(self):
+        """Which is the whole reason a viewer can swap them for free."""
+        from thermodraw.render import bounds
+        placements = layout(self.group(16))
+        shown = [bounds(p) for p in placements if p.shown and p.element != "anchor"]
+        every = [bounds(p) for p in placements if p.element != "anchor"]
+        assert (min(b[1] for b in shown) == pytest.approx(
+            min(b[1] for b in every)))
+        assert (max(b[3] for b in shown) == pytest.approx(
+            max(b[3] for b in every)))
+
+    def test_both_forms_ship_with_stable_ids(self):
+        from thermodraw import render
+        from thermodraw.render import variant_id
+        svg = render(layout(self.group(16)))
+        full = variant_id("branch 0 a->b", "full")
+        assert f'<g id="{full}" display="none">' in svg
+        assert f'<g id="{variant_id("branch 0 a->b", "condensed")}">' in svg
+
+    def test_an_id_does_not_move_when_the_diagram_does(self):
+        from thermodraw.render import variant_id
+        assert variant_id("branch 0 a->b", "full") ==             variant_id("branch 0 a->b", "full")
+        assert variant_id("branch 0 a->b", "full") !=             variant_id("branch 1 a->b", "full")
+
+    def test_the_hidden_form_is_kept_out_of_the_occupancy(self):
+        """The label is solved against what is on show, not against both."""
+        scene = compose(layout(self.group(16)))
+        owners = {id(e.owner) for e in scene.occupancy.items}             if hasattr(scene.occupancy, "items") else None
+        rect = [r for r in scene.rects if r.ref == "branch 0 a->b"][0]
+        assert rect.clear and rect.used == rect.solved
+
+    @pytest.mark.parametrize("n", [2, 3, 4, 8, 16])
+    @pytest.mark.parametrize("arrangement", ["parallel", "series"])
+    def test_the_default_drawing_checks_clean(self, n, arrangement):
+        """A fan radiating straight out of a node crossed its own label, so
+        every default-placed group reported `label-adrift`. The trunk either
+        side is what fixed it."""
+        assert check(self.group(n, arrangement, span=900)).ok
+
+    def test_one_label_speaks_for_the_group(self):
+        rects = compose(layout(self.group(8))).rects
+        assert len([r for r in rects if r.ref == "branch 0 a->b"]) == 1
+
+    def test_the_label_says_how_many_and_how_they_combine(self):
+        from thermodraw.describe import describe
+        says = {l.ref: l.says for l in describe(self.group(8)).lines}
+        assert "8 in parallel" in says["branch 0 a->b"]
+        series = {l.ref: l.says
+                  for l in describe(self.group(20, "series")).lines}
+        assert "20 in series" in series["branch 0 a->b"]
+
+    def test_a_repeated_branch_cannot_also_be_routed(self):
+        with pytest.raises(DiagramError, match="via"):
+            (DiagramBuilder(R="K/W", T="C")
+             .node("a", "A", "72", at=(0, 0)).node("b", "B", "61", at=(720, 0))
+             .branch("a", "b", "cond", "X", "0.3", count=8,
+                     arrangement="parallel", via=[(300, 120)]).build())
+
+
 class TestPhaseNode:
     """A node whose temperature a phase change holds.
 

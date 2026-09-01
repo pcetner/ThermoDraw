@@ -16,6 +16,7 @@ from . import check as C
 from . import describe as D
 from . import layout as L
 from . import model as M
+from . import page as P
 from . import render as R
 from . import theme as T
 
@@ -36,17 +37,18 @@ class DiagramBuilder:
         return self
 
     def branch(self, source, target, kind="cond", label=None, value=None,
-               sub="", via=None, at=None, angle=None, side="auto"):
+               sub="", via=None, at=None, angle=None, side="auto",
+               rate=None, count=None, arrangement=None):
         """`sub` is only meaningful on a capacitance, where the subscript
         names a place. A resistance carries its own, naming the mechanism."""
         self.diagram.branches.append(M.Branch(
             source=source, target=target, kind=kind, label=label, sub=sub,
-            value=value, via=list(via or []), at=at, angle=angle,
-            side=side))
+            value=value, rate=rate, count=count, arrangement=arrangement,
+            via=list(via or []), at=at, angle=angle, side=side))
         return self
 
     def source(self, node, kind="diss", label=None, value=None, sub="",
-               at=None, angle=0.0, side="auto", outward=False):
+               at=None, angle=0.0, side="auto", outward=False, count=None):
         """Heat crossing into `node`, or out of it with `outward=True`.
 
         `outward` is the `from` of the schema against its `to`. Only `flow`
@@ -55,7 +57,7 @@ class DiagramBuilder:
         end = {"source" if outward else "target": node}
         self.diagram.sources.append(M.Source(
             kind=kind, label=label, sub=sub, value=value,
-            at=at, angle=angle, side=side, **end))
+            at=at, angle=angle, side=side, count=count, **end))
         return self
 
     def rail(self, reference, y, span=None):
@@ -99,6 +101,11 @@ class DiagramBuilder:
         """
         return D.describe(self, size=size or self.diagram.size,
                           padding=padding)
+
+    def page(self, size=None, padding=R.PADDING, title=None):
+        """This diagram as a self-contained HTML page, controls and all."""
+        return P.page(self, size=size or self.diagram.size, padding=padding,
+                      title=title)
 
     def to_dict(self):
         return self.build().to_dict()

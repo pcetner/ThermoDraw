@@ -3,14 +3,16 @@
     thermodraw check    diagram.json
     thermodraw describe diagram.json
     thermodraw render   diagram.json -o out.svg --mode light
+    thermodraw page     diagram.json -o out.html
 
     python -m thermodraw check diagram.json      # from a checkout, no install
 
 `check` is the reason this exists, and `describe` is the half it could not
 cover: the checker says nothing is wrong with the drawing and cannot say it is
-the drawing you meant.
+the drawing you meant. `page` is the same drawing with its controls, for a
+repeated group a reader may want to expand.
 
-`check` is the reason this exists. Finding out whether a diagram was any good
+Finding out whether a diagram was any good
 used to mean rendering it, serving it over HTTP, opening a browser, taking a
 screenshot and looking — five sequential steps, none of which a script or a
 model can do cheaply. This is one call whose output is text, and whose exit
@@ -18,7 +20,7 @@ status is the answer.
 
 Exit codes: 0 clean, 1 findings, 2 the file could not be read or was invalid.
 
-Stdlib only, and SVG only. PNG needs a rasteriser, a rasteriser is a
+Stdlib only. SVG and HTML; PNG needs a rasteriser, a rasteriser is a
 dependency, and the library has none.
 """
 import argparse
@@ -31,6 +33,7 @@ from .check import ORDER, Finding, check
 from .describe import describe
 from .layout import layout
 from .model import Diagram, DiagramError
+from .page import page
 from .render import render
 
 
@@ -113,6 +116,21 @@ def do_describe(args):
     return 0
 
 
+def do_page(args):
+    """The diagram as a page: the same SVG inline, plus its controls."""
+    diagram = _load(args.diagram)
+    out = page(diagram, size=args.size or diagram.size, title=args.title)
+    if args.out == "-":
+        _soften(sys.stdout).write(out)
+        return 0
+    path = pathlib.Path(args.out
+                        or pathlib.Path(args.diagram).with_suffix(".html"))
+    with open(path, "w", encoding="utf-8", newline="\n") as f:
+        f.write(out)
+    print(f"{path} ({len(out):,} bytes)")
+    return 0
+
+
 def do_render(args):
     diagram = _load(args.diagram)
     svg = render(layout(diagram), size=args.size or diagram.size)
@@ -153,6 +171,13 @@ def main(argv=None):
     d.add_argument("--json", action="store_true", help="machine-readable")
     size(d)
     d.set_defaults(fn=do_describe)
+
+    g = subs.add_parser("page", help="write the diagram as an HTML page")
+    g.add_argument("diagram")
+    g.add_argument("-o", "--out", help='output path, or "-" for stdout')
+    g.add_argument("--title", help="heading for the page")
+    size(g)
+    g.set_defaults(fn=do_page)
 
     r = subs.add_parser("render", help="write the diagram as SVG")
     r.add_argument("diagram")

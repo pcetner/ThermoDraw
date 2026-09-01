@@ -72,6 +72,14 @@ class Placement:
     radius: float = 5.5
     ref: Optional[str] = None
     wall: Optional[Tuple[float, float]] = None   # (half, depth) of a ground
+    # Which copy of a repeated branch this is, and which form it belongs to:
+    # None is drawn either way, "full" is dropped when condensed, "condensed"
+    # is the ellipsis that stands in its place.
+    copy: Optional[int] = None
+    variant: Optional[str] = None
+    # False for the form that is not the default. It is still drawn, into a
+    # hidden group, so a viewer can swap without the diagram being rebuilt.
+    shown: bool = True
 
 
 def _angle(a, b):
@@ -155,6 +163,151 @@ def _endpoint(diagram, ref, other):
     return tuple(diagram.node(ref).at)
 
 
+# ------------------------------------------------------- repeated branches
+# `count` says there are several identical paths, and the drawing shows them.
+#
+# The outermost two copies are always drawn and the middle ones are what the
+# condensed form drops, which is the whole reason the toggle is cheap: both
+# forms occupy exactly the same footprint, so switching between them never
+# re-fits the canvas and never moves a label. An ellipsis stands where the
+# dropped copies were.
+TRUNK = 44        # clean wire either side of a node before the fan begins
+FAN = 44          # the diagonal from the trunk out to a lane
+PITCH_PAD = 14    # clear space between adjacent parallel lanes
+SERIES_PAD = 18   # clear space between symbols set end to end
+ELLIPSIS_STEP = 9
+
+
+def _lanes(a, b, n, pitch):
+    """`n` parallel lanes between `a` and `b`, centred on the straight line.
+
+    A trunk, then the fan, then the lane, then back. Fanning straight out of
+    the node was the obvious construction and the wrong one: n wires
+    radiating from a point cross the space its own label wants, so every
+    default-placed parallel group reported `label-adrift`. The trunk leaves
+    each node's neighbourhood clear, and it is how the drawing is made by
+    hand anyway. Both trunks dedupe, being one segment shared by every lane.
+
+    Lane 0 and lane n-1 are the outermost, which is what lets the condensed
+    form keep the group's exact footprint.
+    """
+    span = _length(a, b) or 1.0
+    ux, uy = (b[0] - a[0]) / span, (b[1] - a[1]) / span
+    nx, ny = -uy, ux
+    trunk = min(TRUNK, span / 6)
+    diag = min(FAN, span / 6)
+    jin = (a[0] + ux * trunk, a[1] + uy * trunk)
+    jout = (b[0] - ux * trunk, b[1] - uy * trunk)
+    for k in range(n):
+        off = (k - (n - 1) / 2) * pitch
+        head = (jin[0] + ux * diag + nx * off, jin[1] + uy * diag + ny * off)
+        tail = (jout[0] - ux * diag + nx * off, jout[1] - uy * diag + ny * off)
+        yield k, [a, jin, head, tail, jout, b], (
+            (head[0] + tail[0]) / 2, (head[1] + tail[1]) / 2)
+
+
+def _in_series(a, b, centre, n, half_len):
+    """`n` symbol centres in a row along the branch, centred on `centre`."""
+    span = _length(a, b) or 1.0
+    ux, uy = (b[0] - a[0]) / span, (b[1] - a[1]) / span
+    pitch = 2 * half_len + SERIES_PAD
+    for k in range(n):
+        d = (k - (n - 1) / 2) * pitch
+        yield k, (centre[0] + ux * d, centre[1] + uy * d)
+
+
+def _series_runs(a, b, centres, half_len):
+    """The wire either side of, and between, symbols set end to end."""
+    span = _length(a, b) or 1.0
+    ux, uy = (b[0] - a[0]) / span, (b[1] - a[1]) / span
+
+    def before(p):
+        return (p[0] - ux * half_len, p[1] - uy * half_len)
+
+    def after(p):
+        return (p[0] + ux * half_len, p[1] + uy * half_len)
+
+    runs = [[a, before(centres[0])]]
+    for i in range(len(centres) - 1):
+        runs.append([after(centres[i]), before(centres[i + 1])])
+    runs.append([after(centres[-1]), b])
+    return [r for r in runs if _length(r[0], r[1]) > 0.5]
+
+
+def _repeat(b, ref, sym, source, target, centre, angle, label):
+    """Every placement a repeated branch makes, both forms at once.
+
+    `variant` is None on anything drawn either way, "full" on the copies the
+    condensed form drops, and "condensed" on the ellipsis that replaces them.
+    `render` shows one set and hides the other; nothing else moves.
+    """
+    out, n = [], b.count
+    keep = {0, n - 1}                       # the outermost, drawn either way
+    condensed = b.condensed
+
+    def tag(variant):
+        return {"variant": variant,
+                "shown": variant is None or (variant == "condensed") == condensed}
+
+    if b.arrangement == "series":
+        spots = [(k, c) for k, c in
+                 _in_series(source, target, centre, n, sym.half_len)]
+        centres = [c for _, c in spots]
+        # Two sets of wire. The full form breaks at every symbol; the
+        # condensed form runs straight from the first to the last with one
+        # gap for the ellipsis, because hiding a symbol would otherwise leave
+        # the gap it was standing in.
+        for run in _series_runs(source, target, centres, sym.half_len):
+            out.append(Placement("wire", points=run, ref=ref,
+                                 **tag(None if not condensed else "full")))
+        if condensed:
+            span = _length(source, target) or 1.0
+            ux = (target[0] - source[0]) / span
+            uy = (target[1] - source[1]) / span
+            hole = ELLIPSIS_STEP * 2
+            for a_, b_ in (((centres[0][0] + ux * sym.half_len,
+                             centres[0][1] + uy * sym.half_len),
+                            (centre[0] - ux * hole, centre[1] - uy * hole)),
+                           ((centre[0] + ux * hole, centre[1] + uy * hole),
+                            (centres[-1][0] - ux * sym.half_len,
+                             centres[-1][1] - uy * sym.half_len))):
+                if _length(a_, b_) > 0.5:
+                    out.append(Placement("wire", points=[a_, b_], ref=ref,
+                                         **tag("condensed")))
+        for k, c in spots:
+            out.append(Placement(
+                "symbol", at=c, angle=angle, symbol=sym, ref=ref, copy=k,
+                **tag(None if k in keep else "full")))
+        mark_angle = angle
+    else:
+        pitch = 2 * sym.half + PITCH_PAD
+        for k, route, c in _lanes(source, target, n, pitch):
+            marks = tag(None if k in keep else "full")
+            for run in _split(route, 2, c, sym.half_len):
+                out.append(Placement("wire", points=run, ref=ref, copy=k,
+                                     **marks))
+            out.append(Placement(
+                "symbol", at=c, angle=angle, symbol=sym, ref=ref, copy=k,
+                **marks))
+        mark_angle = angle + 90
+
+    if condensed:
+        out.append(Placement("ellipsis", at=centre, angle=mark_angle,
+                             ref=ref, **tag("condensed")))
+
+    # One label for the group, anchored at its centre and reserving the whole
+    # of it, so the solver clears the fan rather than one lane of it. It draws
+    # nothing itself: `radius=0` keeps it out of the canvas measurement, which
+    # the copies already account for.
+    reach = ((n - 1) / 2) * (2 * sym.half + PITCH_PAD) + sym.half
+    label.half = reach if b.arrangement != "series" else sym.half
+    label.half_len = sym.half_len if b.arrangement != "series" else (
+        ((n - 1) / 2) * (2 * sym.half_len + SERIES_PAD) + sym.half_len)
+    out.append(Placement("anchor", at=centre, angle=angle, ref=ref,
+                         radius=0.0, label=label))
+    return out
+
+
 def layout(diagram):
     """Placements for everything in the diagram, back to front."""
     diagram.validate()
@@ -179,23 +332,27 @@ def layout(diagram):
         centre = tuple(b.at) if b.at else ((a[0] + c[0]) / 2, (a[1] + c[1]) / 2)
         angle = b.angle if b.angle is not None else _angle(a, c)
 
-        for run in _split(route, index, centre, sym.half_len):
-            out.append(Placement("wire", points=run, ref=ref))
         # A break names no quantity, so it gets no second line rather than an
         # invented symbol for a resistance it does not have.
         base = M.BRANCH_SYMBOL[b.kind]
         sub = (M.BRANCH_SUB[b.kind] if M.BRANCH_SUB[b.kind] is not None
                else b.sub)
+        label = Label(user=b.label,
+                      name=S.S_(base, sub) if base else None,
+                      value=diagram.value_text(b.kind, b.value),
+                      extra=[x for x in (
+                          diagram.rate_text(b.rate),
+                          diagram.count_text(b.count, b.arrangement)) if x],
+                      half=sym.half, half_len=sym.half_len,
+                      side=b.side)
+        if b.repeated:
+            out += _repeat(b, ref, sym, source, target, centre, angle, label)
+            continue
+        for run in _split(route, index, centre, sym.half_len):
+            out.append(Placement("wire", points=run, ref=ref))
         out.append(Placement(
             "symbol", at=centre, angle=angle, symbol=sym, ref=ref,
-            label=Label(user=b.label,
-                        name=S.S_(base, sub) if base else None,
-                        value=diagram.value_text(b.kind, b.value),
-                        extra=[x for x in (
-                            diagram.rate_text(b.rate),
-                            diagram.count_text(b.count, b.arrangement)) if x],
-                        half=sym.half, half_len=sym.half_len,
-                        side=b.side)))
+            label=label))
 
     if diagram.rail:
         xs = [n.at[0] for n in diagram.nodes if n.at]

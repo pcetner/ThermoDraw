@@ -24,6 +24,7 @@ from . import symbols, theme
 from .builder import DiagramBuilder
 from .check import Finding, Report, check
 from .describe import Description, describe
+from .page import page
 from .io import save
 from .layout import Placement, layout
 from .model import Branch, Diagram, DiagramError, Node, Rail, Source
@@ -40,6 +41,8 @@ __all__ = [
     "check", "Report", "Finding",
     # is it the one you meant?
     "describe", "Description",
+    # the same drawing, as a page you can interact with
+    "page",
     # the vocabulary
     "Symbol", "SYMBOLS",
     # output
