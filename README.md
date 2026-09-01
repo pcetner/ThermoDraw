@@ -1,16 +1,42 @@
-# ThermoDraw
+<h1 align="center">ThermoDraw</h1>
 
-Thermal network diagrams for Python. Emits SVG, no runtime dependencies.
+<p align="center">
+  Thermal network diagrams for Python.<br>
+  Emits SVG. No runtime dependencies.
+</p>
 
-Draws thermal resistance networks in heat-transfer notation — hatched boxes
-carrying a mechanism texture — rather than borrowing circuit schematic
-symbols. Every symbol works at any orientation, and labels are placed by a
-solver rather than by hand.
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/hero-dark.svg">
+    <img src="docs/assets/hero-light.svg" alt="A power device from junction to still air: conduction, contact and a parallel convection and radiation path, with two capacitances on the reference rail" width="960">
+  </picture>
+</p>
 
-## Status
+<p align="center"><sub>Junction to still air — conduction, contact, then convection and radiation in parallel.</sub></p>
 
-Alpha. The symbol vocabulary is settled; the network layer is not built yet.
-Symbols are currently placed individually at coordinates you supply.
+<br>
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/vocabulary-dark.svg">
+    <img src="docs/assets/vocabulary-light.svg" alt="The twelve symbols" width="800">
+  </picture>
+</p>
+
+<p align="center"><sub>Twelve symbols. Mechanism is carried by the interior texture, not by the outline.</sub></p>
+
+<br>
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/rosette-dark.svg">
+    <img src="docs/assets/rosette-light.svg" alt="One node losing heat by twelve parallel paths, each drawn at a different angle" width="460">
+  </picture>
+</p>
+
+<p align="center"><sub>Every symbol at every angle. Textures rotate; labels never do.</sub></p>
+
+<br>
 
 ## Install
 
@@ -25,47 +51,21 @@ from thermodraw import symbols, theme
 
 svg = symbols.diagonal_demo()
 
-# For the web: CSS variables, follows the reader's light/dark setting
-open("diagram.svg", "w").write(theme.with_variables(svg))
-
-# For Word or PowerPoint: colours resolved, since neither honours var()
-open("diagram-light.svg", "w").write(theme.bake(svg, "light"))
+open("web.svg", "w").write(theme.with_variables(svg))   # follows light/dark
+open("word.svg", "w").write(theme.bake(svg, "light"))   # colours resolved
 ```
-
-Render the full symbol reference:
 
 ```bash
-python examples/render_reference.py
+python examples/render_demo.py       # the three images above
+python examples/render_reference.py  # every symbol at every 45°
 ```
 
-## Symbols
+## More
 
-Twelve, each drawn at any angle:
+[`docs/symbol-reference.html`](docs/symbol-reference.html) — every symbol at eight orientations, with the reasoning.
+[`CLAUDE.md`](CLAUDE.md) — the design record.
 
-| | |
-|---|---|
-| Free node | temperature solved for |
-| Fixed node | temperature imposed, wire connects to the boundary |
-| Conduction | section hatching — heat crossing solid material |
-| Convection | streamlines — heat carried by a moving fluid |
-| Radiation | wavy arrows crossing an empty box, dashed outline |
-| Contact | two solids meeting, hatched in opposing directions |
-| Capacitance | thermal mass |
-| Dissipation | power appearing at a node |
-| Radiative input | incident flux |
-| Thermal break | adiabatic boundary, wire stops short of the wall |
-| Heat flow | annotation, W |
-| Heat flux | annotation, W/m² — several arrows, no single line of action |
+Alpha: the symbol vocabulary is settled, the network layer is not built yet.
+Symbols are placed at coordinates you supply.
 
-`docs/symbol-reference.html` shows all of them at eight orientations with the
-reasoning behind each choice. Open it in a browser; it carries its own
-light/dark toggle.
-
-## Design notes
-
-`CLAUDE.md` records why each decision was made, including several that reverse
-an earlier choice. Worth reading before changing a glyph or the label solver.
-
-## Licence
-
-MIT
+MIT.
