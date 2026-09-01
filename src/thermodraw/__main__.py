@@ -57,11 +57,18 @@ def _load(path):
 def _soften(stream):
     """Let a cp1252 console print a diagram's own labels without dying.
 
-    Findings quote node ids and branch endpoints, which come from the file and
-    can hold anything. The fixed text is ASCII; this covers the rest.
+    Findings quote node ids, branch endpoints and units keys, which come from
+    the file and can hold anything. The fixed text is ASCII; this covers the
+    rest.
+
+    `backslashreplace`, not `replace`. The units quantity for a heat flux is
+    `q` followed by U+2033, and on a cp1252 console `replace` printed "units
+    names 'q?'" — an error naming a key the reader cannot copy, about a
+    character they most likely mistyped in the first place. This prints
+    'q\\u2033', which is ugly and recoverable.
     """
     try:
-        stream.reconfigure(errors="replace")
+        stream.reconfigure(errors="backslashreplace")
     except (AttributeError, ValueError):            # not a real tty, or piped
         pass
     return stream
