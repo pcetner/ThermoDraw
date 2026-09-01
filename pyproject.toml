@@ -35,11 +35,15 @@ thermodraw = "thermodraw.__main__:main"
 # suite itself needs only pytest. Nothing here rasterises: cairosvg and
 # pillow were declared for a while, imported nowhere, and kept alive by a
 # CI job whose only purpose was to notice if they stopped installing.
-dev = ["pytest", "fonttools", "brotli"]
+dev = ["pytest", "mypy", "fonttools", "brotli"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src", "examples", "tests"]
+# A deprecation raised from inside the package fails the run. Scoped to the
+# package on purpose: an unscoped `-W error` would break CI on a third-party
+# warning the day a new Python lands, for a reason that is nobody's here.
+filterwarnings = ["error::DeprecationWarning:thermodraw"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

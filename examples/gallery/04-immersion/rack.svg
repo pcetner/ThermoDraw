@@ -1,15 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2437.8 347.5" width="2437.8" height="347.5" role="img"><style>
-  :root{--sym:#1b1b1f;--panel:#fff;--ink:#16181d;--ink-2:#6b7078;
-        --ink-3:#8b909b;--tex:#9aa0ab;--rule:#e2e4e9;--accent:#b4442c;
-        --sans:"IBM Plex Sans","ThermoDraw Sans","Helvetica Neue",Arial,sans-serif}
+  :root{--sym:#1b1b1f;--panel:#ffffff;--ink:#16181d;--ink-2:#6b7078;--ink-3:#8b909b;--tex:#9aa0ab;--rule:#e2e4e9;--accent:#b4442c;--sans:"IBM Plex Sans","ThermoDraw Sans","Helvetica Neue",Arial,sans-serif}
   @media (prefers-color-scheme:dark){
-    :root:not([data-theme="light"]){--sym:#d8d6d1;--panel:#171a1f;
-      --ink:#e9e7e2;--ink-2:#a2a7b2;--ink-3:#727884;--tex:#767c88;
-      --rule:#2a2e36;--accent:#e8996b}}
-  :root[data-theme="dark"]{--sym:#d8d6d1;--panel:#171a1f;--ink:#e9e7e2;
-    --ink-2:#a2a7b2;--ink-3:#727884;--tex:#767c88;--rule:#2a2e36;
-    --accent:#e8996b}
+    :root:not([data-theme="light"]){--sym:#d8d6d1;--panel:#171a1f;--ink:#e9e7e2;--ink-2:#a2a7b2;--ink-3:#727884;--tex:#767c88;--rule:#2a2e36;--accent:#e8996b;--sans:"IBM Plex Sans","ThermoDraw Sans","Helvetica Neue",Arial,sans-serif}}
+  :root[data-theme="dark"]{--sym:#d8d6d1;--panel:#171a1f;--ink:#e9e7e2;--ink-2:#a2a7b2;--ink-3:#727884;--tex:#767c88;--rule:#2a2e36;--accent:#e8996b;--sans:"IBM Plex Sans","ThermoDraw Sans","Helvetica Neue",Arial,sans-serif}
 
 .w,.sym-box{stroke:var(--sym);stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round}
 polyline{fill:none;stroke:var(--sym);stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}

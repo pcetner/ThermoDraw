@@ -17,6 +17,24 @@ record is `claude.ai/code/artifact/db16bd4b-8839-4214-a29a-e87924bb7169`.
 
 ### Added
 
+- **Guards for each class of defect the review found**, chosen because each
+  would have caught something that shipped. Every rendered scene must parse
+  as XML, and a hostile label is rendered and paged in the suite. A CI job
+  rewrites every golden with `--update-goldens` and diffs the tree — that
+  flag writes and then *skips*, so on its own it could never fail, and
+  nothing had ever checked that the goldens were reproducible. Another
+  re-renders the gallery and the README images and diffs them; two gallery
+  renders had gone stale with nothing to say so. `gen_dictionary --check`
+  is a named CI step like `gen_docs --check`, for the reason that step's own
+  comment gives. `mypy` runs in CI, since the wheel ships `py.typed` and
+  asserts it; it found one wrong annotation. `tests/scenes.py` fails rather
+  than skips when `examples/` is present and the demo scenes did not import,
+  which is how the three most complex scenes in the suite could have vanished
+  silently. `docs/schema.md`'s vocabulary — every field, kind and quantity —
+  is pinned to the model. The `page` subcommand has tests; it had none.
+  `label-collision` and `parallel-pair-same-side` have negatives. Four tests
+  that could not fail now can. Python 3.13 is in the matrix, and a
+  deprecation raised from inside the package fails the run.
 - **`Dictionary.html` — the page for someone who has not drawn one of these
   before.** `docs/symbol-reference.html` is the design record: eight
   orientations of each glyph and the argument behind every choice. It answers

@@ -143,7 +143,7 @@ class Description:
     # the count. `rail.reference` is documented as inert — it records which
     # node the rail *is* and does nothing — which makes this the only place it
     # could ever be checked against what was meant.
-    rail: Tuple[str, float, Tuple[float, float]] = None
+    rail: Optional[Tuple[str, float, Tuple[float, float]]] = None
     edges: List[Tuple[str, str, str]] = field(default_factory=list)
     pieces: List[List[str]] = field(default_factory=list)
 

@@ -288,6 +288,42 @@ class TestLabelCollision:
         for rect in compose(layout(parallel_pair(80).build())).rects:
             assert rect.clear is True
 
+    def test_a_label_with_room_is_not_reported(self):
+        """The negative this class lacked: `check` itself, not the scene."""
+        assert "label-collision" not in codes(check(parallel_pair(80)))
+
+    def test_two_labels_on_each_other_are_one_finding_naming_the_pair(self):
+        """Two nodes at one spot, both trapped: each label is printed over
+        the other, and each finds the other. Reported once, as a pair, with
+        the remedy that fits a pair — the branch of `_collisions` no test
+        had reached."""
+        via = []
+        for i in range(34):
+            y = -8 - i * 8
+            via += [(-260, y), (260, y)] if i % 2 == 0 else [(260, y), (-260, y)]
+        b = (DiagramBuilder(R="K/W", T="°C")
+             .node("h", "Trapped", "150", at=(0, 0), side="up")
+             .node("g", "Also trapped", "140", at=(0, 0), side="up")
+             .node("c", "Far", "20", at=(900, 0))
+             .branch("h", "c", "cond", "Serpentine", "0.3",
+                     via=via, at=(700, 0)))
+        found = one(check(b), "label-collision")
+        assert "the label on node" in found.message
+        assert "set `side` on one of the two" in found.remedy
+
+
+class TestParallelPairSameSide:
+    """A note, because the hero fires it and is fine. What was missing was
+    the negative: proof that putting the labels on opposite sides — which is
+    what the remedy says to do — actually clears it."""
+
+    def test_labels_on_opposite_sides_are_not_reported(self):
+        assert "parallel-pair-same-side" not in \
+            codes(check(parallel_pair(80, "down")))
+
+    def test_and_on_the_same_side_they_are(self):
+        assert "parallel-pair-same-side" in codes(check(parallel_pair(80)))
+
 
 # --------------------------------------------- defect 2: a label in a corridor
 def parallel_pair(dy, side="auto"):
@@ -885,14 +921,35 @@ class TestRepeatedBranches:
         assert f'<g id="{variant_id("branch 0 a->b", "condensed")}"'                ' class="td-form">' in svg
 
     def test_an_id_does_not_move_when_the_diagram_does(self):
+        """A page holds these ids in its markup, so they must survive
+        anything unrelated changing around the group. That is what
+        content-addressing the ref buys — and what comparing a pure function
+        with itself, as this test once did, could not show."""
+        from thermodraw import render
         from thermodraw._render import variant_id
-        assert variant_id("branch 0 a->b", "full") ==             variant_id("branch 0 a->b", "full")
-        assert variant_id("branch 0 a->b", "full") !=             variant_id("branch 1 a->b", "full")
+        wanted = f'id="{variant_id("branch 0 a->b", "full")}"'
+        assert wanted in render(layout(self.group(16)))
+        moved = (DiagramBuilder(R="K/W", T="C")
+                 .node("a", "Junction", "72", at=(0, 0))
+                 .node("b", "Spreader", "61", at=(720, 0))
+                 .node("z", "Elsewhere", "9", at=(2000, 900))
+                 .branch("a", "b", "cond", "Die attach", "0.0275",
+                         count=16, arrangement="parallel").build())
+        assert wanted in render(layout(moved))
+        assert variant_id("branch 0 a->b", "full") != \
+            variant_id("branch 1 a->b", "full")
 
     def test_the_hidden_form_is_kept_out_of_the_occupancy(self):
-        """The label is solved against what is on show, not against both."""
+        """The label is solved against what is on show, not against both.
+        This used to compute the set of owners and then never look at it,
+        so it could not tell exclusion from a label that happened to fit."""
         scene = compose(layout(self.group(16)))
-        owners = {id(e.owner) for e in scene.occupancy.items}             if hasattr(scene.occupancy, "items") else None
+        owners = ([box[3] for box in scene.occupancy.boxes]
+                  + [seg[2] for seg in scene.occupancy.segments])
+        assert owners, "the occupancy holds the drawing"
+        assert all(o is None or o.shown for o in owners), \
+            "a hidden-form placement reached the occupancy"
+        assert any(o is not None and o.variant == "condensed" for o in owners)
         rect = [r for r in scene.rects if r.ref == "branch 0 a->b"][0]
         assert rect.clear and rect.used == rect.solved
 

@@ -124,6 +124,33 @@ class TestRender:
         assert out == out_file.read_text(encoding="utf-8")
 
 
+class TestPage:
+    """The one subcommand nothing exercised: zero lines of `do_page` ran."""
+
+    def test_it_writes_a_page(self, capsys, tmp_path):
+        out_file = tmp_path / "hero.html"
+        code, _ = run(capsys, "page", str(HERO), "-o", str(out_file))
+        assert code == 0
+        text = out_file.read_text(encoding="utf-8")
+        assert text.startswith("<!doctype html>") and "<svg" in text
+
+    def test_the_default_output_sits_beside_the_input(self, capsys, tmp_path):
+        src = tmp_path / "d.json"
+        src.write_bytes(HERO.read_bytes())
+        assert run(capsys, "page", str(src))[0] == 0
+        assert (tmp_path / "d.html").exists()
+
+    def test_dash_writes_to_stdout(self, capsys):
+        code, out = run(capsys, "page", str(HERO), "-o", "-")
+        assert code == 0 and out.startswith("<!doctype html>")
+
+    def test_title_names_the_page(self, capsys, tmp_path):
+        out_file = tmp_path / "t.html"
+        run(capsys, "page", str(HERO), "-o", str(out_file),
+            "--title", "Kettle")
+        assert "<h1>Kettle</h1>" in out_file.read_text(encoding="utf-8")
+
+
 class TestBadInput:
     """Exit 2 is neither "clean" nor "findings" — it is "no answer"."""
 
