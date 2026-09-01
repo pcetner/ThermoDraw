@@ -36,13 +36,20 @@ from thermodraw import model as M  # noqa: E402
 TEMPLATE = ROOT / "docs" / "dictionary.template.html"
 PAGE = ROOT / "Dictionary.html"
 
-# Which of the three things a symbol is, and which array of the file it is
-# written into. The badge on the entry and the caption over its JSON both come
-# from here, so a reader is never shown a fragment like `"kind": "flux"` with
-# nothing saying where it goes.
-WHERE = {"node": ("Node", "nodes"),
-         "branch": ("Path", "branches"),
-         "source": ("Source", "sources")}
+# The three things a symbol can be: what to call it, what it means, and which
+# array of the file it is written into.
+#
+# This used to be a badge repeated on all nineteen entries, which said the
+# same three words over and over and still never defined them. The definition
+# now sits once, at the top, on the panel you pick a symbol from — and the
+# entries carry no badge at all, because the sticky heading above them already
+# says which group is being read.
+WHERE = {"node": ("Node", "nodes", "A place that has a temperature."),
+         "branch": ("Path", "branches",
+                    "A route heat takes between two places."),
+         "source": ("Source", "sources",
+                    "Heat arriving from outside the network.")}
+CATEGORIES = ("node", "branch", "source")
 
 # What each symbol says, when to use it, and how it is written.
 #
@@ -315,11 +322,11 @@ def written_as(spec):
     library's own words, so a reader told this was "the drawing above" would
     be looking for a mug in a plate that says Die attach.
     """
-    _, array = WHERE[spec["where"]]
+    _, array, _ = WHERE[spec["where"]]
     body = _PAIR.sub(r"[\1, \2]",
                      json.dumps(spec["code"], indent=2, ensure_ascii=False))
-    return (f'<div class="written"><p class="cap">That example, written in a '
-            f'diagram file &mdash; one entry in <code>"{array}"</code></p>'
+    return (f'<div class="written"><p class="cap">As a component in '
+            f'<code>"{array}"</code></p>'
             f"<pre>{html.escape(body)}</pre></div>")
 
 
@@ -375,13 +382,11 @@ def entry(key, name, spec, figure=""):
     row's picture starts, and the empty frame happens to be the honest
     illustration anyway.
     """
-    label, _ = WHERE[spec["where"]]
     plate = (f"<figure>{figure}</figure>" if figure
              else '<figure class="none"><span>draws nothing</span></figure>')
     return (
         f'<article class="entry" id="sym-{key}">'
-        f'<div class="entry-head"><h3>{html.escape(name)}</h3>'
-        f'<span class="badge">{label}</span></div>'
+        f"<h3>{html.escape(name)}</h3>"
         + plate
         + f'<div class="entry-body"><p>{spec["what"]}</p>'
         f'<p class="example"><b>Example:</b> {spec["use"]}</p>'
@@ -390,9 +395,17 @@ def entry(key, name, spec, figure=""):
 
 
 def group(title, keys, by_key):
-    """One titled group of entries, in the library's own order."""
-    body = [f'<section id="grp-{_slug(title)}"><h2>{html.escape(title)}</h2>'
-            f'<p class="lede">{LEDES[title]}</p>']
+    """One titled group of entries, in the library's own order.
+
+    The heading and its opening line ride together in a sticky block, so
+    whichever group a reader is in stays named at the top of the window until
+    the next one takes over. That is what replaced the badge on every entry:
+    the question "what am I looking at" is answered continuously rather than
+    nineteen times.
+    """
+    body = [f'<section id="grp-{_slug(title)}">'
+            f'<div class="section-head"><h2>{html.escape(title)}</h2>'
+            f'<p class="lede">{LEDES[title]}</p></div>']
     for key in keys:
         sym = by_key[key]
         body.append(entry(key, sym.name, ENTRIES[key],
@@ -408,17 +421,32 @@ def _slug(title):
 
 
 def index(by_key):
-    """A contents list. Nineteen entries is past the point where a reader can
-    be expected to scroll for one."""
+    """Contents, as one table per category, side by side.
+
+    It does two jobs at once on purpose. Nineteen entries is past the point
+    where a reader can be expected to scroll for one, and the three words the
+    whole page is organised around have to be defined somewhere — so the
+    definition sits on the panel whose symbols it covers, which is where a
+    reader is already looking when the question occurs to them.
+
+    Categories are read off each entry's own `where`, not off a second list of
+    group titles, so regrouping `symbols.GROUPS` cannot leave this behind.
+    """
+    order = [k for _, keys in symbols.GROUPS for k in keys]
+    order.append(CORNER["key"])
+    specs = dict(ENTRIES, **{CORNER["key"]: CORNER})
+    names = dict({k: by_key[k].name for k in by_key},
+                 **{CORNER["key"]: CORNER["name"]})
+
     out = ['<nav class="index" aria-label="Contents">']
-    for title, keys in symbols.GROUPS:
-        names = [(f"sym-{k}", by_key[k].name) for k in keys]
-        if title == "Nodes":
-            names.append((f"sym-{CORNER['key']}", CORNER["name"]))
-        links = "".join(f'<li><a href="#{i}">{html.escape(n)}</a></li>'
-                        for i, n in names)
-        out.append(f'<div><h4><a href="#grp-{_slug(title)}">'
-                   f"{html.escape(title)}</a></h4><ul>{links}</ul></div>")
+    for where in CATEGORIES:
+        label, _, definition = WHERE[where]
+        keys = [k for k in order if specs[k]["where"] == where]
+        links = "".join(f'<li><a href="#sym-{k}">{html.escape(names[k])}</a>'
+                        f"</li>" for k in keys)
+        wide = " wide" if len(keys) > 6 else ""
+        out.append(f'<div class="cat{wide}"><h4>{label}</h4>'
+                   f'<p class="def">{definition}</p><ul>{links}</ul></div>')
     out.append("</nav>")
     return "".join(out)
 

@@ -68,63 +68,68 @@ code{font-family:var(--mono);font-size:.85em;background:var(--tint);
    here, and none of them is answerable in the abstract — each one is shown
    in the entry it belongs to. */
 .intro{margin-top:34px;padding-top:26px;border-top:1px solid var(--rule)}
-.intro>p:first-child{margin-bottom:16px;color:var(--ink);font-size:18px}
-.rules{margin:0;padding:0;list-style:none;display:grid;gap:14px;
-       grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
-.rules li{background:var(--panel);border:1px solid var(--rule);border-radius:6px;
-          padding:14px 16px;font-family:var(--sans);font-size:14.5px;
-          line-height:1.5;color:var(--ink-2)}
-.rules b{display:block;color:var(--ink);font-weight:600;font-size:11px;
-         letter-spacing:.07em;text-transform:uppercase;margin-bottom:5px}
+.kicker{margin:0 0 18px;color:var(--ink);font-size:18px}
 .rule{font-family:var(--sans);font-size:14.5px;margin:18px 0 0;
       padding-left:14px;border-left:2px solid var(--accent)}
 
-/* Contents. Nineteen entries is past the point where scrolling for one is
-   reasonable. */
-.index{margin-top:34px;padding:22px 24px;background:var(--panel);
-       border:1px solid var(--rule);border-radius:6px;
-       display:grid;gap:22px;
-       grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
-.index h4{font-family:var(--sans);font-size:13px;font-weight:600;
-          margin:0 0 9px;padding-bottom:7px;line-height:1.35;
-          color:var(--ink);border-bottom:1px solid var(--rule)}
-.index h4 a{color:inherit;text-decoration:none}
-.index h4 a:hover{color:var(--accent)}
-.index ul{margin:0;padding:0;list-style:none;font-family:var(--sans);
-          font-size:13.5px;line-height:1.45}
-.index li{margin:0 0 5px}
-.index a{color:var(--ink-2);text-decoration:none}
-.index a:hover{color:var(--accent);text-decoration:underline}
+/* Contents, as one table per category. Two jobs in one component: nineteen
+   entries is past the point where scrolling for one is reasonable, and the
+   three words the page is organised around are defined here, on the panel
+   whose symbols they cover, rather than in a row of badges that repeated the
+   words nineteen times and defined them nowhere. */
+.index{margin:0;display:grid;gap:16px;grid-template-columns:1fr 1.7fr 1fr}
+@media (max-width:860px){.index{grid-template-columns:1fr}}
+.cat{background:var(--panel);border:1px solid var(--rule);border-radius:8px;
+     padding:16px 18px 14px;display:flex;flex-direction:column}
+.cat h4{font-family:var(--sans);font-size:11px;font-weight:600;
+        letter-spacing:.09em;text-transform:uppercase;color:var(--accent);
+        margin:0 0 7px}
+.cat .def{font-family:var(--sans);font-size:14px;line-height:1.45;
+          color:var(--ink);margin:0 0 13px;padding-bottom:13px;
+          border-bottom:1px solid var(--rule);max-width:none}
+.cat ul{margin:0;padding:0;list-style:none;font-family:var(--sans);
+        font-size:13.5px;line-height:1.45}
+.cat.wide ul{columns:2;column-gap:24px}
+.cat li{margin:0 0 6px;break-inside:avoid}
+.cat a{color:var(--ink-2);text-decoration:none}
+.cat a:hover{color:var(--accent);text-decoration:underline}
 
-/* A group of entries. */
-section{margin-top:56px;padding-top:26px;border-top:1px solid var(--rule);
-        scroll-margin-top:20px}
+/* A group of entries. The heading rides at the top of the window for as long
+   as its own group is being read, then the next one takes over — so the
+   question "what am I looking at" is answered continuously instead of by a
+   badge on all nineteen entries. */
+section{margin-top:44px;scroll-margin-top:0}
+.section-head{position:sticky;top:0;z-index:3;background:var(--paper);
+              padding:16px 0 12px;margin-bottom:4px;
+              border-bottom:1px solid var(--rule);
+              transition:box-shadow .22s ease,border-color .22s ease}
+.section-head.stuck{border-bottom-color:transparent;
+                    box-shadow:0 10px 22px -16px rgba(20,22,28,.55),
+                               0 1px 0 0 var(--rule)}
+:root[data-theme="dark"] .section-head.stuck,
+:root:not([data-theme="light"]) .section-head.stuck{
+  box-shadow:0 12px 26px -16px rgba(0,0,0,.85),0 1px 0 0 var(--rule)}
+@media (prefers-reduced-motion:reduce){.section-head{transition:none}}
 h2{font-family:var(--sans);font-size:19px;font-weight:600;color:var(--ink);
-   margin:0 0 6px;letter-spacing:-.01em}
+   margin:0 0 5px;letter-spacing:-.01em}
 h2::before{content:"";display:inline-block;width:15px;height:2px;border-radius:2px;
    background:var(--accent);vertical-align:.3em;margin-right:10px}
-.lede{font-family:var(--sans);font-size:14.5px;margin:0 0 8px;max-width:70ch}
+.lede{font-family:var(--sans);font-size:14.5px;margin:0;max-width:70ch}
 
 /* One entry. The name comes first and spans the row; the drawing sits under
    it on the left with the meaning alongside. */
 .entry{display:grid;grid-template-columns:236px minmax(0,1fr);gap:14px 30px;
        grid-template-areas:"head head" "fig  body";
        align-items:start;margin-top:34px;padding-top:28px;
-       border-top:1px solid var(--rule);scroll-margin-top:20px}
-.entry:first-of-type{border-top:none;padding-top:10px}
+       border-top:1px solid var(--rule);scroll-margin-top:96px}
+.entry:first-of-type{border-top:none;padding-top:14px}
 @media (max-width:760px){
   .entry{grid-template-columns:minmax(0,1fr);
          grid-template-areas:"head" "fig" "body"}
 }
 
-.entry-head{grid-area:head;display:flex;align-items:baseline;gap:12px;
-            flex-wrap:wrap}
-.entry h3{font-family:var(--sans);font-size:20px;font-weight:600;margin:0;
-          letter-spacing:-.015em;color:var(--ink)}
-.badge{font-family:var(--sans);font-size:11px;font-weight:600;
-       letter-spacing:.07em;text-transform:uppercase;color:var(--ink-3);
-       border:1px solid var(--rule);border-radius:999px;padding:3px 10px;
-       background:var(--panel);white-space:nowrap}
+.entry h3{grid-area:head;font-family:var(--sans);font-size:20px;
+          font-weight:600;margin:0;letter-spacing:-.015em;color:var(--ink)}
 
 .entry figure{grid-area:fig;margin:0;background:var(--panel);
               border:1px solid var(--rule);border-radius:6px;padding:4px}
@@ -171,18 +176,12 @@ footer a:hover{color:var(--accent)}
 </header>
 
 <div class="intro">
-<p>Every symbol here is one of three things.</p>
+<p class="kicker">Every symbol here is one of three things.</p>
 
-<ul class="rules">
-  <li><b>Node</b>A place that has a temperature.</li>
-  <li><b>Path</b>A route heat takes between two places.</li>
-  <li><b>Source</b>Heat arriving from outside the network.</li>
-</ul>
+{{INDEX}}
 
 <p class="rule">A box is a resistance: heat crosses it and drops in
 temperature. An arrow is a rate.</p>
-
-{{INDEX}}
 </div>
 
 {{ENTRIES}}
@@ -202,6 +201,28 @@ const set = d => { r.dataset.theme = d ? 'dark' : 'light';
                    b.textContent = d ? 'Switch to light' : 'Switch to dark'; };
 set(matchMedia('(prefers-color-scheme:dark)').matches);
 b.addEventListener('click', () => set(r.dataset.theme !== 'dark'));
+
+// A pinned heading needs an edge; one sitting in the flow does not. Pinned is
+// simply top === 0, so it is read off the position rather than inferred.
+//
+// The usual IntersectionObserver trick — threshold 1 with a -1px top margin —
+// was tried first and is wrong twice here. A heading still below the fold has
+// ratio 0 and wore the shadow before the reader ever reached it; and the
+// callback samples its rectangle whenever it happens to run, which during a
+// scroll is not the frame the heading actually pins. Five rectangles a frame
+// is cheaper than being subtly wrong.
+const heads = [...document.querySelectorAll('.section-head')];
+let queued = false;
+const mark = () => {
+  queued = false;
+  for (const h of heads)
+    h.classList.toggle('stuck', h.getBoundingClientRect().top <= 0.5);
+};
+addEventListener('scroll', () => {
+  if (!queued) { queued = true; requestAnimationFrame(mark); }
+}, {passive: true});
+addEventListener('resize', mark, {passive: true});
+mark();
 </script>
 </body>
 </html>
