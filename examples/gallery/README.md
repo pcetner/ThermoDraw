@@ -49,8 +49,10 @@ reported it changing a layout decision. The vocabulary findings stand:
 knowing the design rationale does not hand anyone a spreading-resistance
 symbol. The documentation-quality findings are softer than they look, because
 the agents were not working from the schema alone. *A note on method* in
-`FINDINGS.md` says the same, and the run has not yet been repeated with the
-injection suppressed.
+`FINDINGS.md` says the same. The run has not yet been repeated with the
+injection suppressed; `RERUN.md` is the protocol for doing so, with the
+outcomes written down in advance, and it cannot be run from inside this
+checkout for the same reason the first run leaked.
 
 ## What is in each folder
 

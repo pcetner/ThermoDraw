@@ -119,11 +119,33 @@ python examples/render_reference.py  # every symbol at every 45°
 pytest
 ```
 
+## Where this sits
+
+Drawing schematics from Python is not an empty field, and laying out a graph
+is a solved problem — Graphviz, D2 and Mermaid will place an arbitrary network
+for you, and schemdraw will draw it in circuit notation with a resistor
+zigzag for every path. What none of them does is the thing this exists for:
+say *which mechanism* each path is, in a notation a thermal engineer reads,
+and then say whether the drawing reads well and whether its numbers agree
+with each other.
+
+So the parts that are ThermoDraw's own are the eighteen-symbol vocabulary and
+the rule behind it, the label solver, `check`, `describe` and `--physics`.
+The part that is not yet built — solving for node coordinates — is the part
+most likely to be someone else's solved problem, and the design record says
+which of the ten checks a solver must satisfy, which it minimises, and which
+it makes redundant.
+
+If you want circuit notation, use schemdraw. If you want a graph laid out and
+do not care what the boxes mean, use Graphviz. If you want a thermal network
+that a reviewer can read from the picture, this.
+
 ## More
 
 [`docs/schema.md`](docs/schema.md) — the whole format, written to be pasted into a prompt.
 [`docs/symbol-reference.html`](docs/symbol-reference.html) — every symbol at eight orientations, with the reasoning.
-[`CLAUDE.md`](CLAUDE.md) — the design record.
+[`CLAUDE.md`](CLAUDE.md) — the decisions, one line each.
+[`docs/design-record.md`](docs/design-record.md) — the argument behind each one.
 
 Alpha. The symbol vocabulary is settled; labels, wire runs and canvas size are
 solved for you, and `thermodraw check` reports what a reader would notice.

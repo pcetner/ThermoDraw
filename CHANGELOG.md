@@ -28,6 +28,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the six diagrams' numbers close. It ships off by default until the hero and
   the gallery are made to, because the alternative — every committed diagram
   going red — is the rule an author learns to ignore.
+- **`examples/gallery/RERUN.md`** — the clean-room protocol for repeating the
+  gallery with the `CLAUDE.md` injection actually suppressed, which
+  `FINDINGS.md` said to do and nothing had. It cannot be run from inside this
+  checkout, for the reason the first run leaked; it says how to build a room
+  without the file, what to record, and what outcomes would count as failure,
+  written before any run so the run cannot be read as confirming whatever it
+  produced.
+- **A positioning section in the README.** Nothing in the repository had
+  named an alternative. Graphviz, D2 and Mermaid lay out graphs; schemdraw
+  draws circuit notation; none says which mechanism a path is or checks the
+  drawing. The part not yet built — the solver — is the part most likely to
+  be someone else's solved problem.
+
+### Changed
+
+- **`CLAUDE.md` is the decisions; `docs/design-record.md` is the argument.**
+  The design record was 34KB of essay auto-loaded into every session, written
+  so that revisiting a decision read as not having understood it, and it had
+  become an instrument rather than a record: stale in three places, arguing
+  from constraints that did not support two of its conclusions, restating a
+  claim its own evidence had falsified. It is split. `CLAUDE.md` is one line
+  per decision, marked **bet** where it is one, with what would overturn it.
+  The essays move to `docs/design-record.md`, corrected where the review
+  found them wrong and marked where they were, and not loaded into anything.
+- **"Boxes, not zigzags" is recorded as a bet, with the reader's reason.**
+  The justification had been that a box has room for a texture — an argument
+  about drawing. The reader's reason is legibility at thumbnail and print
+  scale, where a 0.7-em structural subscript fails and a texture does not. No
+  human reader has been asked; the record says what one would settle.
+- **The radiation dash means the value holds at one operating point**, not
+  that the path is nonlinear on the page. The record had said both, three
+  hundred lines apart: a linearised value is linear, and adds like any other.
+  What is different about `R_rad` is that it is a result, not a property.
+- **The ten checks are partitioned by what survives the solver.** Three are
+  constraints it must satisfy, two are objectives it minimises, four are
+  unchanged by it, and three exist only because a human places coordinates
+  and are unreachable once one does not. The table is in the record, and it
+  is the thing the checker-first order was for.
 
 ## [0.3.0] - 2026-09-01
 
