@@ -64,13 +64,18 @@ A place with a temperature.
 | field | meaning |
 |---|---|
 | `id` | referred to by branches and sources |
-| `kind` | `free` (default), `fixed`, `break`, `corner` |
+| `kind` | `free` (default), `fixed`, `break`, `phase`, `corner` |
 | `label` | the words above the symbol — the top line, always |
 | `sub` | subscript on `T`. Identity: you choose it, it names a place |
 | `value` | temperature, unit appended from `units.T` |
 | `at` | `[x, y]`. **Required in 0.2** |
 | `angle` | turns the node's label frame, in degrees. It moves the label and nothing else |
 | `side` | `auto` (default), `up`, `down`, `left`, `right` — where the label goes |
+
+`phase` is a node whose temperature a phase change holds rather than a
+boundary: the constant-temperature marking, two short rules beneath, and
+no wall. Condensation at 3.2 kW with no temperature drop is one node, not
+two surfaces with a path between them.
 
 `fixed` draws the boundary wall and connects to it with a short stub. `break`
 draws the same wall with no stub — the visible gap is the whole distinction,
@@ -118,22 +123,70 @@ A path heat takes between two nodes.
 | field | meaning |
 |---|---|
 | `from`, `to` | node ids, or the literal `"rail"` |
-| `kind` | `cond`, `conv`, `rad`, `contact`, `cap`, `break` |
+| `kind` | `cond`, `conv`, `rad`, `contact`, `spread`, `pipe`, `mixed`, `cap`, `flow`, `break` |
 | `label` | the words above the box |
 | `sub` | **only** for `cap`, where the subscript names a place |
-| `value` | unit appended from `units.R` (or `units.C` for `cap`). Optional: a path with no number draws its label alone |
+| `value` | unit appended from `units.R` (`units.C` for `cap`, `units.q` for `flow`). Optional: a path with no number draws its label alone |
+| `rate` | what this path actually carries, in `units.q`, beside the resistance it presents |
+| `count` | how many identical ones there are |
+| `arrangement` | `parallel` or `series`. Required with `count` |
 | `via` | `[[x, y], ...]` waypoints, for a path that is not a straight line |
 | `at` | where the box sits. Defaults to the middle of the longest run |
 | `angle` | overrides the direction taken from the wire |
 | `side` | `auto` (default), `up`, `down`, `left`, `right` — where the label goes |
 
+`spread` is a path whose cross-section grows as the heat goes — hatching
+that fans from a point rather than running parallel. `pipe` is a near
+isothermal link, a heat pipe or a vapour chamber: it still takes a small
+resistance, it just stops wearing solid-conduction hatching. `mixed` has no
+texture at all, which in this vocabulary is not an absence but a statement:
+the mechanism is combined or deliberately unstated. A window quoted as one
+number for conduction *and* convection is `mixed`.
+
+`flow` is the odd one. It carries a **rate**, not a resistance — heat moved
+from one node to another because a fluid moves, or because something pumps
+it. Drawn as chevrons in the line rather than as a box, because the interior
+of a box says what the heat is crossing and here nothing is crossed. It is
+the only **directed** branch: `from` and `to` are the way the heat goes, and
+`angle` is refused on one, since turning the symbol would let the drawing
+contradict the data. Route it with `via` instead.
+
 The subscript on a resistance is **not** yours to set: `cond`, `conv`, `rad`
-and `contact` each carry their own, and they name the physics. Which
+and `contact` each carry their own, and they name the physics. `mixed` is the
+exception, being the one kind whose mechanism the library does not know. Which
 conduction path this is belongs in `label`, so nothing is named twice. On a
 capacitance the subscript names a place, so `sub` is yours.
 
 `"to": "rail"` drops straight down to the reference rail from wherever the
 other end is. That is how thermal mass is hung off a transient model.
+
+### Several of the same path
+
+`count` says there are several identical ones, and the diagram draws them —
+fanned out in `parallel`, or end to end in `series`.
+
+```jsonc
+{"from": "die", "to": "fluid", "kind": "cond", "value": "0.0275",
+ "count": 8, "arrangement": "parallel"}
+```
+
+**`arrangement` is required, and never inferred.** Eight 0.0275 K/W paths are
+0.0034 K/W in parallel and 0.22 K/W in series — a factor of sixty-four — so a
+count on its own is a wrong answer waiting to be read.
+
+The `value` is **per item**. `R_cond = 0.0275 K/W` with `8 in parallel` under
+it means eight of that, not eight sharing it. The library does no arithmetic:
+values are strings so `"2.10"` stays `2.10`, and folding a count would mean
+parsing them as numbers.
+
+More than three and the drawing **condenses**: the outermost two are drawn
+and an ellipsis stands where the rest would be. Both forms are in the file,
+and `thermodraw page` gives you a control to swap between them. Because the
+condensed form keeps the *outermost* copies, the two occupy the same
+footprint, so swapping never moves anything else on the page.
+
+A repeated branch is drawn as a fan between its two nodes, so it cannot also
+take `via`.
 
 `break` is the odd one out: it draws an open circuit — wire, crossbar, gap,
 crossbar, wire — for a mechanical connection that carries no heat, such as a
@@ -164,6 +217,8 @@ unit area).
 | `radin` | wavy arrow | `q` | `units.q` | no |
 | `flow` | arrow | `q` | `units.q` | **yes** |
 | `flux` | several arrows leaving a hatched surface | `q″` | `units["q″"]` | **yes** |
+
+A source also takes `count`, for several identical ones. They simply add, so there is no `arrangement` to state.
 
 Only the two annotation kinds may point away. `diss` is dissipation
 *appearing* at a node rather than travelling to it, and `radin` is radiation
@@ -405,9 +460,40 @@ it went — including `flipped` and `pushed N` where the solver had to work for
 it. Above, `branch 2` and `branch 3` both went "above", which is the parallel
 pair `check` notes, visible directly rather than only graded.
 
+It also prints the **network**: which nodes are joined to which, and by what.
+
+```
+network:
+  j --cond-- c
+  c --contact-- s
+  s --conv/rad-- amb
+  j --cap-- rail
+```
+
+Two mechanisms on one line, as with `s --conv/rad-- amb`, are two branches
+between the same pair. If the drawing is in more than one piece it says so
+here as well as in `network-in-pieces`.
+
 An element carrying no text at all — a `break` branch with no `label` — still
 gets a row, marked `(no label)`. `rail.reference` is documentary and does
 nothing, so this is the only place it can be checked against what you meant.
 
 It always exits 0: it reports, it does not judge. `--json` for a machine. From
 Python it is `describe(diagram)`, returning a `.text()` and a `.to_dict()`.
+
+## A page instead of a picture
+
+`thermodraw render` writes the static SVG that Word, a README and every
+rasteriser need, and that is the canonical output. What a standalone `.svg`
+cannot do is let a reader expand a condensed group — not because SVG is
+static, but because a *file* is.
+
+```bash
+thermodraw page diagram.json -o diagram.html
+```
+
+The same SVG, inline, in one self-contained document with the fonts embedded
+and nothing fetched from anywhere, plus a control for each repeated group.
+Both forms are already in the markup with stable ids, so the control flips two
+`display` attributes; it does not rebuild anything. The script lives in the
+page and never in the SVG.

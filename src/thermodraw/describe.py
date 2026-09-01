@@ -63,6 +63,7 @@ def label_text(label):
         return ""
     stated = " = ".join(x for x in (label.name, label.value) if x)
     parts = [x for x in (label.user, stated) if x]
+    parts += [x for x in getattr(label, "extra", ()) if x]
     plain = _TAG.sub("", _TSPAN.sub(r"_\1", " | ".join(parts)))
     return html.unescape(plain)
 
@@ -141,6 +142,8 @@ class Description:
     # node the rail *is* and does nothing — which makes this the only place it
     # could ever be checked against what was meant.
     rail: Tuple[str, float, Tuple[float, float]] = None
+    edges: List[Tuple[str, str, str]] = field(default_factory=list)
+    pieces: List[List[str]] = field(default_factory=list)
 
     def text(self):
         out = [f"{self.source}: canvas {self.canvas[0]:.0f} x "
@@ -156,6 +159,19 @@ class Description:
             ref, y, (x0, x1) = self.rail
             out += ["", f"rail: y {y:.0f}, span ({x0:.0f}, {x1:.0f}), "
                         f"reference {ref!r}"]
+        if self.edges or len(self.pieces) > 1:
+            out += ["", "network:"]
+            joined = {}
+            for a, b, kind in self.edges:
+                joined.setdefault((a, b), []).append(kind)
+            for (a, b), kinds in joined.items():
+                out.append(f"  {a} --{'/'.join(kinds)}-- {b}")
+            loose = [g for g in self.pieces if not any(
+                set(g) & {a, b} for a, b, _ in self.edges)]
+            for group in loose:
+                out.append(f"  {', '.join(group)} -- nothing")
+            if len(self.pieces) > 1:
+                out.append(f"  {len(self.pieces)} pieces, not one network")
         if self.nodes:
             out += ["", "nodes:"]
             out += [f"  {i:<14.14s} {k:<8s} at ({x:.0f}, {y:.0f})"
@@ -172,6 +188,9 @@ class Description:
             "counts": dict(self.counts),
             "nodes": [{"id": i, "kind": k, "at": list(a)}
                       for i, k, a in self.nodes],
+            "edges": [{"from": a, "to": b, "kind": k}
+                      for a, b, k in self.edges],
+            "pieces": [list(g) for g in self.pieces],
             "rail": None if not self.rail else {
                 "reference": self.rail[0], "y": self.rail[1],
                 "span": list(self.rail[2])},
@@ -196,6 +215,50 @@ def _wrap(head, items, width=78):
             current = " " * len(head)
         current += piece + " "
     return lines + [current.rstrip()]
+
+
+def network(placements):
+    """Which nodes are joined to which, by what.
+
+    Three of five acceptance readers named this as the biggest thing missing
+    here — "the one question describe exists to answer is the one it
+    doesn't". Positions and counts say what is on the page; only this says
+    what the page means. Built the same way `check.network-in-pieces` builds
+    it, over nodes joined by branches, so the two cannot disagree.
+    """
+    seen, edges = set(), []
+    for p in placements:
+        if p.symbol is None or not (p.ref or "").startswith("branch "):
+            continue
+        if p.ref in seen:
+            continue
+        seen.add(p.ref)
+        ends = p.ref.split(" ", 2)[-1].split("->")
+        if len(ends) == 2:
+            edges.append((ends[0], ends[1], p.symbol.key))
+    return edges
+
+
+def _pieces(edges, ids):
+    """The node ids grouped into connected components, largest first."""
+    adj = {i: set() for i in ids}
+    for a, b, _ in edges:
+        adj.setdefault(a, set()).add(b)
+        adj.setdefault(b, set()).add(a)
+    seen, groups = set(), []
+    for start in sorted(adj):
+        if start in seen:
+            continue
+        stack, group = [start], set()
+        while stack:
+            v = stack.pop()
+            if v in group:
+                continue
+            group.add(v)
+            stack += [w for w in adj[v] if w not in group]
+        seen |= group
+        groups.append(sorted(group))
+    return sorted(groups, key=lambda g: (-len(g), g))
 
 
 def _kind(p):
@@ -230,10 +293,20 @@ def describe(diagram, size=None, padding=PADDING, source="diagram"):
     rects = {id(r.owner): r for r in scene.rects if r.owner is not None}
     lines = []
     for p in placements:
-        if p.element not in ("symbol", "node"):
+        # A repeated group's copies say nothing individually: the anchor
+        # carries the one label that speaks for all of them, so it stands in
+        # the table and they stay out of it.
+        if p.element not in ("symbol", "node", "anchor") or not p.shown:
+            continue
+        if p.element == "symbol" and p.copy is not None:
             continue
         rect = rects.get(id(p))
-        line = Line(ref=p.ref or "?", kind=_kind(p), at=tuple(p.at),
+        kind = _kind(p)
+        if p.element == "anchor":
+            group = [q for q in placements
+                     if q.ref == p.ref and q.symbol is not None]
+            kind = (f"{_kind(group[0])} x{len(group)}" if group else "group")
+        line = Line(ref=p.ref or "?", kind=kind, at=tuple(p.at),
                     angle=p.angle, says=label_text(p.label))
         if rect is not None:
             left, top, bw, bh = rect
@@ -250,6 +323,9 @@ def describe(diagram, size=None, padding=PADDING, source="diagram"):
         counts=dict(Counter(_kind(p) for p in placements)),
         lines=lines,
         nodes=[(n.id, n.kind, tuple(n.at)) for n in diagram.nodes if n.at],
+        edges=network(placements),
+        pieces=_pieces(network(placements),
+                       [n.id for n in diagram.nodes if n.kind != "corner"]),
         rail=None if not diagram.rail else (
             diagram.rail.reference, diagram.rail.y,
             tuple(diagram.rail.span) if diagram.rail.span else

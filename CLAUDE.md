@@ -10,7 +10,10 @@ design. It draws them in heat-transfer notation (hatched boxes carrying a
 mechanism texture) rather than circuit notation (resistor zigzags), because a
 box has interior room for a mechanism glyph and a zigzag does not.
 
-The symbol vocabulary is settled. The network layer is not built yet.
+The network layer is not built yet. The symbol vocabulary was settled
+until five agents drew five networks from five domains and named nine
+things it could not say; `examples/gallery/FINDINGS.md` is that list,
+and most of it has since been built.
 
 ## Layout
 
@@ -23,8 +26,9 @@ src/thermodraw/
   core.py      text metrics, transforms, the label solver, occupancy, textures
   check.py     is the drawing any good? placements -> findings, no SVG
   describe.py  is it the drawing you meant? placements -> prose, no SVG
-  __main__.py  the command line: `check`, `describe`, `render`
-  symbols.py   the thirteen symbols, plus sheet renderers
+  page.py      the same SVG inline in HTML, with its controls
+  __main__.py  the command line: `check`, `describe`, `render`, `page`
+  symbols.py   the eighteen symbols, plus sheet renderers
   theme.py     CSS variables for web, baked literals and fonts for Word/slides
   _metrics.py  generated character widths — do not edit
   fonts/       the vendored subset, OFL-1.1
@@ -121,6 +125,22 @@ change them without understanding what problem they solved.
   which is what `layout.BRANCH_SYM` exists to bridge.
 - **Boundaries use a clipped hatch band, not loose tick marks.** Ticks fall
   apart at intermediate angles whatever shape they outline.
+- **Boxes resist; arrows carry.** The interior of a box states what the heat
+  is *crossing*, which is why there are exactly four textures and one rule
+  generating them. Advection crosses nothing — the medium is going — so a
+  `flow` branch is chevrons in the line, not a fifth texture. It extends the
+  rule that already made sources arrows rather than circled elements, instead
+  of straining the one that makes boxes boxes.
+- **`flow` is the first directed branch, and refuses `angle`.** On every other
+  kind `angle` merely orients the symbol and means nothing. On a directed one
+  it reverses the arrow, so the drawing could contradict `from` and `to`. The
+  drawing must not be able to disagree with the data.
+- **An empty box interior is a statement, not an absence.** In a vocabulary
+  where the texture names the mechanism, `mixed` having none says the
+  mechanism is combined or deliberately unstated — which is what a window
+  quoted as one number for conduction *and* convection actually is. It is
+  also the one kind whose subscript the caller sets, because it is the one
+  kind the library cannot name.
 - **Heat flux is several arrows, not one.** Flux is per unit area and has no
   single line of action, so it must not borrow heat flow's symbol.
 
@@ -181,6 +201,39 @@ if both are taken. `side="up"/"down"/"left"/"right"` overrides the choice.
 Before this existed, the demo was fixed by hand: moving coordinates, and
 inflating `half` — a clearance parameter — into a "push harder" knob. If you
 find yourself doing that again, the occupancy list is the thing to reach for.
+
+### Drawing several of the same path (`count`)
+
+- **An arrangement is never inferred.** Eight 0.0275 K/W paths are 0.0034 in
+  parallel and 0.22 in series, a factor of sixty-four, so `count` without
+  `arrangement` is a wrong answer waiting to be read. It is refused.
+- **The condensed form keeps the *outermost* copies.** That is the whole
+  reason a viewer can swap forms for free: both occupy exactly the same
+  footprint, so nothing re-fits, no label re-solves, and the checker's verdict
+  holds for whichever one is on show. Keeping the *first two* instead would
+  have made every toggle a re-layout.
+- **A trunk before the fan.** Lanes radiating straight out of a node cross the
+  space that node's own label wants, so every default-placed parallel group
+  reported `label-adrift`. Forty-four units of clean wire either side fixed
+  it, and it is how the drawing is made by hand anyway. Both trunks dedupe,
+  being one segment shared by every lane.
+- **One label for the group.** It rides an `anchor` placement at the group
+  centre that draws nothing, with `half`/`half_len` covering the whole fan, so
+  the solver clears the group rather than one lane of it. `radius=0` keeps it
+  out of the canvas measurement, which the copies already account for.
+
+### A page instead of a picture (`page.py`)
+
+- **SVG stays canonical.** Word, PowerPoint, the README and every rasteriser
+  need a static file, and `theme.bake` exists because they cannot even resolve
+  a CSS variable. None of them run script.
+- **SVG is not what blocks interactivity — a *file* is.** Inline SVG in a page
+  is fully scriptable by its host, so the page is where the controls live and
+  the picture stays a picture. A library whose first line is "emits SVG, no
+  runtime dependencies" should not put a widget inside every drawing it makes.
+- **Both forms ship in the markup with stable ids.** `render.variant_id`
+  content-addresses them, so a page holding those ids does not break when
+  something unrelated in the diagram moves.
 
 ### Checking a diagram (`check.py`)
 

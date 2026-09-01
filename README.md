@@ -19,7 +19,7 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/assets/vocabulary-dark.svg">
-    <img src="docs/assets/vocabulary-light.svg" alt="The thirteen symbols" width="800">
+    <img src="docs/assets/vocabulary-light.svg" alt="The eighteen symbols" width="800">
   </picture>
 </p>
 
@@ -105,13 +105,16 @@ placements: ground x1, node x4, symbol/cap x2, symbol/cond x1,
 
 ...then every node with its kind and place, and every label with the direction
 it went. `check` grades the drawing; this says what is in it.
-`thermodraw render` writes the SVG, and all three work as `python -m
-thermodraw` from a checkout.
+`thermodraw render` writes the SVG. `thermodraw page` writes the same drawing
+as a self-contained HTML page with its controls — a repeated group of sixteen
+draws two and an ellipsis, and the page lets a reader expand it without
+anything being rebuilt. All four work as `python -m thermodraw` from a
+checkout.
 
 ```bash
 python examples/render_demo.py       # the three images above
 python examples/render_reference.py  # every symbol at every 45°
-pytest                               # 368 tests
+pytest                               # 447 tests
 ```
 
 ## More

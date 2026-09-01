@@ -8,6 +8,7 @@ Labels go on last so they sit above the geometry, and they are placed through
 `core.annotate`, which still solves each block against its own symbol. It now
 reports the rectangle it used, which is what lets the canvas size itself.
 """
+import collections
 import math
 from dataclasses import dataclass, field
 from typing import List, Optional, Tuple
@@ -122,6 +123,24 @@ def _key(seg):
     return (a, b) if a <= b else (b, a)
 
 
+def ellipsis(x, y, a, step=9, r=2.4):
+    """Three dots where the copies a condensed group drops used to be."""
+    return (f'<g transform="{S.xf(x, y, a)}">'
+            + "".join(f'<circle class="fillsym" cx="{d * step}" cy="0" '
+                      f'r="{r}"/>' for d in (-1, 0, 1))
+            + '</g>')
+
+
+def variant_id(ref, variant):
+    """A stable, content-addressed id for one form of a repeated group.
+
+    Stable is the whole point: a page toggling between the two forms holds
+    these in its markup, so they must not move when something unrelated in
+    the diagram does. `core.uid` hashes what it is given and nothing else.
+    """
+    return S.uid("td", ref, variant)
+
+
 def phase_mark(x, y):
     """Two short rules beneath a node whose temperature a phase change holds."""
     return "".join(
@@ -176,6 +195,10 @@ def bounds(p):
         return S.box_bounds(centre, half, angle)
     if p.element == "phase":
         return S.box_bounds(*_phase_box(p))
+    if p.element == "anchor":
+        # A label anchor draws nothing; the copies it speaks for are already
+        # measured, and counting it again would pad the canvas.
+        return p.at[0], p.at[1], p.at[0], p.at[1]
     r = p.radius
     return p.at[0] - r, p.at[1] - r, p.at[0] + r, p.at[1] + r
 
@@ -189,6 +212,18 @@ def compose(placements, size=None, padding=PADDING):
     """
     wires, glyphs, nodes, labels = [], [], [], []
     rects, seen = [], set()
+    # Both forms of every repeated group are drawn. The one that is not the
+    # default goes into a hidden group with a stable id, so swapping between
+    # them is two attribute flips rather than a rebuild — and because the
+    # condensed form keeps the outermost copies, the two occupy the same
+    # footprint and nothing re-fits.
+    variants = collections.OrderedDict()
+
+    def emit(p, markup, into):
+        if p.variant is None:
+            into.append(markup)
+        else:
+            variants.setdefault((p.ref, p.variant, p.shown), []).append(markup)
 
     for p in placements:
         if p.element != "wire":
@@ -198,15 +233,17 @@ def compose(placements, size=None, padding=PADDING):
             if key in seen or seg[0] == seg[1]:
                 continue
             seen.add(key)
-            wires.append(wire(seg))
+            emit(p, wire(seg), wires)
 
     for p in placements:
         if p.element == "symbol":
-            glyphs.append(place(p.symbol, p.at[0], p.at[1], p.angle))
+            emit(p, place(p.symbol, p.at[0], p.at[1], p.angle), glyphs)
         elif p.element == "ground":
             glyphs.append(ground(p.at[0], p.at[1], p.angle, *_wall(p)))
         elif p.element == "phase":
             glyphs.append(phase_mark(p.at[0], p.at[1]))
+        elif p.element == "ellipsis":
+            emit(p, ellipsis(p.at[0], p.at[1], p.angle), glyphs)
         elif p.element == "node":
             nodes.append(node(p.at[0], p.at[1], p.radius))
 
@@ -215,6 +252,8 @@ def compose(placements, size=None, padding=PADDING):
     # solves that clearance, and solves it tighter than a bounding box can.
     occupied = S.Occupancy()
     for p in placements:
+        if not p.shown:
+            continue
         if p.element == "wire":
             for a, b in _segments([tuple(q) for q in p.points]):
                 occupied.add_segment(a, b, owner=p)
@@ -232,7 +271,9 @@ def compose(placements, size=None, padding=PADDING):
 
     for p in placements:
         lab = p.label
-        if lab is None or not (lab.user or lab.value or lab.name):
+        if lab is None or not p.shown:
+            continue
+        if not (lab.user or lab.value or lab.name or lab.extra):
             continue
         report = {}
         rect = S.annotate(p.at[0], p.at[1], p.angle, labels, user=lab.user,
@@ -244,7 +285,11 @@ def compose(placements, size=None, padding=PADDING):
         if rect:
             rects.append(LabelRect(rect, owner=p, report=report))
 
-    parts = wires + glyphs + nodes + labels
+    groups = [f'<g id="{variant_id(ref, v)}"'
+              + ("" if shown else ' display="none"') + ">"
+              + "".join(body) + "</g>"
+              for (ref, v, shown), body in variants.items()]
+    parts = wires + glyphs + groups + nodes + labels
     ink = extent(placements, rects, 0.0)
     box = ((0.0, 0.0, float(size[0]), float(size[1])) if size is not None
            else extent(placements, rects, padding))

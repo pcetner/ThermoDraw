@@ -534,6 +534,8 @@ def _crowded_run(scene, placements, out):
     for p in placements:
         if p.symbol is None or not (p.ref or "").startswith("branch "):
             continue
+        if p.copy not in (None, 0):     # one pass per group, not per copy
+            continue
         ends = p.ref.split(" ", 2)[-1].split("->")
         na, nb = (nodes.get(e) for e in ends) if len(ends) == 2 else (None, None)
         if na is None or nb is None:

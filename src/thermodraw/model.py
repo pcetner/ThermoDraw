@@ -405,6 +405,11 @@ class Diagram:
                     "route it with `via` instead")
             if b.count is not None:
                 _count(b.count, f"branch {b.source}-{b.target}")
+                if b.count > 1 and b.via:
+                    raise DiagramError(
+                        f"branch {b.source}-{b.target}: a repeated branch is "
+                        "drawn as a fan between its two nodes, so it cannot "
+                        "also take `via`. Drop one or the other")
                 if b.count > 1 and b.arrangement not in ARRANGEMENTS:
                     raise DiagramError(
                         f"branch {b.source}-{b.target}: count {b.count} needs "
