@@ -44,6 +44,10 @@ def main():
         zigs.append(p)
     for name, placements in (("boxes", boxes), ("zigzags", zigs)):
         svg = theme.bake(render(placements, size=d.size), "light")
+        # A white ground of its own, so the file looks the same in every
+        # viewer: the test is about a glance, and a dark host would decide it.
+        svg = svg.replace("</style>", '</style><rect width="100%" height="100%" '
+                          'fill="#ffffff"/>', 1)
         save(svg, HERE / f"{name}.svg")
     print("wrote boxes.svg and zigzags.svg")
 
