@@ -216,10 +216,25 @@ find yourself doing that again, the occupancy list is the thing to reach for.
   room its expansion needs, and expanding it moves that group and nothing
   else. Sizing to the shown form instead would have made every toggle reflow
   the whole page, which is a far worse trade than some reserved whitespace.
+- **Right angles, not a fan.** The first version peeled each lane off on a
+  diagonal, which reads as janky at any count above about four and worsens as
+  the group grows. A trunk, a riser square across it, then the lane: a comb,
+  which is how it is drawn by hand, and which puts every riser on one line so
+  the branch point is a single visible junction rather than a spray.
+- **The elision mark is stubs of the missing lanes, not an ellipsis.** Three
+  dots are punctuation and too quiet to say "there is a branch here". Short
+  segments at the lane pitch, in the same stroke as a lane, say it in the
+  drawing's own language. Across the run for a series group, since there the
+  dropped copies sit along it.
 - **The motion is a staggered fade, not a transform.** A transform on the
   group would drag the wires off the nodes they connect to. `render` gives
   each copy a delay from how far it sits off the centre line, so the fan runs
   open from the middle outwards while no geometry moves at all.
+- **A form's label belongs to that form.** Both are drawn, each solved against
+  its own extent, and each fades with the drawing it describes. Putting the
+  visible one in the shared label list left it stranded in the middle of the
+  other form after a swap — the text stayed where sixteen lanes had opened
+  around it.
 - **Wire dedup is keyed per form.** Both forms share their trunks, and a
   global key handed the shared segment to whichever was emitted first —
   leaving the other drawn with nothing joining it to its nodes.

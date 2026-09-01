@@ -816,8 +816,8 @@ class TestRepeatedBranches:
                                              (4, True), (16, True)])
     def test_above_three_condenses(self, n, condensed):
         placements = layout(self.group(n))
-        dots = [p for p in placements if p.element == "ellipsis"]
-        assert bool(dots) is condensed
+        marks = [p for p in placements if p.element == "elided"]
+        assert bool(marks) is condensed
         hidden = [p for p in placements if not p.shown]
         assert bool(hidden) is condensed
 

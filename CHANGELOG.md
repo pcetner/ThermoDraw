@@ -107,9 +107,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   anything, and the script lives in the page and never in the picture.
 
   The copies fade in from the middle outwards, each with a delay `render` sets
-  from how far it sits off the centre line, so a fan appears to run open. It
+  from how far it sits off the centre line, so a group appears to run open. It
   is a fade and not a transform on purpose: a transform would drag the group's
   wires off the nodes they connect to.
+
+  A parallel group is drawn as a comb — a trunk out of each node, a riser
+  square across it, then one lane per copy — rather than a diagonal fan, which
+  read as janky above about four lanes. The condensed form stands short stubs
+  of the missing lanes between the two it shows, because three dots are
+  punctuation and too quiet to say there is a branch here.
+
+  Each form carries its own label and fades with it. The visible one used to
+  sit in the shared label list, which left it stranded in the middle of the
+  other form after a swap.
 
 - **`describe` prints the network.** Which nodes are joined to which, and by
   what — the thing three of five acceptance readers named as its single
