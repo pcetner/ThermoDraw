@@ -112,3 +112,52 @@ class TestTheDictionary:
             assert cy + sym.ink[1] <= h + 0.01, f"{sym.key} ink below it"
             assert cy + top >= -0.01, f"{sym.key} label above the frame"
             assert cy + top + bh <= h + 0.01, f"{sym.key} label below it"
+
+    def test_a_plate_says_what_its_example_says(self):
+        """The drawing, the sentence and the JSON are one story.
+
+        A plate reading "Die attach" over an example about a mug is exactly
+        the jargon the page exists to avoid, and it was the first draft.
+        """
+        from thermodraw import symbols
+        sys.path.insert(0, str(ROOT / "tools"))
+        import gen_dictionary
+
+        by_key = {s.key: s for s in symbols.SYMBOLS}
+        for key, spec in gen_dictionary.ENTRIES.items():
+            label = spec["code"].get("label")
+            if label is None:                       # a bare annotation
+                continue
+            svg = gen_dictionary.plate(by_key[key], spec)
+            assert label in svg, f"{key}: plate does not say {label!r}"
+            assert by_key[key].user not in svg or by_key[key].user == label, (
+                f"{key}: plate still carries the library's sample words")
+
+    def test_a_plate_cannot_show_notation_the_pipeline_would_not(self):
+        """`break`'s sample carries `q = 0 W`, and no break node can draw it:
+        a node's quantity is T. Taking the letter from the same tables
+        `layout` reads is what keeps the page honest."""
+        from thermodraw import symbols
+        sys.path.insert(0, str(ROOT / "tools"))
+        import gen_dictionary
+
+        by_key = {s.key: s for s in symbols.SYMBOLS}
+        svg = gen_dictionary.plate(by_key["break"],
+                                   gen_dictionary.ENTRIES["break"])
+        assert "0 W" not in svg and ">q<" not in svg
+        assert "Rubber feet" in svg
+
+    def test_an_example_stating_a_value_must_have_a_unit(self):
+        """Units are per diagram, so an entry may set its own — but it may
+        not print a bare number, which is the one thing `model` refuses."""
+        from thermodraw import symbols
+        sys.path.insert(0, str(ROOT / "tools"))
+        import gen_dictionary
+
+        by_key = {s.key: s for s in symbols.SYMBOLS}
+        for key, spec in gen_dictionary.ENTRIES.items():
+            if "value" not in spec["code"]:
+                continue
+            svg = gen_dictionary.plate(by_key[key], spec)
+            unit = spec.get("unit") or by_key[key].value.split(" ", 1)[1]
+            assert f'{spec["code"]["value"]} {unit}'.split()[-1] in svg
