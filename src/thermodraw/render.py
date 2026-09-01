@@ -93,6 +93,12 @@ def node(x, y, r=5.5):
 # supposed to move a single byte.
 WALL_HALF, WALL_DEPTH = 24, 13
 
+# The constant-temperature marking under a phase-change node: two rules of
+# half-width PHASE_HALF at these depths. `symbols.g_phase_node` draws the same
+# three numbers, and `tests/test_check.py` pins the two to each other — the
+# lesson from `g_break`, which drew an arrangement the pipeline never had.
+PHASE_HALF, PHASE_Y1, PHASE_Y2 = 13, 13, 19
+
 
 def ground(x, y, angle=90, half=WALL_HALF, depth=WALL_DEPTH):
     """A hatched boundary band. angle=90 lays it flat, hatch below."""
@@ -114,6 +120,21 @@ def _key(seg):
     """Segments match regardless of which way round they were routed."""
     a, b = ((round(p[0], 1), round(p[1], 1)) for p in seg)
     return (a, b) if a <= b else (b, a)
+
+
+def phase_mark(x, y):
+    """Two short rules beneath a node whose temperature a phase change holds."""
+    return "".join(
+        f'<line class="w" x1="{x - PHASE_HALF:.1f}" y1="{y + dy}" '
+        f'x2="{x + PHASE_HALF:.1f}" y2="{y + dy}"/>'
+        for dy in (PHASE_Y1, PHASE_Y2))
+
+
+def _phase_box(p):
+    """The marking as an oriented box: (centre, half, angle)."""
+    mid = (PHASE_Y1 + PHASE_Y2) / 2
+    return ((p.at[0], p.at[1] + mid),
+            (PHASE_HALF, (PHASE_Y2 - PHASE_Y1) / 2), 0.0)
 
 
 def _wall(p):
@@ -153,6 +174,8 @@ def bounds(p):
     if p.element == "ground":
         centre, half, angle = _wall_box(p)
         return S.box_bounds(centre, half, angle)
+    if p.element == "phase":
+        return S.box_bounds(*_phase_box(p))
     r = p.radius
     return p.at[0] - r, p.at[1] - r, p.at[0] + r, p.at[1] + r
 
@@ -182,6 +205,8 @@ def compose(placements, size=None, padding=PADDING):
             glyphs.append(place(p.symbol, p.at[0], p.at[1], p.angle))
         elif p.element == "ground":
             glyphs.append(ground(p.at[0], p.at[1], p.angle, *_wall(p)))
+        elif p.element == "phase":
+            glyphs.append(phase_mark(p.at[0], p.at[1]))
         elif p.element == "node":
             nodes.append(node(p.at[0], p.at[1], p.radius))
 
@@ -200,6 +225,8 @@ def compose(placements, size=None, padding=PADDING):
             # The boundary wall was the one drawn thing the solver could not
             # see, so a label was free to land on it.
             occupied.add_box(*_wall_box(p), owner=p)
+        elif p.element == "phase":
+            occupied.add_box(*_phase_box(p), owner=p)
         elif p.element == "node":
             occupied.add_box(p.at, (p.radius, p.radius), 0.0, owner=p)
 
@@ -210,6 +237,7 @@ def compose(placements, size=None, padding=PADDING):
         report = {}
         rect = S.annotate(p.at[0], p.at[1], p.angle, labels, user=lab.user,
                           name=lab.name, value=lab.value,
+                          extra=lab.extra,
                           half=lab.half, half_len=lab.half_len,
                           side=lab.side, occupied=occupied, owner=p,
                           report=report)

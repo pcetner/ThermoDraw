@@ -88,6 +88,14 @@ def test_every_kind_in_the_schema_is_a_real_symbol():
     assert set(BRANCH_SYM) <= M.BRANCH_KINDS, "a mapping for no such kind"
 
 
+def test_the_groups_are_the_symbol_order():
+    """`GROUPS` is what the vocabulary sheet lays out and what a reader
+    learns the vocabulary from, so it cannot drift from the list itself."""
+    flat = [k for _, keys in symbols.GROUPS for k in keys]
+    assert flat == [s.key for s in symbols.SYMBOLS]
+    assert len(set(flat)) == len(flat), "a symbol in two groups"
+
+
 # -------------------------------------------------------------------- units
 def test_units_are_appended_from_the_table():
     d = hero()

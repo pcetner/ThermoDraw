@@ -781,6 +781,45 @@ class TestABoundaryNodesOwnLabel:
         assert not codes(check(b))
 
 
+class TestPhaseNode:
+    """A node whose temperature a phase change holds.
+
+    The same trap `g_break` fell into: a node glyph the sheet draws and the
+    pipeline does not, drifting apart with nothing to say so. The marking is
+    three numbers, and both paths use them.
+    """
+
+    @staticmethod
+    def one():
+        return (DiagramBuilder(T="°C")
+                .node("boil", "Boiling surface", "49", kind="phase",
+                      sub="sat", at=(0, 0)).build())
+
+    def test_the_pipeline_draws_the_marking(self):
+        assert [p.element for p in layout(self.one())] == ["node", "phase"]
+
+    def test_the_glyph_and_the_pipeline_use_the_same_numbers(self):
+        from thermodraw import render as _r, symbols as _s
+        from thermodraw.render import PHASE_HALF, PHASE_Y1, PHASE_Y2
+        assert (PHASE_HALF, PHASE_Y1, PHASE_Y2) ==             (_s.PHASE_HALF, _s.PHASE_Y1, _s.PHASE_Y2)
+        glyph = _s.g_phase_node(0)
+        for dy in (PHASE_Y1, PHASE_Y2):
+            assert f'y1="{dy}" x2="{PHASE_HALF}" y2="{dy}"' in glyph
+
+    def test_it_draws_differently_from_a_free_node(self):
+        from thermodraw import render
+        free = (DiagramBuilder(T="°C")
+                .node("boil", "Boiling surface", "49", sub="sat",
+                      at=(0, 0)).build())
+        assert render(layout(self.one())) != render(layout(free))
+
+    def test_the_marking_is_registered_against_the_label_solver(self):
+        """The wall was invisible to it once, and a label landed on it."""
+        scene = compose(layout(self.one()))
+        rect = [r for r in scene.rects if r.ref == "node 'boil'"][0]
+        assert rect.clear
+
+
 class TestBreakBranch:
     """A break you can connect something to.
 

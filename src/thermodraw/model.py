@@ -17,8 +17,24 @@ from dataclasses import MISSING as _MISSING
 from dataclasses import dataclass, field, fields
 from typing import Any, Dict, List, Optional, Sequence, Union
 
-NODE_KINDS = {"free", "fixed", "break", "corner"}
-BRANCH_KINDS = {"cond", "conv", "rad", "contact", "cap", "break"}
+NODE_KINDS = {"free", "fixed", "break", "corner", "phase"}
+BRANCH_KINDS = {"cond", "conv", "rad", "contact", "cap", "break",
+                "flow", "spread", "pipe", "mixed"}
+
+# A branch whose quantity is a rate rather than a resistance, so which end
+# is `from` and which is `to` is the direction heat travels. `angle` is
+# refused on one: on a branch it overrides the direction taken from the
+# wire, which would let the drawing contradict the data.
+DIRECTED_KINDS = {"flow"}
+
+# How several identical paths combine. Never inferred: eight 0.0275 K/W
+# paths are 0.0034 in parallel and 0.22 in series, a factor of 64, so a
+# `count` without an `arrangement` is a wrong answer waiting to be read.
+ARRANGEMENTS = ("parallel", "series")
+
+# Above this many, a repeated group draws two and an ellipsis rather than
+# all of them. Three or fewer fit without crowding and read better drawn.
+CONDENSE_ABOVE = 3
 SOURCE_KINDS = {"diss", "radin", "flow", "flux"}
 
 # A source written with `from` points away from its node instead of into it.
@@ -31,12 +47,17 @@ OUTWARD_KINDS = {"flow", "flux"}
 # mechanism. A subscript on a C, T, P or q is identity, and the caller sets
 # it. None here means "ask the branch", which is how that asymmetry is kept.
 BRANCH_SUB = {"cond": "cond", "conv": "conv", "rad": "rad",
-              "contact": "contact", "cap": None, "break": None}
+              "contact": "contact", "cap": None, "break": None,
+              "flow": None, "spread": "spread", "pipe": "pipe",
+              # `mixed` is the one kind whose mechanism the library does
+              # not know, so its subscript is the caller's to set.
+              "mixed": None}
 # None means the branch names no quantity at all: a thermal break has neither
 # a resistance nor a capacitance, so it carries the user's label and nothing
 # else. `layout` drops the second line rather than inventing a symbol for it.
 BRANCH_SYMBOL = {"cond": "R", "conv": "R", "rad": "R", "contact": "R",
-                 "cap": "C", "break": None}
+                 "cap": "C", "break": None, "flow": "q",
+                 "spread": "R", "pipe": "R", "mixed": "R"}
 SOURCE_SYMBOL = {"diss": "P", "radin": "q", "flow": "q", "flux": "q″"}
 
 # Which quantity each kind is measured in, so one units entry serves many.
@@ -44,8 +65,13 @@ SOURCE_SYMBOL = {"diss": "P", "radin": "q", "flow": "q", "flux": "q″"}
 # is not measured in the same thing as a heat flow and must not share the
 # entry. `radin` and `flow` are both powers and do share `q`.
 QUANTITY = {"cond": "R", "conv": "R", "rad": "R", "contact": "R", "cap": "C",
-            "free": "T", "fixed": "T", "break": "T",
+            "spread": "R", "pipe": "R", "mixed": "R",
+            "free": "T", "fixed": "T", "break": "T", "phase": "T",
             "diss": "P", "radin": "q", "flow": "q", "flux": "q″"}
+
+# What a `rate` on a resistance is measured in. It is a heat rate whatever
+# the path's own quantity is, which is the whole point of the field.
+RATE = "q"
 
 RAIL = "rail"
 
@@ -113,6 +139,15 @@ def _value(value, where):
 # reachable from Python and from nowhere else: the model carried no field for
 # it, so a diagram written as data could not say where its own label goes.
 SIDES = ("auto", "up", "down", "left", "right")
+
+
+def _count(value, where):
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise DiagramError(
+            f"{where}: count must be a whole number, got {value!r}")
+    if value < 1:
+        raise DiagramError(f"{where}: count must be 1 or more, got {value}")
+    return value
 
 
 def _side(value, where):
@@ -198,16 +233,40 @@ class Node:
 
 @dataclass
 class Branch:
+    """A path heat takes between two nodes.
+
+    `rate` is what this path actually carries, beside the resistance it
+    presents. A cryostat heat-load budget is a list of exactly those numbers,
+    and without the field they end up inside the free-text label, reading as
+    part of the path's name and bypassing the units table.
+
+    `count` with `arrangement` says there are several identical ones. Both or
+    neither: eight 0.0275 K/W paths are 0.0034 in parallel and 0.22 in
+    series, so an unstated arrangement is a wrong answer waiting to be read.
+    """
+
     source: str
     target: str
     kind: str = "cond"
     label: Optional[str] = None
     sub: str = ""
     value: Union[str, float, None] = None
+    rate: Union[str, float, None] = None
+    count: Optional[int] = None
+    arrangement: Optional[str] = None
     via: List[Sequence[float]] = field(default_factory=list)
     at: Optional[Sequence[float]] = None
     angle: Optional[float] = None
     side: str = "auto"
+
+    @property
+    def repeated(self):
+        return bool(self.count and self.count > 1)
+
+    @property
+    def condensed(self):
+        """Two and an ellipsis, rather than all of them."""
+        return bool(self.count and self.count > CONDENSE_ABOVE)
 
 
 @dataclass
@@ -234,6 +293,7 @@ class Source:
     at: Optional[Sequence[float]] = None
     angle: float = 0.0
     side: str = "auto"
+    count: Optional[int] = None             # several identical ones; they add
     source: Optional[str] = None            # `from`: heat leaving that node
 
     @property
@@ -271,6 +331,20 @@ class Diagram:
 
     def unit(self, kind):
         return self.units.get(QUANTITY.get(kind, ""), "")
+
+    def rate_text(self, value):
+        """A heat rate as it will be drawn, or None. Always in `units.q`."""
+        text = _fmt(value)
+        if text is None:
+            return None
+        return f"{text} {self.units.get(RATE, '')}".strip()
+
+    def count_text(self, count, arrangement):
+        """How many, and how they combine, as one readable line."""
+        if not count or count <= 1:
+            return None
+        return (f"{count} in series" if arrangement == "series"
+                else f"{count} in parallel")
 
     def value_text(self, kind, value):
         text = _fmt(value)
@@ -319,6 +393,40 @@ class Diagram:
             # `QUANTITY` only holds "break" for the *node* kind — one
             # namespace, two positions. Without this the author gets "units
             # has no entry for 'T'" about a branch, which explains nothing.
+            # `angle` on a branch overrides the direction taken from the
+            # wire, which for a directed kind would let the arrow contradict
+            # `from` and `to`. The drawing must not be able to disagree with
+            # the data, so this is refused rather than silently preferred.
+            if b.kind in DIRECTED_KINDS and b.angle is not None:
+                raise DiagramError(
+                    f"branch {b.source}-{b.target}: {b.kind!r} carries heat "
+                    "from one end to the other, so its direction is `from` "
+                    "and `to`. `angle` would turn the symbol against them; "
+                    "route it with `via` instead")
+            if b.count is not None:
+                _count(b.count, f"branch {b.source}-{b.target}")
+                if b.count > 1 and b.arrangement not in ARRANGEMENTS:
+                    raise DiagramError(
+                        f"branch {b.source}-{b.target}: count {b.count} needs "
+                        "an arrangement of " + " or ".join(
+                            repr(a) for a in ARRANGEMENTS)
+                        + ". Identical paths combine differently in each, so "
+                          "it cannot be left unstated")
+            elif b.arrangement is not None:
+                raise DiagramError(
+                    f"branch {b.source}-{b.target}: arrangement "
+                    f"{b.arrangement!r} without a count says nothing")
+            if b.kind == "break" and b.rate is not None:
+                raise DiagramError(
+                    f"branch {b.source}-{b.target} is a break, which carries "
+                    f"no heat and so no rate; got {b.rate!r}")
+            if b.rate is not None:
+                _value(b.rate, f"branch {b.source}-{b.target}")
+                if not self.units.get(RATE):
+                    raise DiagramError(
+                        f"branch {b.source}-{b.target} has the rate "
+                        f"{b.rate!r} but units has no entry for {RATE!r}, so "
+                        "it would render bare")
             if b.kind == "break" and b.value is not None:
                 raise DiagramError(
                     f"branch {b.source}-{b.target} is a break, which carries "

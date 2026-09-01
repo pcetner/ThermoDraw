@@ -23,7 +23,7 @@ BY_KEY = {s.key: s for s in S.SYMBOLS}
 # positions, which is a feature for whoever writes the JSON. It is a collision
 # in here, because BY_KEY is one namespace, so the branch resolves through
 # this and the node goes straight to BY_KEY.
-BRANCH_SYM = {"break": "break-branch"}
+BRANCH_SYM = {"break": "break-branch", "flow": "flow-branch"}
 
 # How a node meets its boundary. A fixed node reaches down STUB units to its
 # wall; a thermal break stops at the circle and its wall stands BREAK_GAP away,
@@ -41,6 +41,7 @@ class Label:
     user: Optional[str] = None
     name: Optional[str] = None
     value: Optional[str] = None
+    extra: Sequence[str] = ()
     half: float = 5.5
     half_len: float = 5.5
     side: str = "auto"
@@ -190,6 +191,9 @@ def layout(diagram):
             label=Label(user=b.label,
                         name=S.S_(base, sub) if base else None,
                         value=diagram.value_text(b.kind, b.value),
+                        extra=[x for x in (
+                            diagram.rate_text(b.rate),
+                            diagram.count_text(b.count, b.arrangement)) if x],
                         half=sym.half, half_len=sym.half_len,
                         side=b.side)))
 
@@ -223,6 +227,8 @@ def layout(diagram):
             label=Label(user=s.label,
                         name=S.S_(M.SOURCE_SYMBOL[s.kind], s.sub),
                         value=diagram.value_text(s.kind, s.value),
+                        extra=[x for x in
+                               (diagram.count_text(s.count, "parallel"),) if x],
                         half=sym.half, half_len=sym.half_len,
                         side=s.side)))
         reach = -sym.half_len if s.outward else sym.half_len
@@ -268,6 +274,8 @@ def layout(diagram):
                                  ref=ref))
             out.append(Placement("ground", at=(at[0], at[1] + STUB), angle=90,
                                  ref=ref))
+        elif n.kind == "phase":
+            out.append(Placement("phase", at=at, ref=ref))
         elif n.kind == "break":
             # Set further out than a fixed node's wall, so the clear space
             # reads as longer than a stub. At the stub's own distance the

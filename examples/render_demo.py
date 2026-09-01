@@ -106,25 +106,37 @@ def rosette(n=12, R=176):
 # `tests/test_frame.py::drawn_ink` rather than by eye — this sheet is a
 # golden, so a wrong nudge gets blessed by `--update-goldens` in silence.
 # ("fixed" is the one hand-set entry left, 10 right of its own ink centre.)
-NUDGE = {"fixed": (28, -9), "break": (16, -16), "flux": (-3, 0)}
+NUDGE = {"fixed": (28, -9), "break": (16, -16), "flux": (-3, 0),
+         "phase": (0, -7)}
 
 
 def vocabulary(cols=4, cw=250, ch=152):
-    """Every symbol once, at rest, named and nothing more."""
-    rows = (len(sym.SYMBOLS) + cols - 1) // cols
+    """Every symbol once, at rest, named and nothing more.
+
+    Laid out group by group, each group starting a new row. At eighteen
+    entries the order *is* the specification, and a plain left-to-right fill
+    stops carrying it — a reader learning the vocabulary needs to see that
+    the four box textures are one family and the sources are another.
+    """
+    by_key = {s.key: s for s in sym.SYMBOLS}
+    cells, row = [], 0
+    for _, keys in sym.GROUPS:
+        for i, key in enumerate(keys):
+            cells.append((by_key[key], row + i // cols, i % cols))
+        row += (len(keys) + cols - 1) // cols
+
     b = []
-    for i, s in enumerate(sym.SYMBOLS):
+    for s, r, c in cells:
         dx, dy = NUDGE.get(s.key, (0, 0))
-        cx = (i % cols) * cw + cw / 2
-        cy = (i // cols) * ch + ch / 2 - 12
-        b.append(f'<g transform="{S.xf(cx + dx, cy + dy, 0)}">{s.draw(0)}</g>')
-        b.append(f'<text class="user" x="{cx}" y="{(i // cols) * ch + ch - 16}" '
+        cx, top = c * cw + cw / 2, r * ch
+        b.append(f'<g transform="{S.xf(cx + dx, top + ch / 2 - 12 + dy, 0)}">'
+                 f'{s.draw(0)}</g>')
+        b.append(f'<text class="user" x="{cx}" y="{top + ch - 16}" '
                  f'text-anchor="middle">{s.name}</text>')
-        if i % cols:
-            b.append(f'<line class="tick" x1="{(i % cols) * cw}" '
-                     f'y1="{(i // cols) * ch + 18}" x2="{(i % cols) * cw}" '
-                     f'y2="{(i // cols) * ch + ch - 32}"/>')
-    return sym.canvas(cw * cols, ch * rows, "".join(b))
+        if c:
+            b.append(f'<line class="tick" x1="{c * cw}" y1="{top + 18}" '
+                     f'x2="{c * cw}" y2="{top + ch - 32}"/>')
+    return sym.canvas(cw * cols, ch * row, "".join(b))
 
 
 SCENES = {"hero": hero, "rosette": rosette, "vocabulary": vocabulary}
