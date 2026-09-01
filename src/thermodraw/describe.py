@@ -27,7 +27,7 @@ import math
 import re
 from collections import Counter
 from dataclasses import dataclass, field
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from .layout import layout as _layout
 # By name, not `from . import render`: the package rebinds `thermodraw.render`
@@ -80,19 +80,38 @@ def side_word(side):
 
 @dataclass
 class Line:
-    """One labelled thing, and where its text went."""
+    """One drawn thing: where it sits, and where its text went.
+
+    Keyed on the placement rather than on the label, because `compose` skips
+    a label with nothing to say — so an element carrying no text had no row
+    at all. A `break` branch names no quantity by design; give one no `label`
+    and it used to vanish from the description entirely, surviving only as a
+    number in the counts.
+
+    `at` is the element. `label_at` is its text, which is a different point
+    and the whole reason `side` is worth printing.
+    """
 
     ref: str
     kind: str
     at: Tuple[float, float]
-    side: str
-    size: Tuple[float, float]
+    angle: float = 0.0
+    side: str = ""
+    size: Tuple[float, float] = (0.0, 0.0)
+    label_at: Optional[Tuple[float, float]] = None
     says: str = ""
     pushed: float = 0.0
     flipped: bool = False
     clear: bool = True
 
     def text(self):
+        where = f"({self.at[0]:.0f}, {self.at[1]:.0f})"
+        # Only when it is turned. Printing "angle 0" on every row of a flat
+        # ladder buries the one source that is not.
+        if self.angle % 360:
+            where += f" a{self.angle % 360:g}"
+        if self.label_at is None:
+            return f"  {self.ref:<22.22s} {self.kind:<15.15s} {where:<17s} "                    "(no label)"
         notes = []
         if self.flipped:
             notes.append("flipped")
@@ -102,8 +121,9 @@ class Line:
             notes.append("OVERLAPS")
         notes.append(self.says)
         tail = "   ".join(n for n in notes if n)
-        return (f"  {self.ref:<22.22s} {self.kind:<15.15s} {self.side:<12s}"
-                f" {self.size[0]:>4.0f}x{self.size[1]:<4.0f} {tail}").rstrip()
+        return (f"  {self.ref:<22.22s} {self.kind:<15.15s} {where:<17s}"
+                f" {self.side:<12s} {self.size[0]:>4.0f}x"
+                f"{self.size[1]:<4.0f} {tail}").rstrip()
 
 
 @dataclass
@@ -125,7 +145,8 @@ class Description:
     def text(self):
         out = [f"{self.source}: canvas {self.canvas[0]:.0f} x "
                f"{self.canvas[1]:.0f}, "
-               f"{len(self.lines)} label" + ("" if len(self.lines) == 1 else "s")]
+               f"{sum(1 for l in self.lines if l.label_at)} label"
+               + ("" if sum(1 for l in self.lines if l.label_at) == 1 else "s")]
 
         out += [""] + _wrap("placements: ",
                             [f"{k} x{v}"
@@ -140,7 +161,7 @@ class Description:
             out += [f"  {i:<14.14s} {k:<8s} at ({x:.0f}, {y:.0f})"
                     for i, k, (x, y) in self.nodes]
         if self.lines:
-            out += ["", "labels:"]
+            out += ["", "elements:"]
             out += [l.text() for l in self.lines]
         return "\n".join(out)
 
@@ -154,11 +175,14 @@ class Description:
             "rail": None if not self.rail else {
                 "reference": self.rail[0], "y": self.rail[1],
                 "span": list(self.rail[2])},
-            "labels": [{"ref": l.ref, "kind": l.kind, "at": list(l.at),
-                        "side": l.side, "says": l.says, "width": l.size[0],
-                        "height": l.size[1], "pushed": l.pushed,
-                        "flipped": l.flipped, "clear": l.clear}
-                       for l in self.lines],
+            "elements": [{"ref": l.ref, "kind": l.kind, "at": list(l.at),
+                          "angle": l.angle, "says": l.says,
+                          "label": None if l.label_at is None else {
+                              "at": list(l.label_at), "side": l.side,
+                              "width": l.size[0], "height": l.size[1],
+                              "pushed": l.pushed, "flipped": l.flipped,
+                              "clear": l.clear}}
+                         for l in self.lines],
         }
 
 
@@ -200,17 +224,25 @@ def describe(diagram, size=None, padding=PADDING, source="diagram"):
     scene = compose(placements, size=size, padding=padding)
     bx0, by0, bx1, by1 = scene.box
 
+    # By placement, in diagram order, so an element with no label still gets
+    # a row. Keyed on identity: two placements can share a ref, and a symbol
+    # and its own lead wires all do.
+    rects = {id(r.owner): r for r in scene.rects if r.owner is not None}
     lines = []
-    for rect in scene.rects:
-        left, top, bw, bh = rect
-        owner = rect.owner
-        lines.append(Line(
-            ref=rect.ref or "?", kind=_kind(owner) if owner else "?",
-            at=(left + bw / 2, top + bh / 2), side=side_word(rect.side),
-            size=(bw, bh),
-            says=label_text(owner.label if owner else None),
-            pushed=round(rect.used - rect.solved, 1),
-            flipped=rect.flipped, clear=rect.clear))
+    for p in placements:
+        if p.element not in ("symbol", "node"):
+            continue
+        rect = rects.get(id(p))
+        line = Line(ref=p.ref or "?", kind=_kind(p), at=tuple(p.at),
+                    angle=p.angle, says=label_text(p.label))
+        if rect is not None:
+            left, top, bw, bh = rect
+            line.label_at = (left + bw / 2, top + bh / 2)
+            line.side = side_word(rect.side)
+            line.size = (bw, bh)
+            line.pushed = round(rect.used - rect.solved, 1)
+            line.flipped, line.clear = rect.flipped, rect.clear
+        lines.append(line)
 
     return Description(
         source=source,

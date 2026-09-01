@@ -190,26 +190,36 @@ def layout(diagram):
                                      (span[1], diagram.rail.y)]))
 
     for i, s in enumerate(diagram.sources):
-        ref = f"source {i} -> {s.target}"
+        ref = (f"source {i} {s.source} ->" if s.outward
+               else f"source {i} -> {s.target}")
         sym = BY_KEY[s.kind]
-        node = diagram.node(s.target)
+        node = diagram.node(s.node)
         tip = tuple(node.at)
-        centre = tuple(s.at) if s.at else (
-            tip[0] - _source_offset(sym), tip[1])
-        angle = s.angle
+        # Direction is which end of the arrow meets the node, and nothing
+        # else. Every source glyph draws its tail at -half_len and its head
+        # at +half_len, so `from` and `to` share one drawing at one rotation:
+        # put the symbol on the far side and join the head, or on the near
+        # side and join the tail. On `flux` that is the whole feature — the
+        # hatch band is a surface, so joining the tail stands the surface
+        # against the node with the arrows leaving it.
+        rad = math.radians(s.angle)
+        along = (math.cos(rad), math.sin(rad))
+        step = _source_offset(sym) * (1 if s.outward else -1)
+        centre = tuple(s.at) if s.at else (tip[0] + along[0] * step,
+                                           tip[1] + along[1] * step)
         out.append(Placement(
-            "symbol", at=centre, angle=angle, symbol=sym, ref=ref,
+            "symbol", at=centre, angle=s.angle, symbol=sym, ref=ref,
             label=Label(user=s.label,
                         name=S.S_(M.SOURCE_SYMBOL[s.kind], s.sub),
                         value=diagram.value_text(s.kind, s.value),
                         half=sym.half, half_len=sym.half_len,
                         side=s.side)))
-        rad = math.radians(angle)
-        head = (centre[0] + math.cos(rad) * sym.half_len,
-                centre[1] + math.sin(rad) * sym.half_len)
-        edge = (tip[0] - math.cos(rad) * 5.5, tip[1] - math.sin(rad) * 5.5)
-        if _length(head, edge) > 0.5:
-            out.append(Placement("wire", points=[head, edge], ref=ref))
+        reach = -sym.half_len if s.outward else sym.half_len
+        end = (centre[0] + along[0] * reach, centre[1] + along[1] * reach)
+        edge = (tip[0] + along[0] * (5.5 if s.outward else -5.5),
+                tip[1] + along[1] * (5.5 if s.outward else -5.5))
+        if _length(end, edge) > 0.5:
+            out.append(Placement("wire", points=[end, edge], ref=ref))
 
     for n in diagram.nodes:
         if n.kind == "corner":

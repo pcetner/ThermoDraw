@@ -399,6 +399,110 @@ class TestTheRemedyNamesTheField:
         assert _remedy(None, pair=True).isascii()
 
 
+class TestHeatLeavingANode:
+    """`from` against `to`, which is the direction the arrow points.
+
+    The acceptance reader was asked for the flux leaving a cell's top face
+    and could only draw arrows pointing into it. Every source glyph already
+    draws its tail at -half_len and its head at +half_len, so this needed no
+    new geometry at all: put the symbol on the near side and join the tail.
+    """
+
+    @staticmethod
+    def one(end, kind="flux", **kw):
+        return Diagram.from_dict({
+            "units": {"T": "C", "q″": "W/cm2", "q": "W"},
+            "nodes": [{"id": "cell", "label": "Cell", "value": "44",
+                       "at": [300, 300]}],
+            "sources": [dict({end: "cell", "kind": kind, "label": "Top face",
+                              "value": "0.9"}, **kw)]})
+
+    def test_the_symbol_moves_to_the_other_side_of_the_node(self):
+        """Same glyph, same rotation. Only which end meets the node."""
+        out = [p for p in layout(self.one("from")) if p.symbol is not None][0]
+        into = [p for p in layout(self.one("to")) if p.symbol is not None][0]
+        assert out.angle == into.angle == 0.0
+        assert out.at[0] > 300 > into.at[0], "not on opposite sides"
+        assert out.at[0] - 300 == 300 - into.at[0], "not the same distance"
+
+    def test_the_lead_joins_the_tail_rather_than_the_head(self):
+        """Which is what makes the arrows leave instead of arrive."""
+        placements = layout(self.one("from"))
+        symbol = [p for p in placements if p.symbol is not None][0]
+        wire = [p for p in placements if p.element == "wire"][0]
+        far = max(q[0] for q in wire.points)
+        assert far == pytest.approx(symbol.at[0] - symbol.symbol.half_len)
+        assert min(q[0] for q in wire.points) == pytest.approx(300 + 5.5)
+
+    def test_flux_stands_its_surface_against_the_node(self):
+        """The hatch band is a surface, and it is at the glyph's tail.
+
+        So joining the tail puts the surface on the node with the arrows
+        leaving it, which is what "flux off this face" means. The glyph's
+        own note has said "several arrows leaving a surface" all along.
+        """
+        symbol = [p for p in layout(self.one("from"))
+                  if p.symbol is not None][0]
+        hatch_x = symbol.at[0] - 23          # g_flux draws its band at -23
+        assert abs(hatch_x - 300) < abs(symbol.at[0] + 28 - 300), \
+            "the arrowheads are nearer the node than the surface"
+
+    @pytest.mark.parametrize("angle", [0, 90, 180, 270])
+    def test_it_checks_clean_at_every_quarter_turn(self, angle):
+        assert check(self.one("from", angle=angle)).ok
+
+    def test_the_default_place_follows_the_angle(self):
+        """It used to go left whatever the angle, so `angle` without an `at`
+        put the symbol beside the node and the lead across the page."""
+        symbol = [p for p in layout(self.one("from", angle=270))
+                  if p.symbol is not None][0]
+        assert symbol.at[0] == 300 and symbol.at[1] < 300, "not above it"
+
+    def test_the_ref_says_which_way_it_goes(self):
+        assert [p.ref for p in layout(self.one("from")) if p.symbol][0] \
+            == "source 0 cell ->"
+        assert [p.ref for p in layout(self.one("to")) if p.symbol][0] \
+            == "source 0 -> cell"
+
+    @pytest.mark.parametrize("kind", ["diss", "radin"])
+    def test_a_kind_that_names_its_own_direction_is_refused(self, kind):
+        """And the message says what to reach for instead."""
+        with pytest.raises(DiagramError) as exc:
+            self.one("from", kind=kind, angle=0).validate()
+        assert "cannot be written with `from`" in str(exc.value)
+        assert "`flow` or `flux`" in str(exc.value)
+        if kind == "radin":
+            assert "`rad` branch to a boundary" in str(exc.value)
+
+    def test_both_ends_at_once_is_refused(self):
+        with pytest.raises(DiagramError) as exc:
+            Diagram.from_dict({
+                "nodes": [{"id": "a", "at": [0, 0]}],
+                "sources": [{"to": "a", "from": "a", "kind": "flow"}]}
+            ).validate()
+        assert "not both" in str(exc.value)
+
+    def test_and_so_is_neither(self):
+        with pytest.raises(DiagramError) as exc:
+            Diagram.from_dict({
+                "nodes": [{"id": "a", "at": [0, 0]}],
+                "sources": [{"kind": "flow"}]}).validate()
+        assert "needs `to`" in str(exc.value)
+
+    def test_it_round_trips_through_json(self):
+        d = self.one("from")
+        assert d.to_dict()["sources"][0]["from"] == "cell"
+        assert "to" not in d.to_dict()["sources"][0]
+        assert Diagram.from_json(d.to_json()).to_dict() == d.to_dict()
+
+    def test_the_builder_can_say_it_too(self):
+        b = (DiagramBuilder(T="C", q="W")
+             .node("cell", "Cell", "44", at=(300, 300))
+             .source("cell", "flow", "Conducted away", "38", outward=True))
+        assert b.build().sources[0].outward
+        assert b.build().to_dict()["sources"][0]["from"] == "cell"
+
+
 class TestABoundaryNodesOwnLabel:
     """`side: "down"` on a boundary node aims the label at its own wall.
 

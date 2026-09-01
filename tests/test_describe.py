@@ -51,6 +51,33 @@ class TestItSaysWhatIsThere:
         d = hero()
         assert len(describe(d).lines) == len(compose(layout(d)).rects) == 11
 
+    def test_it_says_where_each_element_sits(self):
+        """The label's position is not the element's, and for a source which
+        way it points is the whole of its meaning."""
+        at = {l.ref: (l.at, l.angle) for l in describe(hero()).lines}
+        assert at["branch 4 j->rail"] == ((200.0, 278.0), 90.0)
+        assert at["source 0 -> j"] == ((96.0, 150.0), 0.0)
+        text = describe(hero()).text()
+        assert "symbol/cap      (200, 278) a90" in text
+        assert "symbol/cond     (312, 150)   " in text, "angle 0 not printed"
+
+    def test_an_element_with_no_label_still_gets_a_row(self):
+        """`compose` skips a label with nothing to say, so a row keyed on
+        labels made an unlabelled element vanish into the counts.
+
+        A `break` branch names no quantity by design — leave its `label` off
+        and it is exactly this case.
+        """
+        d = (DiagramBuilder(T="C")
+             .node("a", "Cell", "44", at=(0, 0))
+             .node("b", "Chassis", "30", at=(340, 0))
+             .branch("a", "b", "break").build())
+        line = [l for l in describe(d).lines if l.ref.startswith("branch")][0]
+        assert line.kind == "symbol/break-branch" and line.at == (170.0, 0.0)
+        assert line.label_at is None and line.says == ""
+        assert "(no label)" in line.text()
+        assert describe(d).text().splitlines()[0].endswith("2 labels")
+
     def test_it_gives_the_nodes_their_kinds_and_places(self):
         assert ("amb", "fixed", (936, 372)) in describe(hero()).nodes
 
@@ -149,7 +176,7 @@ class TestItReadsInATerminal:
     def test_it_is_json_when_asked(self):
         data = json.loads(json.dumps(describe(hero()).to_dict()))
         assert data["canvas"] == [1041.7, 430.8]
-        assert {l["ref"] for l in data["labels"]} >= {"node 'j'"}
+        assert {l["ref"] for l in data["elements"]} >= {"node 'j'"}
 
 
 class TestItSaysHowTheLabelLanded:
