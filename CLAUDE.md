@@ -33,10 +33,11 @@ src/thermodraw/
   _metrics.py  generated character widths — do not edit
   fonts/       the vendored subset, OFL-1.1
 tools/
-  gen_metrics.py  width tables from the real font
-  subset_font.py  the vendored faces
-  gen_docs.py     regenerates the symbol reference
-  golden_diff.py  what actually changed in a golden, element by element
+  gen_metrics.py     width tables from the real font
+  subset_font.py     the vendored faces
+  gen_docs.py        regenerates the symbol reference
+  gen_dictionary.py  regenerates Dictionary.html — the prose lives here
+  golden_diff.py     what actually changed in a golden, element by element
 examples/
   hero.json              the README diagram, as data
   render_demo.py         the three README images
@@ -44,11 +45,19 @@ examples/
 docs/
   schema.md              the format, written to be pasted into a prompt
   symbol-reference.html  the design record — open this first (generated)
+Dictionary.html          what each symbol means, and when (generated)
 ```
 
 `docs/symbol-reference.html` is the visual specification. It shows every
 symbol at eight orientations with the reasoning for each choice. Read it
 before changing any glyph.
+
+`Dictionary.html` is the other half of that, for a reader rather than a
+maintainer: each symbol once, at 0°, with a plain description and one
+scenario. The two pages ask different questions on purpose — the reference
+answers *why is it drawn this way*, which is not what someone meeting the
+vocabulary for the first time wants to know. Both are generated from the
+library, so neither can show a glyph the code cannot draw.
 
 ## Design decisions, and why
 
