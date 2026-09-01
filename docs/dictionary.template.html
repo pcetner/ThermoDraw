@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Symbol dictionary — ThermoDraw {{VERSION}}</title>
+<title>Symbol dictionary · ThermoDraw {{VERSION}}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Serif:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
@@ -74,17 +74,18 @@ code{font-family:var(--mono);font-size:.85em;background:var(--tint);
    line under the contents, which is the wrong weight for the thing the rest
    of the page is downstream of. Both glyphs are drawn bare — the point is the
    shape, and a worked example is what a reader would look at instead. */
-.shapes{display:grid;gap:18px;grid-template-columns:1fr 1fr;margin-top:22px}
-@media (max-width:820px){.shapes{grid-template-columns:1fr}}
-.shape{display:grid;grid-template-columns:168px minmax(0,1fr);gap:18px;
-       align-items:center;background:var(--panel);
-       border:1px solid var(--rule);border-radius:8px;padding:18px 20px}
-.shape figure{margin:0}
+.shapes{display:grid;gap:18px;margin-top:22px;
+        grid-template-columns:repeat(3,minmax(0,1fr))}
+@media (max-width:880px){.shapes{grid-template-columns:1fr}}
+.shape{background:var(--panel);border:1px solid var(--rule);border-radius:8px;
+       padding:18px 20px 20px}
+.shape figure{margin:0 0 15px;max-width:186px}
 .shape figure svg{display:block;width:100%;height:auto}
 .shape h3{font-family:var(--sans);font-size:15.5px;font-weight:600;
-          margin:0 0 6px;color:var(--ink);letter-spacing:-.01em}
-.shape p{font-family:var(--sans);font-size:14px;line-height:1.5;margin:0;
+          margin:0 0 7px;color:var(--ink);letter-spacing:-.01em}
+.shape p{font-family:var(--sans);font-size:14px;line-height:1.55;margin:0;
          max-width:none;color:var(--ink-2)}
+@media (max-width:880px){.shape figure{max-width:200px}}
 
 /* Contents, as one table per category. Two jobs in one component: nineteen
    entries is past the point where scrolling for one is reasonable, and the
@@ -200,11 +201,11 @@ footer a:hover{color:var(--accent)}
 {{ENTRIES}}
 
 <footer>
-Each drawing here is rendered by the library itself, at 0°. Every symbol also
-works at any angle — see <a href="docs/symbol-reference.html">the symbol
-reference</a> for all eight orientations and the reasoning behind each glyph,
-and <a href="docs/schema.md">the schema</a> for the full set of fields and how
-the pieces above fit into one file.
+Every drawing on this page is rendered by the library itself, at 0°. The
+symbols work at any angle. For all eight orientations and the reasoning behind
+each glyph, see <a href="docs/symbol-reference.html">the symbol reference</a>.
+For the full set of fields, and how these pieces fit together into one file,
+see <a href="docs/schema.md">the schema</a>.
 </footer>
 
 </div>

@@ -200,11 +200,14 @@ class TestTheDictionary:
         entries are downstream of. It spent a revision as one line under the
         contents, which is not the weight it earns."""
         page = (ROOT / "Dictionary.html").read_text(encoding="utf-8")
-        assert "<h2>Boxes and arrows</h2>" in page
-        assert page.count('<div class="shape">') == 2
+        sys.path.insert(0, str(ROOT / "tools"))
+        import gen_dictionary
+
+        assert "<h2>Boxes, arrows and chevrons</h2>" in page
+        assert page.count('<div class="shape">') == len(gen_dictionary.SHAPES)
 
     def test_a_symbol_with_nothing_to_say_still_gets_a_frame(self):
-        """The primer draws both glyphs bare, so `annotate` places no block
+        """The primer draws its glyphs bare, so `annotate` places no block
         and returns no rectangle. `card` used to unpack that None."""
         from thermodraw import symbols
         for sym in symbols.SYMBOLS:
@@ -212,3 +215,26 @@ class TestTheDictionary:
             h = float(re.search(r'viewBox="0 0 [\d.]+ ([\d.]+)', svg).group(1))
             assert h >= 2 * sym.ink[1], sym.key
             assert "<text" not in svg, sym.key
+
+    def test_no_em_dash_reaches_the_reader(self):
+        """House style for this page. The prose is for someone meeting heat
+        transfer for the first time, and a dash is usually standing in for a
+        sentence that was not finished."""
+        page = (ROOT / "Dictionary.html").read_text(encoding="utf-8")
+        body = re.sub(r"<script>.*?</script>", "",
+                      page.split("</style>", 1)[1], flags=re.S)
+        assert "\u2014" not in body and "&mdash;" not in body
+
+    def test_the_primer_answers_its_own_pictures(self):
+        """Each panel has to explain the drawing beside it. The first draft
+        showed a hatched box without saying why it was hatched, never said
+        what a rate is, and left chevrons out of a vocabulary that has
+        them."""
+        sys.path.insert(0, str(ROOT / "tools"))
+        import gen_dictionary
+
+        text = " ".join(b for _, _, b in gen_dictionary.SHAPES).lower()
+        assert "hatching" in text, "the box is hatched and nothing says why"
+        assert "watts" in text, "a rate is never defined"
+        assert any(k == "flow-branch" for k, _, _ in gen_dictionary.SHAPES), \
+            "chevrons are a third of the shapes and go unmentioned"
