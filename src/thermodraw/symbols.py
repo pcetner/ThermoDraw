@@ -83,6 +83,37 @@ def tex_rad():
         for y in (-7, 7))
 
 
+def tex_spread():
+    """Hatching that fans from a point: heat diverging into more section.
+
+    `core.hatch` rules parallel lines, which is the whole distinction being
+    drawn here, so the fan is its own construction. Clipped the same way.
+    """
+    x0, half, n = -S.BW / 2, S.BH / 2, 9
+    rules = "".join(
+        f'<line x1="{x0}" y1="0" x2="{S.BW / 2}" y2="{-half + i * (S.BH / n):.1f}"/>'
+        for i in range(n + 1))
+    cid = S.uid("clip", S.BW, S.BH, "spread")
+    return (f'<defs><clipPath id="{cid}"><rect x="{-S.BW/2}" y="{-half}" '
+            f'width="{S.BW}" height="{S.BH}"/></clipPath></defs>'
+            f'<g class="tex" clip-path="url(#{cid})">{rules}</g>')
+
+
+def tex_pipe():
+    """Two opposed arrows: vapour out along one face, condensate back along
+    the other. It is what a heat pipe is, and it keeps the mechanism in the
+    interior rather than reaching for a new outline."""
+    span = S.BW / 2 - 10
+    out = []
+    for y, sign in ((-7, 1), (7, -1)):
+        out.append(f'<line class="tex" x1="{-span * sign}" y1="{y}" '
+                   f'x2="{(span - 11) * sign}" y2="{y}"/>')
+        out.append(f'<g transform="rotate({0 if sign > 0 else 180})">'
+                   + S.arrowhead(span, y if sign > 0 else -y, 6.0, 11.0)
+                   + '</g>')
+    return "".join(out)
+
+
 def tex_contact():
     """Two solids meeting, hatched in opposing directions.
 
@@ -152,6 +183,57 @@ def g_break(a):
             '<circle class="node-open" cx="0" cy="0" r="5.5"/>'
             '<g transform="translate(0,24) rotate(90)">'
             + S.hatched_wall(0, 22, depth=13) + '</g>')
+
+
+def g_spread(a):
+    return leads(S.BW / 2) + tex_spread() + rect()
+
+
+def g_pipe(a):
+    return leads(S.BW / 2) + tex_pipe() + rect()
+
+
+def g_mixed(a):
+    """No texture at all. In a vocabulary where the interior names the
+    mechanism, an empty interior is not an absence — it says the mechanism is
+    mixed, or deliberately unstated. A window quoted as "conduction and
+    convection at 0.31 K/W" is one number for two mechanisms, and drawing it
+    as `cond` names physics that is only half happening."""
+    return leads(S.BW / 2) + rect()
+
+
+def g_flow_branch(a):
+    """Heat carried from one end to the other at a stated rate.
+
+    Chevrons rather than a filled head, because a filled head is the mark a
+    source uses to *land on* a node and this is a pass-through. Not a box:
+    the interior of a box states what the heat is crossing, and here nothing
+    is crossed — the medium is going. Boxes resist, arrows carry.
+    """
+    return ('<line class="w" x1="-40" y1="0" x2="40" y2="0"/>'
+            + "".join(f'<polyline class="w" fill="none" '
+                      f'points="{x-7},-10 {x+4},0 {x-7},10"/>'
+                      for x in (-6, 6)))
+
+
+def g_phase_node(a):
+    """A node whose temperature is held by a phase change.
+
+    Thermodynamically that is a fixed node which is not at a boundary, so it
+    takes the imposed-temperature reading without the boundary wall: the
+    standard constant-temperature marking, two short rules beneath.
+    """
+    return ('<line class="w" x1="-54" y1="0" x2="-5" y2="0"/>'
+            '<line class="w" x1="5" y1="0" x2="54" y2="0"/>'
+            '<circle class="node-open" cx="0" cy="0" r="5.5"/>'
+            '<line class="w" x1="-13" y1="13" x2="13" y2="13"/>'
+            '<line class="w" x1="-13" y1="19" x2="13" y2="19"/>')
+
+
+# The three numbers `g_phase_node` draws, named so `layout` and `render` can
+# be pinned against them. `render` holds its own copy for the pipeline path;
+# a test asserts the two agree, which is what `g_break` needed and lacked.
+PHASE_HALF, PHASE_Y1, PHASE_Y2 = 13, 13, 19
 
 
 def g_branch_break(a):
@@ -227,7 +309,12 @@ class Symbol:
                                                           self.half)
 
 
+# The order is the specification. At eighteen entries an arbitrary list stops
+# being readable, so they are grouped by what kind of statement they make, and
+# `render_demo.vocabulary` starts each group on a new row. `GROUPS` below is
+# the same order, and a test pins the two to each other.
 SYMBOLS = [
+    # -- nodes: a place, and what holds its temperature
     Symbol(key="free", name="Free node", draw=g_free_node,
            text=S_("T", "j"), value="112 °C", user="Junction",
            half=5.5, half_len=5.5, reach=(54, 5.5),
@@ -239,6 +326,21 @@ SYMBOLS = [
            note="Temperature is imposed and the wire connects to the boundary. "
                 "Past vertical the symbol mirrors, so the hatch never arrives "
                 "upside down."),
+    Symbol(key="break", name="Thermal break", draw=g_break, mirror=True,
+           text=S_("q"), value="0 W", user="Mounting standoff",
+           half=22, half_len=22, reach=(54, 37),
+           note="Circle, gap, wall — the fixed node without its stub. A fixed "
+                "node connects to its boundary; this one does not, and the "
+                "visible gap is the entire distinction."),
+    Symbol(key="phase", name="Phase-change node", draw=g_phase_node,
+           text=S_("T", "sat"), value="49 °C", user="Boiling surface",
+           half=22, half_len=16, reach=(54, 19),
+           note="Temperature held by a phase change rather than by a boundary, "
+                "so it takes the imposed-temperature marking without the wall. "
+                "Latent heat crosses it at no temperature drop at all, which is "
+                "the whole reason a two-phase system exists."),
+
+    # -- paths: the interior states what the heat is crossing
     Symbol(key="cond", name="Conduction", draw=g_cond, texture=tex_cond,
            text=S_("R", "cond"), value="0.35 K/W", user="Die attach",
            half=S.BH / 2, half_len=S.BW / 2,
@@ -263,11 +365,56 @@ SYMBOLS = [
            reach=(S.BW / 2 + LEAD, S.BH / 2),
            note="Contact rather than TIM: the other three subscripts name "
                 "mechanisms, and a TIM is a material."),
+
+    # -- paths: shape, two-phase, unstated, and storage
+    Symbol(key="spread", name="Spreading resistance", draw=g_spread,
+           texture=tex_spread,
+           text=S_("R", "spread"), value="0.15 K/W", user="CuW submount",
+           half=S.BH / 2, half_len=S.BW / 2,
+           reach=(S.BW / 2 + LEAD, S.BH / 2),
+           note="Hatching that fans from a point rather than running parallel: "
+                "the cross-section grows as the heat goes. Drawn as `cond` it "
+                "asserts one-dimensional conduction, which is exactly what a "
+                "spreading path is not."),
+    Symbol(key="pipe", name="Isothermal link", draw=g_pipe, texture=tex_pipe,
+           text=S_("R", "pipe"), value="0.0018 K/W", user="Heat pipe",
+           half=S.BH / 2, half_len=S.BW / 2,
+           reach=(S.BW / 2 + LEAD, S.BH / 2),
+           note="Vapour out along one face, condensate back along the other. It "
+                "still takes a resistance, because a heat pipe has a small one; "
+                "what it stops doing is wearing solid-conduction hatching on a "
+                "two-phase device."),
+    Symbol(key="mixed", name="Unstated mechanism", draw=g_mixed,
+           text=S_("R", "window"), value="0.31 K/W", user="Double glazing",
+           half=S.BH / 2, half_len=S.BW / 2,
+           reach=(S.BW / 2 + LEAD, S.BH / 2),
+           note="The one kind whose mechanism the library does not know, so the "
+                "subscript is yours to set. An empty interior is not an absence "
+                "here: it says mixed, or deliberately unstated. A window quoted "
+                "as one number for conduction and convection together is this."),
     Symbol(key="cap", name="Capacitance", draw=g_cap,
            text=S_("C", "j"), value="0.9 mJ/K", user="Die",
            half=15, half_len=15, reach=(40, 15),
            note="On a near-vertical branch the block moves to whichever side has "
                 "room, and stays whole."),
+
+    # -- paths that carry a rate, or carry nothing
+    Symbol(key="flow-branch", name="Heat flow, along a path",
+           draw=g_flow_branch, text=S_("q"), value="3.2 kW",
+           user="Technical water", half=10, half_len=22, reach=(40, 10),
+           note="Boxes resist; arrows carry. Chevrons rather than a filled head, "
+                "because a filled head is the mark a source uses to land on a "
+                "node and this is a pass-through. Directed — `from` and `to` are "
+                "the way the heat goes — so `angle` is refused on one."),
+    Symbol(key="break-branch", name="Thermal break, in line",
+           draw=g_branch_break, text="", value=None, user="Nylon standoff",
+           half=10, half_len=12, reach=(40, 8),
+           note="An open circuit: a mechanical connection carrying no heat. A "
+                "plain wire would say heat flows and a resistance would say "
+                "how much, so it is neither. It names no quantity either, and "
+                "the label is the user's line alone."),
+
+    # -- sources: heat crossing into or out of one node
     Symbol(key="diss", name="Dissipation", draw=g_diss,
            text=S_("P", "d"), value="45 W", user="Switching loss",
            half=7, half_len=32,
@@ -278,12 +425,6 @@ SYMBOLS = [
            half=9, half_len=32,
            note="Amplitude now ramps linearly to zero, so the shaft flattens "
                 "into the head instead of easing out of it."),
-    Symbol(key="break", name="Thermal break", draw=g_break, mirror=True,
-           text=S_("q"), value="0 W", user="Mounting standoff",
-           half=22, half_len=22, reach=(54, 37),
-           note="Circle, gap, wall — the fixed node without its stub. A fixed "
-                "node connects to its boundary; this one does not, and the "
-                "visible gap is the entire distinction."),
     Symbol(key="flow", name="Heat flow", draw=g_flow,
            text=S_("q"), value="38 W", user=None, half=7, half_len=30,
            note="An annotation, sized to the arrow alone so the block sits close."),
@@ -292,18 +433,20 @@ SYMBOLS = [
            half=25, half_len=26, reach=(28, 24),
            note="Several arrows leaving a surface. Flux is per unit area, so it "
                 "has no single line of action to borrow heat flow's symbol."),
-    # Appended rather than filed beside the other branch kinds: the
-    # vocabulary sheet is a golden, and inserting mid-list reflows every cell
-    # after it, which turns the review into a diff nobody can read. The key
-    # is "break-branch" because `layout.BY_KEY` is one namespace and the node
-    # kind already holds "break"; the kind an author writes is still "break".
-    Symbol(key="break-branch", name="Thermal break, in line",
-           draw=g_branch_break, text="", value=None, user="Nylon standoff",
-           half=10, half_len=12, reach=(40, 8),
-           note="An open circuit: a mechanical connection carrying no heat. A "
-                "plain wire would say heat flows and a resistance would say "
-                "how much, so it is neither. It names no quantity either, and "
-                "the label is the user's line alone."),
+]
+
+# The same order, with the boundaries that make it legible. The vocabulary
+# sheet starts a new row at each group; `tests/test_model.py` pins this list
+# against SYMBOLS so neither can drift from the other.
+GROUPS = [
+    ("Nodes", ("free", "fixed", "break", "phase")),
+    ("Paths: what the heat crosses",
+     ("cond", "conv", "rad", "contact")),
+    ("Paths: shape, phase, mechanism, storage",
+     ("spread", "pipe", "mixed", "cap")),
+    ("Paths that carry a rate, or carry nothing",
+     ("flow-branch", "break-branch")),
+    ("Sources", ("diss", "radin", "flow", "flux")),
 ]
 
 

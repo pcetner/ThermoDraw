@@ -296,13 +296,19 @@ def _line_h(line):
     return max(s for _, s, _ in line) * LINE_LEAD
 
 
-def build_block(user=None, name=None, value=None,
+def build_block(user=None, name=None, value=None, extra=(),
                 size=13, vsize=13, usize=11.5):
-    """Lay the three texts into lines. User label always first.
+    """Lay the texts into lines. User label always first.
 
     Symbol text and value are joined by an equals sign and set at the same
     size and weight, because that is what they are: two sides of one
     statement. Only the italic marks the variable.
+
+    `extra` is further statements about the same element, one line each, in
+    the value's own style: the heat rate a path carries, or how many of it
+    there are. They are separate lines rather than a suffix on the value
+    because the value line already wraps at `WRAP_AT`, and a suffix would
+    have to wrap with it and then read as part of the number.
     """
     lines = []
     if user:
@@ -318,6 +324,9 @@ def build_block(user=None, name=None, value=None,
         lines.append([(name, size, "lbl")])
     elif value:
         lines.append([(value, vsize, "val")])
+    for line in extra:
+        if line:
+            lines.append([(line, vsize, "val")])
     return lines
 
 
@@ -366,8 +375,8 @@ def _corner(cx, cy, side, d, bw, bh):
     return px - bw / 2, (py - bh - 2 if side[1] < 0 else py + 2)
 
 
-def annotate(cx, cy, a, out, user=None, name=None, value=None, half=10,
-             half_len=None, gap=5, size=13, vsize=13, usize=11.5,
+def annotate(cx, cy, a, out, user=None, name=None, value=None, extra=(),
+             half=10, half_len=None, gap=5, size=13, vsize=13, usize=11.5,
              side="auto", occupied=None, owner=None, report=None):
     """Place one text block and return the rectangle it took.
 
@@ -392,7 +401,7 @@ def annotate(cx, cy, a, out, user=None, name=None, value=None, half=10,
     always been able to give up silently, and a label printed over a wire is
     indistinguishable in the output from one placed deliberately.
     """
-    lines = build_block(user, name, value, size, vsize, usize)
+    lines = build_block(user, name, value, extra, size, vsize, usize)
     if not lines:
         return None
     hl = half if half_len is None else half_len
