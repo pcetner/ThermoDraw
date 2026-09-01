@@ -59,3 +59,8 @@ what that cost — how many rounds, which remedies worked, and what had to be
 approximated to get there — is in `rounds.md` and `findings.md`. A diagram that
 checks clean while quietly drawing a heat pipe as a conduction resistance has
 told you something about the vocabulary, not about the drawing.
+
+Two of them no longer check clean. `04-immersion` and `05-laser-diode` now
+report `network-in-pieces`, because the check added after this run finds the
+severed network their agents could only describe in prose. They are left as
+they were drawn: the warning is the point.

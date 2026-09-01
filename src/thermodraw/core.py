@@ -335,6 +335,30 @@ def _sides(a, side):
     return [first, down if first is up else up]
 
 
+def free_sides(cx, cy, a, hl, half, bw, bh, occupied, owner=None, gap=5):
+    """Which of the four page sides this block could be placed on, by name.
+
+    The same question `annotate` asks of a candidate, asked of all four rather
+    than of the two it would try. It exists because the checker was
+    recommending sides the occupancy already knew were blocked — telling a
+    node to try left or right when those are the directions its branches leave
+    in, while holding the very object that proved it. Advice that names a
+    direction is worth nothing unless the direction is free.
+
+    Built from `clear_offset`, `_corner` and `Occupancy.free`, which is the
+    whole point: a second copy of the placement arithmetic would eventually
+    disagree with the placement.
+    """
+    out = []
+    for name, side in PAGE_SIDES.items():
+        d = clear_offset(cx, cy, a, side, hl, half, bw, bh, gap)
+        x, y = _corner(cx, cy, side, d, bw, bh)
+        if occupied is None or occupied.free(
+                (x + bw / 2, y + bh / 2), (bw / 2, bh / 2), owner):
+            out.append(name)
+    return out
+
+
 def _corner(cx, cy, side, d, bw, bh):
     px, py = cx + side[0] * d, cy + side[1] * d
     if abs(side[0]) > 0.5:                       # block sits left or right

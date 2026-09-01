@@ -57,6 +57,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   rebuilding the page. `describe(diagram)` from Python, `.describe()` on a
   builder, `thermodraw describe file.json` from a shell, `--json`.
 
+- **`network-in-pieces`, the tenth check.** Two of the five gallery diagrams
+  are severed in half and passed everything else: a two-phase loop whose
+  halves are joined only by a `flow` annotation at each end, and a stack whose
+  Peltier stage is drawn the same way. Nothing in either file relates the two
+  arrows except that the same number was typed twice.
+
+  Over nodes joined by branches, not over wire segments. The hero's own wire
+  graph is in two pieces — a source's lead and a node's boundary stub are
+  legitimately separate ink — so a check on wire connectivity would condemn
+  the flagship. A `break` branch counts, though it carries no heat: this
+  finding is for a path the author meant to draw and did not, and a break is
+  the opposite, an explicit statement that nothing flows there.
+
+  Its remedy names the cause, because the cause is a gap in the vocabulary: a
+  source has one end, so no arrangement of `flow` annotations can join two
+  nodes.
+
 - **`nodes-too-close`, the ninth check.** Every label finding names what is
   *nearest* the crowded label, and on a short run that is a wire — so the
   author is told to move a `via` when the spacing is what is wrong, and no
@@ -156,6 +173,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and the previous behaviour exactly), `up`, `down`, `left`, `right`.
 
 ### Fixed
+
+- **The remedies were wrong more often than they were right.** Five agents
+  drawing five thermal networks applied them literally, as instructed. Six of
+  eighteen worked; three made the drawing worse. Every fault was in the change
+  that claimed each finding "names the schema field that fixes it", and three
+  agents hit them independently.
+
+  `angle` was offered for every element and means three different things — the
+  schema's own tables say so. On a branch it overrides the direction taken
+  from the wire, so following the advice laid a conduction box diagonally
+  across its own wire and the checker then reported the diagram clean. It is
+  now offered only for a node's label, the one element where it means what the
+  remedy says.
+
+  `via` was offered on sources, which have no such field: a source's lead is a
+  wire carrying the source's ref, and the validator refuses `via` outright.
+
+  `side` was offered without consulting the occupancy that produced the
+  finding — telling a node to try left or right when those were the directions
+  its branches left in, and on a vertical branch naming the two sides that lie
+  *along* the wire. `core.free_sides` now asks the same question `annotate`
+  asks of a candidate, of all four sides, built from the same `clear_offset`,
+  `_corner` and `Occupancy.free`, so it cannot drift from the placement.
+
+- **`parallel-pair-same-side` could be silenced by its own remedy.** It
+  skipped any pair whose labels both had an explicit `side`, so setting
+  `side` — which is exactly what it tells you to do — removed the pair from
+  the check whether or not it had helped. A false clean is worse than a
+  missing check, and a note is already something you may ignore. It now
+  reports where the labels actually landed, however they got there.
+
+- **A node with no value and no subscript drew a bare italic `T`,** and
+  nothing objected. Interior junctions between series layers routinely have no
+  temperature of their own; two readers fell back to `corner`, which draws
+  nothing and loses the name. Such a node now draws its label alone. A
+  subscript still produces `T_mid` with no number, which is what a symbolic
+  diagram wants.
+
+- **A waypoint on a rail branch now frees the space it promised.** The rail
+  end dropped from the node whatever the route did, so a `via` bought a
+  detour that came back to the same place — making `docs/schema.md`'s claim
+  that waypoints are "how you free up the space directly under a node" false,
+  and costing one reader a full re-layout. It now drops from the last
+  waypoint.
 
 - **The symbol sheet documented a glyph the library cannot draw.**
   `docs/symbol-reference.html` is what `CLAUDE.md` calls the visual
@@ -268,6 +329,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   remedy now depends on the culprit: a `via` waypoint for a wire, `at` for a
   symbol or a node, `side` for two labels, and `angle` once the solver has
   tried both sides of the branch.
+
+- `docs/schema.md`, from the five-domain gallery run. `size` was referenced by
+  two findings and defined nowhere, in a page whose opening line calls itself
+  "the whole format". Branch `value` is now documented as optional. The Angles
+  section now says outright what its table only implies: symmetry about 180°
+  means no `angle` sends a node's label *below* the line, and `side: "down"`
+  is the only thing that reaches there.
 
 - `docs/schema.md`, from a third acceptance run — a fan-out topology rather
   than a ladder, drawn from the page alone, clean on the first `check`. Three
