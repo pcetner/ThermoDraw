@@ -9,11 +9,67 @@ Labels go on last so they sit above the geometry, and they are placed through
 reports the rectangle it used, which is what lets the canvas size itself.
 """
 import math
+from dataclasses import dataclass, field
+from typing import List, Optional, Tuple
 
 from . import core as S
 from . import symbols as SY
 
 PADDING = 24
+
+
+class LabelRect(tuple):
+    """(left, top, bw, bh) — still a 4-tuple, and now it knows whose it is.
+
+    A tuple subclass rather than a NamedTuple, because a NamedTuple of six
+    fields stops unpacking as four and every caller that writes
+    `for left, top, bw, bh in rects` breaks. This unpacks as four, compares
+    equal to the plain tuple it used to be, and carries the solver's account
+    of the placement alongside — see `core.annotate`'s `report`.
+
+    `core.annotate` keeps returning a plain tuple. The wrapping happens here,
+    so the diagnostic type never reaches the solver.
+
+    No `__slots__`: tuple is a variable-length built-in, and CPython refuses a
+    nonempty `__slots__` on a subtype of one.
+    """
+
+    def __new__(cls, rect, owner=None, report=None):
+        self = super().__new__(cls, rect)
+        report = report or {}
+        self.owner = owner
+        self.ref = getattr(owner, "ref", None)
+        self.side = report.get("side")
+        self.solved = report.get("solved", 0.0)
+        self.used = report.get("used", 0.0)
+        self.flipped = report.get("flipped", False)
+        self.clear = report.get("clear", True)
+        return self
+
+    def __repr__(self):
+        return f"LabelRect({tuple(self)!r}, ref={self.ref!r})"
+
+
+@dataclass
+class Scene:
+    """Everything one render knew, kept rather than thrown away.
+
+    `draw` used to compute the occupancy, place every label against it, and
+    drop it on the floor — so anything wanting to ask why a label sits where
+    it does had to rebuild the page from the placements, and the first bug in
+    that rebuild would be forgetting whatever the original forgot. This hands
+    back the actual object the labels were solved against.
+
+    `ink` is what the drawing covers with no padding; `box` is the canvas it
+    was given. In the sized path the two are unrelated, which is the only way
+    content can fall off the page.
+    """
+
+    parts: List[str] = field(default_factory=list)
+    rects: List[LabelRect] = field(default_factory=list)
+    occupancy: Optional[S.Occupancy] = None
+    ink: Tuple[float, float, float, float] = (0.0, 0.0, 0.0, 0.0)
+    box: Tuple[float, float, float, float] = (0.0, 0.0, 0.0, 0.0)
 
 
 def wire(points):
@@ -25,7 +81,20 @@ def node(x, y, r=5.5):
     return f'<circle class="node-open" cx="{x:.1f}" cy="{y:.1f}" r="{r}"/>'
 
 
-def ground(x, y, angle=90, half=24, depth=13):
+# What ground() draws, named so `bounds` can reserve exactly that and no
+# more. These are not the only two wall numbers in the library — g_fixed_node
+# draws (20, 12) and g_break (22, 13) — and they are deliberately not unified.
+# The three are different walls at different scales, and two of them are
+# specified by docs/symbol-reference.html, which is the declared visual record.
+#
+# Ints, not floats: they reach the markup through an f-string, so 24.0 would
+# write `y="-24.0"` where the drawing has always said `y="-24"`, and the clip
+# ids are content-addressed on exactly those numbers. Naming a constant is not
+# supposed to move a single byte.
+WALL_HALF, WALL_DEPTH = 24, 13
+
+
+def ground(x, y, angle=90, half=WALL_HALF, depth=WALL_DEPTH):
     """A hatched boundary band. angle=90 lays it flat, hatch below."""
     return (f'<g transform="{S.xf(x, y, angle)}">'
             f'{S.hatched_wall(0, half, depth)}</g>')
@@ -47,8 +116,49 @@ def _key(seg):
     return (a, b) if a <= b else (b, a)
 
 
-def draw(placements):
-    """Markup and the rectangles the labels occupy.
+def _wall(p):
+    """(half, depth) for a ground placement, defaulting to what ground draws."""
+    return tuple(p.wall) if p.wall else (WALL_HALF, WALL_DEPTH)
+
+
+def _wall_box(p):
+    """A ground as an oriented box: (centre, half, angle).
+
+    The wall hangs off its anchor rather than straddling it — the line is at
+    local x=0 and the hatch runs from there to `depth` — so its centre is half
+    a depth along the local axis.
+    """
+    half, depth = _wall(p)
+    r = math.radians(p.angle)
+    centre = (p.at[0] + math.cos(r) * depth / 2,
+              p.at[1] + math.sin(r) * depth / 2)
+    return centre, (depth / 2, half), p.angle
+
+
+def bounds(p):
+    """What one placement covers on the page: (x0, y0, x1, y1).
+
+    A node is `±radius` and stays that way. It is tempting to substitute the
+    symbol's `half`/`half_len` — a fixed node carries 22 and 19 — but those
+    are clearance numbers for the label solver, not ink: they would reserve 22
+    units above a node that draws a 5.5 circle, and count the boundary wall a
+    second time when the wall is already its own placement.
+    """
+    if p.element == "wire":
+        xs = [q[0] for q in p.points]
+        ys = [q[1] for q in p.points]
+        return min(xs), min(ys), max(xs), max(ys)
+    if p.symbol is not None:
+        return S.box_bounds(p.at, p.symbol.ink, p.angle)
+    if p.element == "ground":
+        centre, half, angle = _wall_box(p)
+        return S.box_bounds(centre, half, angle)
+    r = p.radius
+    return p.at[0] - r, p.at[1] - r, p.at[0] + r, p.at[1] + r
+
+
+def compose(placements, size=None, padding=PADDING):
+    """Everything a render works out, as a `Scene`.
 
     Wires come first so symbols sit over them, labels last so they sit over
     everything. Identical segments are drawn once: two branches sharing a
@@ -71,7 +181,7 @@ def draw(placements):
         if p.element == "symbol":
             glyphs.append(place(p.symbol, p.at[0], p.at[1], p.angle))
         elif p.element == "ground":
-            glyphs.append(ground(p.at[0], p.at[1], p.angle))
+            glyphs.append(ground(p.at[0], p.at[1], p.angle, *_wall(p)))
         elif p.element == "node":
             nodes.append(node(p.at[0], p.at[1], p.radius))
 
@@ -82,10 +192,14 @@ def draw(placements):
     for p in placements:
         if p.element == "wire":
             for a, b in _segments([tuple(q) for q in p.points]):
-                occupied.add_segment(a, b)
+                occupied.add_segment(a, b, owner=p)
         elif p.symbol is not None:
             occupied.add_box(p.at, (p.symbol.half_len, p.symbol.half),
                              p.angle, owner=p)
+        elif p.element == "ground":
+            # The boundary wall was the one drawn thing the solver could not
+            # see, so a label was free to land on it.
+            occupied.add_box(*_wall_box(p), owner=p)
         elif p.element == "node":
             occupied.add_box(p.at, (p.radius, p.radius), 0.0, owner=p)
 
@@ -93,31 +207,47 @@ def draw(placements):
         lab = p.label
         if lab is None or not (lab.user or lab.value or lab.name):
             continue
+        report = {}
         rect = S.annotate(p.at[0], p.at[1], p.angle, labels, user=lab.user,
                           name=lab.name, value=lab.value,
                           half=lab.half, half_len=lab.half_len,
-                          side=lab.side, occupied=occupied, owner=p)
+                          side=lab.side, occupied=occupied, owner=p,
+                          report=report)
         if rect:
-            rects.append(rect)
+            rects.append(LabelRect(rect, owner=p, report=report))
 
-    return wires + glyphs + nodes + labels, rects
+    parts = wires + glyphs + nodes + labels
+    ink = extent(placements, rects, 0.0)
+    box = ((0.0, 0.0, float(size[0]), float(size[1])) if size is not None
+           else extent(placements, rects, padding))
+    return Scene(parts=parts, rects=rects, occupancy=occupied, ink=ink, box=box)
+
+
+def draw(placements):
+    """Markup and the rectangles the labels occupy — `compose`, in two parts.
+
+    Kept because it is the published shape: `(parts, rects)`, where a rect
+    unpacks as four numbers. `compose` is what to reach for when you also
+    want to know why.
+    """
+    scene = compose(placements)
+    return scene.parts, scene.rects
 
 
 def extent(placements, rects, padding=PADDING):
-    """What the drawing actually covers, labels included."""
+    """What the drawing actually covers, labels included.
+
+    Every placement is measured through `bounds`, which is anisotropic. This
+    used to reserve `hypot(half_len, half)` in both directions — 44.9 around a
+    conduction box that draws 16 tall — and a flat 30 around a boundary wall
+    that draws 13 deep and only downward. The drawing then sat visibly high in
+    its own frame, and the only way to find that out was to look at it.
+    """
     xs, ys = [], []
     for p in placements:
-        if p.element == "wire":
-            xs += [q[0] for q in p.points]
-            ys += [q[1] for q in p.points]
-            continue
-        reach = p.radius
-        if p.symbol is not None:
-            reach = math.hypot(p.symbol.half_len, p.symbol.half)
-        elif p.element == "ground":
-            reach = 30.0
-        xs += [p.at[0] - reach, p.at[0] + reach]
-        ys += [p.at[1] - reach, p.at[1] + reach]
+        x0, y0, x1, y1 = bounds(p)
+        xs += [x0, x1]
+        ys += [y0, y1]
     for left, top, bw, bh in rects:
         xs += [left, left + bw]
         ys += [top, top + bh]
@@ -134,10 +264,10 @@ def render(placements, size=None, padding=PADDING):
     them was clipped with no warning at all. Measuring what was emitted
     removes the guess; passing `size` keeps the old behaviour.
     """
-    parts, rects = draw(placements)
-    body = "".join(parts)
+    scene = compose(placements, size, padding)
+    body = "".join(scene.parts)
     if size is not None:
         return SY.canvas(size[0], size[1], body)
-    x0, y0, x1, y1 = extent(placements, rects, padding)
+    x0, y0, x1, y1 = scene.box
     shifted = f'<g transform="translate({-x0:.1f},{-y0:.1f})">{body}</g>'
     return SY.canvas(round(x1 - x0, 1), round(y1 - y0, 1), shifted)

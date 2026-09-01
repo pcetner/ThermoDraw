@@ -1,0 +1,13 @@
+{
+  "units": {"R": "K/W", "T": "°C"},
+  "nodes": [
+    {"id": "h", "label": "Hot pipe", "value": "150", "at": [200, 150]},
+    {"id": "c", "kind": "fixed", "label": "Ambient", "value": "25", "at": [560, 150]}
+  ],
+  "branches": [
+    {"from": "h", "to": "c", "kind": "conv", "label": "Convection", "value": "0.013",
+     "via": [[212, 150], [212, 70], [470, 70], [470, 150]], "at": [340, 70]},
+    {"from": "h", "to": "c", "kind": "rad", "label": "Radiation", "value": "0.015",
+     "via": [[212, 150], [212, 230], [470, 230], [470, 150]], "at": [340, 230]}
+  ]
+}

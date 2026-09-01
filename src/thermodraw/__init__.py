@@ -17,9 +17,11 @@ symbol at a time for anything the model does not yet cover.
 The schema is docs/schema.md. Design notes and the reasoning behind each
 symbol are in CLAUDE.md.
 """
-from . import core, io, layout as _layout_mod, model, render as _render_mod
+from . import check as _check_mod, core, io, layout as _layout_mod
+from . import model, render as _render_mod
 from . import symbols, theme
 from .builder import DiagramBuilder
+from .check import Finding, Report, check
 from .io import save
 from .layout import Placement, layout
 from .model import Branch, Diagram, DiagramError, Node, Rail, Source
@@ -32,6 +34,8 @@ __all__ = [
     "Diagram", "Node", "Branch", "Source", "Rail", "DiagramError",
     # the pipeline
     "layout", "render", "Placement", "DiagramBuilder",
+    # is it any good?
+    "check", "Report", "Finding",
     # the vocabulary
     "Symbol", "SYMBOLS",
     # output

@@ -71,10 +71,28 @@ d = (DiagramBuilder(R="K/W", T="°C", P="W")
 open("out.svg", "w", encoding="utf-8").write(d.svg("light"))
 ```
 
+Then find out whether it is any good, without opening it:
+
+```bash
+thermodraw check hero.json
+```
+
+```
+hero.json: 11 labels placed, 0 errors, 0 warnings, 1 note
+note: [parallel-pair-same-side] branch 2 s->amb and branch 3 s->amb run
+      between the same two nodes and both labels went to the same side
+      -> set `side` to "down" on the lower of the two
+```
+
+Eight checks on how the drawing reads — text over text, a label shoved out
+past the thing it names, a wire through a symbol, ink off the page. Exit 0
+clean, 1 with findings. `thermodraw render` writes the SVG, and both work as
+`python -m thermodraw` from a checkout.
+
 ```bash
 python examples/render_demo.py       # the three images above
 python examples/render_reference.py  # every symbol at every 45°
-pytest                               # 100 tests
+pytest                               # 265 tests
 ```
 
 ## More
@@ -83,8 +101,9 @@ pytest                               # 100 tests
 [`docs/symbol-reference.html`](docs/symbol-reference.html) — every symbol at eight orientations, with the reasoning.
 [`CLAUDE.md`](CLAUDE.md) — the design record.
 
-Alpha. The symbol vocabulary is settled and labels, wire runs and canvas size
-are solved for you. Node coordinates are still yours to supply; solving for
-those is the network layer, which changes one stage and nothing in the schema.
+Alpha. The symbol vocabulary is settled; labels, wire runs and canvas size are
+solved for you, and `thermodraw check` reports what a reader would notice.
+Node coordinates are still yours to supply; solving for those is the network
+layer, which changes one stage and nothing in the schema.
 
 MIT. The bundled subset of IBM Plex Sans is [OFL-1.1](src/thermodraw/fonts/OFL.txt).

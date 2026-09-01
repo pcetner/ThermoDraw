@@ -9,6 +9,73 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`thermodraw check` — is this diagram any good, answered without looking at
+  it.** The library's premise is that a model can be handed `docs/schema.md`
+  and emit something drawable, and that was tested directly: an agent with no
+  other context produced correct, valid diagrams on the first run with no
+  traceback. They were also ugly, and every aesthetic failure traced to the
+  library rather than the author. Worse, the only way to find them was to
+  render, serve over HTTP, open a browser, screenshot and look — five
+  sequential steps, while 134 golden tests passed green throughout. Goldens
+  pin bytes; they notice that something moved and can say nothing about
+  whether it should have.
+
+  Eight findings, from `label-collision` and `symbols-overlap` (errors)
+  through `label-adrift`, `label-in-a-corridor`, `wire-through-symbol`,
+  `off-canvas` and `frame-off-centre` (warnings) to
+  `parallel-pair-same-side` (a note, because the hero breaks it and is fine).
+  Two of them are the executable form of a paragraph `docs/schema.md`
+  previously offered as advice. Every finding names the schema field that
+  fixes it, and each remedy is tested by applying it and asserting the
+  finding goes away.
+
+  `check(diagram)` from Python, `.check()` on a builder, `thermodraw check
+  file.json` from a shell — exit 0 clean, 1 with findings, 2 unreadable.
+  `--json`, `--strict`, `--quiet`.
+
+- **A command line.** `[project.scripts]` was missing entirely.
+  `thermodraw check` and `thermodraw render`, argparse and stdlib only, so
+  `python -m thermodraw` works from a checkout with no install. SVG only —
+  PNG needs a rasteriser, and the library has no dependencies.
+
+- **`Symbol.reach` and `Symbol.ink`.** `half`/`half_len` are clearance for the
+  label solver, and six symbols draw outside them: a box symbol runs `LEAD`
+  past each end, a capacitance draws ±40 against a `half_len` of 15. Mid-route
+  those leads lie over wire the canvas already counts, which is why it never
+  showed; at the end of a run they were clipped off silently. `reach` is set
+  only where the geometry exceeds the clearance, and `ink` falls back, so the
+  two stay one measurement wherever they agree.
+
+- **`render.Scene` and `render.compose`.** `draw` computed the occupancy,
+  solved every label against it, and dropped it on the floor. `compose`
+  returns it, along with the rectangles, the ink bounds and the canvas.
+  `draw` keeps its `(parts, rects)` contract; a rect is now a `LabelRect`,
+  which still unpacks as four numbers and compares equal to the plain tuple,
+  and additionally knows its owner and what the solver did to place it.
+
+- **`Placement.ref`.** Every placement names what produced it — `node 'j'`,
+  `branch 2 j->c`, `source 0 -> j`, `rail` — wires included, which is what
+  lets a check exclude a branch's own lead from "what is nearer to this label
+  than its owner". A string rather than the model object: holding a `Node`
+  would alias mutable state into a documented-pure output.
+
+- **`core.gap`, `core.box_bounds`, `core.segment_box`, `Occupancy.blocker`,
+  and a `report` out-parameter on `core.annotate`.** Each is the informative
+  half of a predicate that already existed: `_overlap` is now `gap(...) < 0`
+  and `free` is `blocker(...) is None`, so there is one SAT formula and one
+  skip rule rather than a diagnostic that will eventually disagree with the
+  decision it explains. `report` carries `side`, `solved`, `used`, `flipped`
+  and `clear` — the last of which is `False` when the push loop ran out of
+  steps and accepted an overlap, which it has always been able to do silently.
+
+- **`tools/golden_diff.py`.** A golden is one long line, so `git diff` marks
+  the whole file changed for a one-number edit, which makes
+  `pytest --update-goldens` a rubber stamp. This splits both sides into
+  element tokens and reports how many were added, removed and moved.
+
+- `tests/test_check.py`, `tests/test_frame.py` and `tests/test_cli.py`.
+  The suite goes 134 → 265.
+
 - **`side` on nodes, branches and sources.** `core.annotate` has taken an
   explicit label side since the occupancy work, and `layout.Label` has carried
   the field, but the model had nowhere to write it — so the override existed
@@ -17,7 +84,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   "up", and the lower one lands inside the loop. Accepts `auto` (the default,
   and the previous behaviour exactly), `up`, `down`, `left`, `right`.
 
+### Fixed
+
+- **A `break` node drew nothing.** `layout` on one returned a single `node`
+  placement — byte for byte what a `free` node produces — so `g_break` was
+  unreachable from the data pipeline and a distinction CLAUDE.md calls
+  "topological rather than decorative" rendered as no distinction at all. A
+  break now emits its wall, and deliberately no stub reaching it: the visible
+  gap is the whole point of having two symbols.
+
+- **The canvas reserved room the drawing does not use.** `extent` took
+  `hypot(half_len, half)` isotropically — 44.9 around a conduction box that
+  draws 16 across — and a flat 30 around a boundary wall that draws 13 deep,
+  downward only. The hero therefore sat 17 units high in its own frame, and
+  no golden could ever have said so, because the frame had always been wrong
+  and the bytes never changed. `render.bounds` measures each placement
+  anisotropically; `WALL_HALF`/`WALL_DEPTH` name what `ground` actually draws.
+  Moves one golden, `demo-hero.svg`, by one number: 447.8 → 430.8 in height,
+  0 elements added, removed or moved.
+
+  A node stays `±radius` on purpose. A fixed node's `half=22, half_len=19` are
+  clearance numbers for the label solver, and substituting them would reserve
+  22 units above a 5.5 circle and count the wall twice.
+
+- **The boundary wall was invisible to the label solver.** Ground placements
+  fell through all three branches of the occupancy loop, so a label could be
+  placed on a wall with nothing objecting. They are registered now, as the
+  oriented box the wall actually occupies — which hangs off its anchor rather
+  than straddling it.
+
 ### Changed
+
+- `docs/schema.md` gains a **Checking a diagram** section: the command, the
+  eight codes as a table, and the note that the two habits above are now
+  enforced rather than advised. That page is written to be pasted into a
+  prompt, so a model reading it learns both the format and how to verify what
+  it wrote.
+
+- `docs/schema.md` also answers what two fresh agents, given the page and
+  nothing else, had to guess at — the acceptance test the whole exercise
+  exists to pass. Added: an **Angles** section, because `angle` was described
+  only as "rotates the node's own frame", from which a reader inferred a plain
+  clockwise rotation and was wrong about half the circle (the choice is
+  symmetric about 180°, since a label is never set upside down); that y
+  increases downward; that `value` is a string and `units` keys are optional;
+  that `rail.reference` must name a real node and is otherwise inert; that
+  `via` works on a capacitance, which is how you free the space under a
+  crowded node; that a `fixed` node need not sit at the rail's `y`; that one
+  `q` unit is shared by `radin`, `flow` and `flux`; what the "labels placed"
+  count counts; and that a `break` node has to stand alone, because no branch
+  kind draws a plain wire. `tests/test_check.py` pins the angle table so the
+  page cannot drift from the code.
 
 - `docs/schema.md` documents `side`, the per-kind unit each source reads, and
   two layout habits that were previously only visible by reading `hero.json`:

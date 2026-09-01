@@ -20,6 +20,7 @@ by the library and naming physics. On T, C, P and q it is identity, set by the
 caller and empty by default. A subscript on an R names a mechanism; a
 subscript on a T names a place.
 """
+import collections
 import hashlib
 import math
 import re
@@ -90,18 +91,75 @@ def normals(a):
 
 
 # ------------------------------------------------------------- block solver
-def _overlap(pc, ph, oc, oh, a):
+def gap(pc, ph, oc, oh, a):
+    """Separation between an axis-aligned box and an oriented one.
+
+    Positive is the width of the clear space between them; zero is touching;
+    negative is how far one has to move to stop penetrating. The value is the
+    largest separation over the four separating axes, which is the standard
+    SAT quantity: a single axis with daylight on it is enough to prove no
+    overlap, so the best axis is the informative one.
+
+    `_overlap` is this function's sign, and says so in one line. A checker
+    that wants to rank collisions by how bad they are needs the magnitude, and
+    a second copy of the formula would drift from the one the solver uses —
+    which is the drift CLAUDE.md keeps warning about, arriving as a diagnostic
+    that disagrees with the decision it claims to explain.
+    """
     r = math.radians(a)
     u = (math.cos(r), math.sin(r))
     v = (-math.sin(r), math.cos(r))
     d = (oc[0] - pc[0], oc[1] - pc[1])
+    worst = None
     for ax in ((1, 0), (0, 1), u, v):
         ra = ph[0] * abs(ax[0]) + ph[1] * abs(ax[1])
         rb = (oh[0] * abs(ax[0] * u[0] + ax[1] * u[1]) +
               oh[1] * abs(ax[0] * v[0] + ax[1] * v[1]))
-        if abs(d[0] * ax[0] + d[1] * ax[1]) >= ra + rb:
-            return False
-    return True
+        sep = abs(d[0] * ax[0] + d[1] * ax[1]) - (ra + rb)
+        worst = sep if worst is None else max(worst, sep)
+    return worst
+
+
+def _overlap(pc, ph, oc, oh, a):
+    return gap(pc, ph, oc, oh, a) < 0.0
+
+
+def box_bounds(centre, half, angle=0.0, offset=(0.0, 0.0)):
+    """Axis-aligned bounds of an oriented box: (x0, y0, x1, y1).
+
+    `offset` is where the box's centre sits in the local frame, in local
+    units. A boundary wall needs it: the wall hangs off its anchor point
+    rather than straddling it, so its bounds are not symmetric about `centre`
+    and reserving them as if they were is exactly the over-reservation this
+    exists to end.
+    """
+    r = math.radians(angle)
+    u = (math.cos(r), math.sin(r))
+    v = (-math.sin(r), math.cos(r))
+    cx = centre[0] + offset[0] * u[0] + offset[1] * v[0]
+    cy = centre[1] + offset[0] * u[1] + offset[1] * v[1]
+    ex = half[0] * abs(u[0]) + half[1] * abs(v[0])
+    ey = half[0] * abs(u[1]) + half[1] * abs(v[1])
+    return cx - ex, cy - ey, cx + ex, cy + ey
+
+
+def segment_box(a, b, centre, half, angle=0.0):
+    """Does the segment a-b touch the oriented box at `centre`?
+
+    Rotates the segment into the box's frame rather than the box into the
+    page's, so the slab test underneath stays the axis-aligned one the label
+    solver already uses.
+    """
+    if not angle:
+        return _segment_box(a, b, centre, half)
+    r = math.radians(-angle)
+    cos_r, sin_r = math.cos(r), math.sin(r)
+
+    def local(p):
+        dx, dy = p[0] - centre[0], p[1] - centre[1]
+        return (dx * cos_r - dy * sin_r, dx * sin_r + dy * cos_r)
+
+    return _segment_box(local(a), local(b), (0.0, 0.0), half)
 
 
 def support(a, side, half_len, half_h):
@@ -166,6 +224,15 @@ def _segment_box(a, b, centre, half):
     return t0 <= t1
 
 
+Blocker = collections.namedtuple("Blocker", "kind owner detail")
+Blocker.__doc__ = """Why a rectangle was rejected.
+
+`kind` is "box" or "segment"; `owner` is whatever was passed to the add call,
+which for a rendered diagram is the `Placement` that put it there; `detail` is
+the geometry, `(centre, half, angle)` or `(a, b)`.
+"""
+
+
 class Occupancy:
     """What is already on the page, so the next label can avoid it.
 
@@ -178,7 +245,7 @@ class Occupancy:
 
     def __init__(self):
         self.boxes = []       # (centre, half, angle, owner)
-        self.segments = []
+        self.segments = []    # (a, b, owner)
 
     def add_box(self, centre, half, angle=0.0, owner=None):
         self.boxes.append((tuple(centre), tuple(half), angle, owner))
@@ -186,20 +253,33 @@ class Occupancy:
     def add_rect(self, left, top, bw, bh, owner=None):
         self.add_box((left + bw / 2, top + bh / 2), (bw / 2, bh / 2), 0.0, owner)
 
-    def add_segment(self, a, b):
-        self.segments.append((tuple(a), tuple(b)))
+    def add_segment(self, a, b, owner=None):
+        self.segments.append((tuple(a), tuple(b), owner))
 
-    def free(self, centre, half, owner=None):
-        """Is this rectangle clear of everything but its own symbol?"""
+    def blocker(self, centre, half, owner=None):
+        """The first record that rejects this rectangle, or None if it fits.
+
+        `free` is this function's sign. Reporting the blocker from inside the
+        same loop is what keeps a diagnostic honest: reconstructing it from
+        outside means a second implementation of the skip rule and the
+        iteration order, and it will eventually name something the solver
+        never even considered.
+        """
         for oc, oh, angle, own in self.boxes:
             if own is not None and own is owner:
                 continue
             if _overlap(centre, half, oc, oh, angle):
-                return False
-        for a, b in self.segments:
+                return Blocker("box", own, (oc, oh, angle))
+        for a, b, own in self.segments:
+            if own is not None and own is owner:
+                continue
             if _segment_box(a, b, centre, half):
-                return False
-        return True
+                return Blocker("segment", own, (a, b))
+        return None
+
+    def free(self, centre, half, owner=None):
+        """Is this rectangle clear of everything but its own symbol?"""
+        return self.blocker(centre, half, owner) is None
 
 
 RUN_GAP = 6
@@ -264,13 +344,29 @@ def _corner(cx, cy, side, d, bw, bh):
 
 def annotate(cx, cy, a, out, user=None, name=None, value=None, half=10,
              half_len=None, gap=5, size=13, vsize=13, usize=11.5,
-             side="auto", occupied=None, owner=None):
+             side="auto", occupied=None, owner=None, report=None):
     """Place one text block and return the rectangle it took.
 
     `occupied` is consulted for labels already placed and wires already
     drawn; the block's own symbol is skipped through `owner`, because
     clear_offset has already solved that clearance and solved it tighter
     than a bounding box would.
+
+    `report`, if given, is a dict updated in place with what happened — the
+    same out-parameter idiom `out` already uses, so nothing that consumes the
+    return value has to change. It carries:
+
+        side     the unit direction chosen, as a vector
+        solved   the offset clear_offset asked for
+        used     the offset actually taken; more than `solved` means the
+                 block was pushed out past its own symbol to clear something
+        flipped  True when the label crossed to the other side of the branch
+        clear    False when the push loop ran out of steps and accepted an
+                 overlap anyway
+
+    That last one is the point of the whole parameter. The loop below has
+    always been able to give up silently, and a label printed over a wire is
+    indistinguishable in the output from one placed deliberately.
     """
     lines = build_block(user, name, value, size, vsize, usize)
     if not lines:
@@ -280,6 +376,8 @@ def annotate(cx, cy, a, out, user=None, name=None, value=None, half=10,
     bh = sum(_line_h(l) for l in lines)
 
     chosen, left, top = None, None, None
+    solved = used = 0.0
+    clear = True
     candidates = _sides(a, side)
     for cand in candidates:
         d = clear_offset(cx, cy, a, cand, hl, half, bw, bh, gap)
@@ -287,11 +385,13 @@ def annotate(cx, cy, a, out, user=None, name=None, value=None, half=10,
         if occupied is None or occupied.free(
                 (x + bw / 2, y + bh / 2), (bw / 2, bh / 2), owner):
             chosen, left, top = cand, x, y
+            solved = used = d
             break
 
     if chosen is None:                # nowhere clear: push out on the first
         chosen = candidates[0]
         d = clear_offset(cx, cy, a, chosen, hl, half, bw, bh, gap)
+        solved = d
         for _ in range(40):
             left, top = _corner(cx, cy, chosen, d, bw, bh)
             if occupied.free((left + bw / 2, top + bh / 2),
@@ -300,6 +400,12 @@ def annotate(cx, cy, a, out, user=None, name=None, value=None, half=10,
             d += 4
         else:
             left, top = _corner(cx, cy, chosen, d, bw, bh)
+            clear = False
+        used = d
+
+    if report is not None:
+        report.update(side=chosen, solved=solved, used=used, clear=clear,
+                      flipped=chosen is not candidates[0])
 
     y = top
     for line in lines:
@@ -312,7 +418,7 @@ def annotate(cx, cy, a, out, user=None, name=None, value=None, half=10,
             x += measure(txt, sz, CLASS_FACE.get(cls, "regular")) + RUN_GAP
         y += lh
     if occupied is not None:
-        occupied.add_rect(left, top, bw, bh)
+        occupied.add_rect(left, top, bw, bh, owner=owner)
     return left, top, bw, bh
 
 

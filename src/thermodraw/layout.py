@@ -19,6 +19,15 @@ from . import symbols as S
 
 BY_KEY = {s.key: s for s in S.SYMBOLS}
 
+# How a node meets its boundary. A fixed node reaches down STUB units to its
+# wall; a thermal break stops at the circle and its wall stands BREAK_GAP away,
+# with nothing in between. BREAK_WALL is g_break's own (half, depth), not the
+# one render.ground defaults to — the two symbols are drawn at different
+# scales, and docs/symbol-reference.html is the record for that one.
+STUB = 12
+BREAK_GAP = 24
+BREAK_WALL = (22, 13)
+
 
 @dataclass
 class Label:
@@ -33,7 +42,24 @@ class Label:
 
 @dataclass
 class Placement:
-    """One thing to draw, in page coordinates."""
+    """One thing to draw, in page coordinates.
+
+    `ref` names what in the diagram produced this — "node 'j'",
+    "branch 2 j->c", "source 0 -> j", "rail". Everything a branch emits shares
+    one ref, lead wires included, which is what lets a diagnostic say "this
+    label is nearer that branch than the node it names" without counting the
+    node's own stub as a stranger.
+
+    It is a string rather than the model object on purpose: holding a `Node`
+    would alias mutable state into a documented-pure output and change what
+    two placements comparing equal means. It is derived from position for
+    branches and sources, because neither has an id in the schema, so it is
+    not stable under reordering. It is a diagnostic, not a key.
+
+    `mirror` is dead — nothing writes it and `render.place` recomputes the
+    value for itself. It stays because removing a field from a public
+    dataclass is a break for anyone constructing one positionally.
+    """
     element: str                       # symbol | wire | node | ground
     at: Tuple[float, float] = (0.0, 0.0)
     angle: float = 0.0
@@ -42,6 +68,8 @@ class Placement:
     mirror: bool = False
     label: Optional[Label] = None
     radius: float = 5.5
+    ref: Optional[str] = None
+    wall: Optional[Tuple[float, float]] = None   # (half, depth) of a ground
 
 
 def _angle(a, b):
@@ -103,7 +131,8 @@ def layout(diagram):
     diagram.validate()
     out = []
 
-    for b in diagram.branches:
+    for i, b in enumerate(diagram.branches):
+        ref = f"branch {i} {b.source}->{b.target}"
         sym = BY_KEY[b.kind]
         # the rail end depends on the other end, so resolve the node first
         if b.source == M.RAIL:
@@ -120,9 +149,9 @@ def layout(diagram):
         angle = b.angle if b.angle is not None else _angle(a, c)
 
         for run in _split(route, index, centre, sym.half_len):
-            out.append(Placement("wire", points=run))
+            out.append(Placement("wire", points=run, ref=ref))
         out.append(Placement(
-            "symbol", at=centre, angle=angle, symbol=sym,
+            "symbol", at=centre, angle=angle, symbol=sym, ref=ref,
             label=Label(user=b.label,
                         name=S.S_(M.BRANCH_SYMBOL[b.kind],
                                   M.BRANCH_SUB[b.kind]
@@ -135,10 +164,12 @@ def layout(diagram):
     if diagram.rail:
         xs = [n.at[0] for n in diagram.nodes if n.at]
         span = diagram.rail.span or (min(xs), max(xs))
-        out.append(Placement("wire", points=[(span[0], diagram.rail.y),
-                                             (span[1], diagram.rail.y)]))
+        out.append(Placement("wire", ref="rail",
+                             points=[(span[0], diagram.rail.y),
+                                     (span[1], diagram.rail.y)]))
 
-    for s in diagram.sources:
+    for i, s in enumerate(diagram.sources):
+        ref = f"source {i} -> {s.target}"
         sym = BY_KEY[s.kind]
         node = diagram.node(s.target)
         tip = tuple(node.at)
@@ -146,7 +177,7 @@ def layout(diagram):
             tip[0] - (sym.half_len + 5.5), tip[1])
         angle = s.angle
         out.append(Placement(
-            "symbol", at=centre, angle=angle, symbol=sym,
+            "symbol", at=centre, angle=angle, symbol=sym, ref=ref,
             label=Label(user=s.label,
                         name=S.S_(M.SOURCE_SYMBOL[s.kind], s.sub),
                         value=diagram.value_text(s.kind, s.value),
@@ -157,11 +188,12 @@ def layout(diagram):
                 centre[1] + math.sin(rad) * sym.half_len)
         edge = (tip[0] - math.cos(rad) * 5.5, tip[1] - math.sin(rad) * 5.5)
         if _length(head, edge) > 0.5:
-            out.append(Placement("wire", points=[head, edge]))
+            out.append(Placement("wire", points=[head, edge], ref=ref))
 
     for n in diagram.nodes:
         if n.kind == "corner":
             continue
+        ref = f"node '{n.id}'"
         at = tuple(n.at)
         # A fixed node reaches down to its boundary wall, so the label has to
         # clear the wall and not just the circle. The extents live on the
@@ -170,12 +202,25 @@ def layout(diagram):
         half = sym.half if sym else 5.5
         half_len = sym.half_len if sym else 5.5
         out.append(Placement(
-            "node", at=at, angle=n.angle,
+            "node", at=at, angle=n.angle, ref=ref,
             label=Label(user=n.label, name=S.S_("T", n.sub),
                         value=diagram.value_text(n.kind, n.value),
                         half=half, half_len=half_len,
                         side=n.side)))
+        # Both boundary kinds draw a wall; only one draws the stub reaching
+        # it. That gap is the entire distinction between them, and it is
+        # topological rather than decorative — which is why `break` having
+        # quietly emitted nothing but a bare circle was a bug and not a
+        # missing flourish. `g_break` was unreachable from the data pipeline.
         if n.kind == "fixed":
-            out.append(Placement("wire", points=[at, (at[0], at[1] + 12)]))
-            out.append(Placement("ground", at=(at[0], at[1] + 12), angle=90))
+            out.append(Placement("wire", points=[at, (at[0], at[1] + STUB)],
+                                 ref=ref))
+            out.append(Placement("ground", at=(at[0], at[1] + STUB), angle=90,
+                                 ref=ref))
+        elif n.kind == "break":
+            # Set further out than a fixed node's wall, so the clear space
+            # reads as longer than a stub. At the stub's own distance the
+            # reader is left wondering whether the stub failed to draw.
+            out.append(Placement("ground", at=(at[0], at[1] + BREAK_GAP),
+                                 angle=90, ref=ref, wall=BREAK_WALL))
     return out

@@ -12,6 +12,7 @@ the data is the representation, not a serialisation of some object.
          .source("j", "diss", "Switching loss", 45, sub="d"))
     open("out.svg", "w").write(d.svg())
 """
+from . import check as C
 from . import layout as L
 from . import model as M
 from . import render as R
@@ -72,6 +73,15 @@ class DiagramBuilder:
         out = R.render(self.placements(), size=size or self.diagram.size,
                        padding=padding)
         return T.bake(out, mode) if mode else T.with_variables(out)
+
+    def check(self, size=None, padding=R.PADDING):
+        """What is wrong with this diagram, without rendering it to look.
+
+        Symmetry with `.svg()`: the same size and padding, so what is reported
+        is what would be drawn.
+        """
+        return C.check(self.placements(), size=size or self.diagram.size,
+                       padding=padding)
 
     def to_dict(self):
         return self.build().to_dict()

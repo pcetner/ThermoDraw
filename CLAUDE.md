@@ -21,6 +21,8 @@ src/thermodraw/
   render.py    placements -> SVG. Pure, deterministic, sizes its own canvas
   builder.py   sugar over model.py, holding no state the data cannot express
   core.py      text metrics, transforms, the label solver, occupancy, textures
+  check.py     is the drawing any good? placements -> findings, no SVG
+  __main__.py  the command line: `thermodraw check`, `thermodraw render`
   symbols.py   the twelve symbols, plus sheet renderers
   theme.py     CSS variables for web, baked literals and fonts for Word/slides
   _metrics.py  generated character widths — do not edit
@@ -29,6 +31,7 @@ tools/
   gen_metrics.py  width tables from the real font
   subset_font.py  the vendored faces
   gen_docs.py     regenerates the symbol reference
+  golden_diff.py  what actually changed in a golden, element by element
 examples/
   hero.json              the README diagram, as data
   render_demo.py         the three README images
@@ -145,7 +148,100 @@ Before this existed, the demo was fixed by hand: moving coordinates, and
 inflating `half` — a clearance parameter — into a "push harder" knob. If you
 find yourself doing that again, the occupancy list is the thing to reach for.
 
+### Checking a diagram (`check.py`)
+
+- **The premise was tested, and the docs passed.** An agent given only
+  `docs/schema.md` and no other context produced correct, valid diagrams on
+  the first run with no traceback. It also produced ugly ones, and every
+  aesthetic failure traced to the library rather than the author. It saw zero
+  error messages across the whole exercise, because the failure mode was
+  accepted-and-inert input, not wrong input. **Validation catches diagrams
+  that cannot be drawn. This catches diagrams that should not be.**
+- **Goldens pin bytes and cannot pin quality.** 134 of them passed green while
+  the hero sat 17 units high in its own frame — because the frame had always
+  been wrong, so the bytes had never changed. Every check here exists because
+  the only instrument for it was a browser.
+- **The checker never rebuilds the page.** `render.compose` hands back the
+  actual `Occupancy` the labels were solved against and what `core.annotate`
+  did with each one. A diagnostic that reconstructs the page will eventually
+  disagree with the render it claims to explain, and its first bug will be
+  forgetting whatever the original forgot.
+- **Each new primitive is the informative half of a predicate that already
+  existed.** `core.gap` returns the separation and `_overlap` is its sign;
+  `Occupancy.blocker` returns the record and `free` is whether it is None.
+  One SAT formula, one skip rule, one iteration order. A second copy is the
+  drift this file keeps warning about, arriving with a straight face.
+- **Severity is a claim about the reader.** An error is something they would
+  misread; a warning is something they would notice and mistrust; a note is a
+  habit. `parallel-pair-same-side` is a note because the hero breaks it and
+  is fine, and a rule that condemns the flagship is one an author learns to
+  ignore — and then ignores when it is right.
+- **Every remedy is tested by applying it.** A check whose remedy is untested
+  is a check that gives bad advice with authority.
+- **The corridor check has a known blind spot, and it is written down.** It
+  fires on parallel paths 80 apart and not on 160. Four formulations were
+  tried, and every one that caught the loose case also condemned the hero's
+  own capacitance label, which is inside the ladder's main loop and correct
+  where it is. The threshold-free `parallel-pair-same-side` note covers the
+  loose case instead. `tests/test_check.py` pins the limit rather than
+  pretending it is not there.
+- **Fundamental cycles, not all cycles.** A spanning forest by DFS, one cycle
+  per non-tree edge. Enumerating every cycle is exponential; this finds every
+  loop a hand-drawn ladder makes. Two steps are load-bearing and easy to miss:
+  `layout._split` cuts a hole in every branch, so each symbol needs a
+  synthetic edge across it, and a capacitance meets the middle of the rail
+  without sharing a vertex, so every edge is split at every vertex on it.
+- **The report opens with a positive line.** An agent needs a signal that says
+  *good*, not merely an absence of output — silence is also what a crashed
+  checker produces.
+- **The report is ASCII.** It goes to a terminal, and a Windows console is
+  cp1252: an arrow in a fixed string is a `UnicodeEncodeError` on the machine
+  most likely to be running it. Node ids can still carry anything, which is
+  why `__main__` also reconfigures stdout with `errors="replace"`.
+
+### Reviewing goldens rather than rubber-stamping them
+
+A golden is one long line, so `git diff` marks the whole file changed for a
+one-number edit — which makes the diff unreadable, so nobody reads it, so the
+goldens stop being a review and become a record of whatever happened.
+
+**No commit runs `--update-goldens` without `tools/golden_diff.py` output for
+every changed scene in its message, and a sentence saying why each element
+moved.** "0 elements moved" is checkable in five seconds; a 13KB single-line
+diff is not. Land the instrument before the change, not after.
+
 ## Known sharp edges
+
+- **`Placement.mirror` is dead.** Nothing writes it and nothing reads it —
+  `render.place` recomputes the value for itself. It stays because removing a
+  field from a public dataclass breaks anyone constructing one positionally.
+  So is `core.LEAD`, which `symbols.LEAD` shadowed.
+- **`LabelRect` has no `__slots__`.** It is a `tuple` subclass so that it
+  still unpacks as four numbers and compares equal to the plain tuple it
+  replaced, and CPython refuses a nonempty `__slots__` on a subtype of a
+  variable-length built-in. It carries a `__dict__`; that is the price.
+- **`thermodraw.render` and `thermodraw.layout` are functions, not modules.**
+  `__init__` rebinds both, so `from . import render` inside the package gets
+  the function and `render.PADDING` is an `AttributeError`. Import the names:
+  `from .render import PADDING, compose`. `check.py` and `tests/test_frame.py`
+  both do, and both say why.
+- **There are three boundary-wall sizes and they are not unified.**
+  `render.WALL_HALF/WALL_DEPTH` is (24, 13), `g_fixed_node` draws (20, 12) and
+  `g_break` (22, 13). They are three different walls at three different
+  scales, and `docs/symbol-reference.html` is the declared visual record for
+  two of them. `layout.BREAK_WALL` passes `g_break`'s own numbers through the
+  placement rather than taking `ground`'s defaults. Unifying them would move
+  four goldens and the generated page, in the one area this file calls
+  settled, for tidiness.
+- **`render.WALL_HALF` and `WALL_DEPTH` are ints.** They reach the markup
+  through an f-string, so `24.0` writes `y="-24.0"` where the drawing has
+  always said `y="-24"`, and the clip ids are content-addressed on exactly
+  those numbers. Naming a constant moved 5 elements until they were ints
+  again.
+- **A node's bounds are `±radius`, deliberately.** A fixed node's `half=22,
+  half_len=19` are clearance numbers for the label solver, not ink.
+  Substituting them reserves 22 units above a 5.5 circle and counts the
+  boundary wall a second time, when the wall is already its own placement.
 
 - **Text widths are measured**, not estimated. `core._metrics` is generated
   by `tools/gen_metrics.py` from the real font, one table per face because
@@ -186,7 +282,9 @@ In rough priority order:
    solver. A ladder walking left to right with capacitances dropping to a
    common rail covers most cases; parallel paths are expressed with explicit
    `via` waypoints today and need routing. This is the largest remaining piece
-   and the only genuinely hard one.
+   and the only genuinely hard one. `check.py` is now the thing that tells it
+   whether its answer was any good, which is most of what a solver needs and
+   was the reason to build the checker first.
 2. **A spreading resistance symbol** — the one gap in the vocabulary. The
    natural glyph under the current scheme is hatching that fans from a point
    rather than running parallel, reading as heat diverging into a larger
@@ -194,6 +292,9 @@ In rough priority order:
 3. **Region enclosures that auto-size to their contents** rather than taking
    fixed dimensions.
 4. **Unit handling** — pass `0.35` and have it choose between K/W and mK/W.
+5. **More checks, as they earn their place.** A finding is worth adding when
+   it caught something a browser was needed for. It is not worth adding
+   because it is easy to compute.
 
 ## Conventions
 
