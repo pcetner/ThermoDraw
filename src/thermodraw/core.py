@@ -133,6 +133,75 @@ def clear_offset(cx, cy, a, side, half_len, half_h, bw, bh, gap):
     return d
 
 
+# ------------------------------------------------------------- occupancy
+PAGE_SIDES = {"up": (0.0, -1.0), "down": (0.0, 1.0),
+              "left": (-1.0, 0.0), "right": (1.0, 0.0)}
+
+
+def _segment_box(a, b, centre, half):
+    """Does the segment a-b touch the axis-aligned box at centre?
+
+    Liang-Barsky against the four slabs. A label landing on a wire is the
+    second half of the collision problem; the first half, clearing the
+    symbol the label belongs to, is what clear_offset already does.
+    """
+    x0, y0 = a[0] - centre[0], a[1] - centre[1]
+    dx, dy = b[0] - a[0], b[1] - a[1]
+    t0, t1 = 0.0, 1.0
+    for p, q in ((-dx, x0 + half[0]), (dx, half[0] - x0),
+                 (-dy, y0 + half[1]), (dy, half[1] - y0)):
+        if p == 0:
+            if q < 0:
+                return False
+            continue
+        r = q / p
+        if p < 0:
+            if r > t1:
+                return False
+            t0 = max(t0, r)
+        else:
+            if r < t0:
+                return False
+            t1 = min(t1, r)
+    return t0 <= t1
+
+
+class Occupancy:
+    """What is already on the page, so the next label can avoid it.
+
+    clear_offset solves a label against its own symbol and knows nothing
+    else, which is how a dissipation label came to overprint a conduction
+    one and an ambient label came to sit on a wire. Both were fixed by hand,
+    by moving coordinates and inflating a clearance parameter. This is the
+    thing that should have known.
+    """
+
+    def __init__(self):
+        self.boxes = []       # (centre, half, angle, owner)
+        self.segments = []
+
+    def add_box(self, centre, half, angle=0.0, owner=None):
+        self.boxes.append((tuple(centre), tuple(half), angle, owner))
+
+    def add_rect(self, left, top, bw, bh, owner=None):
+        self.add_box((left + bw / 2, top + bh / 2), (bw / 2, bh / 2), 0.0, owner)
+
+    def add_segment(self, a, b):
+        self.segments.append((tuple(a), tuple(b)))
+
+    def free(self, centre, half, owner=None):
+        """Is this rectangle clear of everything but its own symbol?"""
+        for oc, oh, angle, own in self.boxes:
+            if own is not None and own is owner:
+                continue
+            if _overlap(centre, half, oc, oh, angle):
+                return False
+        for a, b in self.segments:
+            if _segment_box(a, b, centre, half):
+                return False
+        return True
+
+
 RUN_GAP = 6
 LINE_LEAD = 1.34
 WRAP_AT = 168
@@ -172,27 +241,65 @@ def build_block(user=None, name=None, value=None,
     return lines
 
 
-def annotate(cx, cy, a, out, user=None, name=None, value=None, half=10,
-             half_len=None, gap=5, size=13, vsize=13, usize=11.5):
-    lines = build_block(user, name, value, size, vsize, usize)
-    if not lines:
-        return
-    hl = half if half_len is None else half_len
+def _sides(a, side):
+    """Candidate directions, best first.
+
+    Auto keeps the original choice and adds its opposite as a fallback, so a
+    blocked label steps across the branch rather than drifting away from it.
+    """
+    if side and side != "auto":
+        return [PAGE_SIDES[side]]
     n1, n2 = normals(a)
     up, down = (n1, n2) if n1[1] <= n2[1] else (n2, n1)
-    side = up if abs(up[1]) >= 0.35 else (up if up[0] > 0 else down)
+    first = up if abs(up[1]) >= 0.35 else (up if up[0] > 0 else down)
+    return [first, down if first is up else up]
 
+
+def _corner(cx, cy, side, d, bw, bh):
+    px, py = cx + side[0] * d, cy + side[1] * d
+    if abs(side[0]) > 0.5:                       # block sits left or right
+        return (px + 3 if side[0] > 0 else px - 3 - bw), py - bh / 2
+    return px - bw / 2, (py - bh - 2 if side[1] < 0 else py + 2)
+
+
+def annotate(cx, cy, a, out, user=None, name=None, value=None, half=10,
+             half_len=None, gap=5, size=13, vsize=13, usize=11.5,
+             side="auto", occupied=None, owner=None):
+    """Place one text block and return the rectangle it took.
+
+    `occupied` is consulted for labels already placed and wires already
+    drawn; the block's own symbol is skipped through `owner`, because
+    clear_offset has already solved that clearance and solved it tighter
+    than a bounding box would.
+    """
+    lines = build_block(user, name, value, size, vsize, usize)
+    if not lines:
+        return None
+    hl = half if half_len is None else half_len
     bw = max(_line_w(l) for l in lines)
     bh = sum(_line_h(l) for l in lines)
-    d = clear_offset(cx, cy, a, side, hl, half, bw, bh, gap)
-    px, py = cx + side[0] * d, cy + side[1] * d
 
-    if abs(side[0]) > 0.5:                       # block sits left or right
-        left = px + 3 if side[0] > 0 else px - 3 - bw
-        top = py - bh / 2
-    else:                                        # block sits above or below
-        left = px - bw / 2
-        top = py - bh - 2 if side[1] < 0 else py + 2
+    chosen, left, top = None, None, None
+    candidates = _sides(a, side)
+    for cand in candidates:
+        d = clear_offset(cx, cy, a, cand, hl, half, bw, bh, gap)
+        x, y = _corner(cx, cy, cand, d, bw, bh)
+        if occupied is None or occupied.free(
+                (x + bw / 2, y + bh / 2), (bw / 2, bh / 2), owner):
+            chosen, left, top = cand, x, y
+            break
+
+    if chosen is None:                # nowhere clear: push out on the first
+        chosen = candidates[0]
+        d = clear_offset(cx, cy, a, chosen, hl, half, bw, bh, gap)
+        for _ in range(40):
+            left, top = _corner(cx, cy, chosen, d, bw, bh)
+            if occupied.free((left + bw / 2, top + bh / 2),
+                             (bw / 2, bh / 2), owner):
+                break
+            d += 4
+        else:
+            left, top = _corner(cx, cy, chosen, d, bw, bh)
 
     y = top
     for line in lines:
@@ -204,6 +311,8 @@ def annotate(cx, cy, a, out, user=None, name=None, value=None, half=10,
                        f'text-anchor="start">{txt}</text>')
             x += measure(txt, sz, CLASS_FACE.get(cls, "regular")) + RUN_GAP
         y += lh
+    if occupied is not None:
+        occupied.add_rect(left, top, bw, bh)
     return left, top, bw, bh
 
 

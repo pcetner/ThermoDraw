@@ -28,6 +28,7 @@ class Label:
     value: Optional[str] = None
     half: float = 5.5
     half_len: float = 5.5
+    side: str = "auto"
 
 
 @dataclass

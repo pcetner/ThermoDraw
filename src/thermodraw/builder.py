@@ -34,10 +34,12 @@ class DiagramBuilder:
         return self
 
     def branch(self, source, target, kind="cond", label=None, value=None,
-               via=None, at=None, angle=None):
+               sub="", via=None, at=None, angle=None):
+        """`sub` is only meaningful on a capacitance, where the subscript
+        names a place. A resistance carries its own, naming the mechanism."""
         self.diagram.branches.append(M.Branch(
-            source=source, target=target, kind=kind, label=label, value=value,
-            via=list(via or []), at=at, angle=angle))
+            source=source, target=target, kind=kind, label=label, sub=sub,
+            value=value, via=list(via or []), at=at, angle=angle))
         return self
 
     def source(self, target, kind="diss", label=None, value=None, sub="",
