@@ -6,29 +6,31 @@
 <title>Symbol dictionary — ThermoDraw {{VERSION}}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Serif:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
 <style>
 {{FACES}}
 :root{
   --paper:#fcfcfd; --panel:#fff; --ink:#16181d; --ink-2:#565b66; --ink-3:#8b909b;
-  --rule:#e2e4e9; --sym:#1b1b1f; --tex:#9aa0ab; --accent:#b4442c; --tint:#f2f3f6;
+  --rule:#e2e4e9; --sym:#1b1b1f; --tex:#9aa0ab; --accent:#b4442c; --tint:#f4f5f8;
   --sb-thumb:rgba(22,24,29,.26); --sb-thumb-hi:rgba(22,24,29,.46);
   --serif:"IBM Plex Serif",Georgia,serif;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
   --sans:{{STACK}};
 }
 @media (prefers-color-scheme:dark){
   :root:not([data-theme="light"]){
     --paper:#0f1115; --panel:#171a1f; --ink:#e9e7e2; --ink-2:#a2a7b2; --ink-3:#727884;
-    --rule:#2a2e36; --sym:#d8d6d1; --tex:#767c88; --accent:#e8996b; --tint:#1c2027;
+    --rule:#2a2e36; --sym:#d8d6d1; --tex:#767c88; --accent:#e8996b; --tint:#1b1f26;
     --sb-thumb:rgba(233,231,226,.26); --sb-thumb-hi:rgba(233,231,226,.48);
   }
 }
 :root[data-theme="dark"]{
   --paper:#0f1115; --panel:#171a1f; --ink:#e9e7e2; --ink-2:#a2a7b2; --ink-3:#727884;
-  --rule:#2a2e36; --sym:#d8d6d1; --tex:#767c88; --accent:#e8996b; --tint:#1c2027;
+  --rule:#2a2e36; --sym:#d8d6d1; --tex:#767c88; --accent:#e8996b; --tint:#1b1f26;
   --sb-thumb:rgba(233,231,226,.26); --sb-thumb-hi:rgba(233,231,226,.48);
 }
 *{box-sizing:border-box}
+html{scroll-behavior:smooth}
 body{margin:0;background:var(--paper);color:var(--ink);
      font-family:var(--serif);font-size:17px;line-height:1.62;
      -webkit-font-smoothing:antialiased}
@@ -43,7 +45,7 @@ body{margin:0;background:var(--paper);color:var(--ink);
   html{scrollbar-width:thin;scrollbar-color:var(--sb-thumb) transparent}
 }
 
-.wrap{width:100%;max-width:1080px;margin:0 auto;
+.wrap{width:100%;max-width:1020px;margin:0 auto;
       padding:52px clamp(20px,3.5vw,56px) 96px}
 header{display:flex;justify-content:space-between;align-items:flex-start;
        gap:20px;flex-wrap:wrap;margin-bottom:8px}
@@ -57,8 +59,8 @@ button:hover{border-color:var(--accent);color:var(--accent)}
 button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 p{margin:0 0 14px;max-width:68ch;color:var(--ink-2)}
 p strong{color:var(--ink);font-weight:600}
-a{color:var(--accent)}
-code{font-family:var(--sans);font-size:.88em;background:var(--tint);
+a{color:var(--accent);text-decoration-thickness:1px;text-underline-offset:2px}
+code{font-family:var(--mono);font-size:.85em;background:var(--tint);
      padding:1px 5px;border-radius:3px;color:var(--ink)}
 
 /* The reading rules, before the entries. */
@@ -68,48 +70,87 @@ code{font-family:var(--sans);font-size:.88em;background:var(--tint);
 .rules li{background:var(--panel);border:1px solid var(--rule);border-radius:6px;
           padding:14px 16px;font-family:var(--sans);font-size:14.5px;
           line-height:1.5;color:var(--ink-2)}
-.rules b{display:block;color:var(--ink);font-weight:600;font-size:13px;
-         letter-spacing:.04em;text-transform:uppercase;margin-bottom:5px}
+.rules b{display:block;color:var(--ink);font-weight:600;font-size:12px;
+         letter-spacing:.05em;text-transform:uppercase;margin-bottom:5px}
+
+/* Contents. Nineteen entries is past the point where scrolling for one is
+   reasonable. */
+.index{margin-top:34px;padding:22px 24px;background:var(--panel);
+       border:1px solid var(--rule);border-radius:6px;
+       display:grid;gap:22px;
+       grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+.index h4{font-family:var(--sans);font-size:13px;font-weight:600;
+          margin:0 0 9px;padding-bottom:7px;line-height:1.35;
+          color:var(--ink);border-bottom:1px solid var(--rule)}
+.index h4 a{color:inherit;text-decoration:none}
+.index h4 a:hover{color:var(--accent)}
+.index ul{margin:0;padding:0;list-style:none;font-family:var(--sans);
+          font-size:13.5px;line-height:1.45}
+.index li{margin:0 0 5px}
+.index a{color:var(--ink-2);text-decoration:none}
+.index a:hover{color:var(--accent);text-decoration:underline}
 
 /* A group of entries. */
-section{margin-top:56px;padding-top:26px;border-top:1px solid var(--rule)}
+section{margin-top:56px;padding-top:26px;border-top:1px solid var(--rule);
+        scroll-margin-top:20px}
 h2{font-family:var(--sans);font-size:19px;font-weight:600;color:var(--ink);
    margin:0 0 6px;letter-spacing:-.01em}
 h2::before{content:"";display:inline-block;width:15px;height:2px;border-radius:2px;
    background:var(--accent);vertical-align:.3em;margin-right:10px}
 .lede{font-family:var(--sans);font-size:14.5px;margin:0 0 8px;max-width:70ch}
 
-/* One entry: the drawing, then what it means. Two columns while there is
-   room for the card at its own size, stacked below that. */
-.entry{display:grid;grid-template-columns:230px 1fr;gap:6px 30px;
-       align-items:start;margin-top:30px;padding-top:26px;
-       border-top:1px solid var(--rule)}
-.entry:first-of-type{border-top:none;padding-top:6px}
-@media (max-width:720px){.entry{grid-template-columns:1fr}}
+/* One entry. The name comes first and spans the row; the drawing sits under
+   it on the left with the meaning alongside. */
+.entry{display:grid;grid-template-columns:236px minmax(0,1fr);gap:14px 30px;
+       grid-template-areas:"head head" "fig  body";
+       align-items:start;margin-top:34px;padding-top:28px;
+       border-top:1px solid var(--rule);scroll-margin-top:20px}
+.entry:first-of-type{border-top:none;padding-top:10px}
+@media (max-width:760px){
+  .entry{grid-template-columns:minmax(0,1fr);
+         grid-template-areas:"head" "fig" "body"}
+}
 
-.entry figure{grid-row:span 3;margin:0;background:var(--panel);
+.entry-head{grid-area:head;display:flex;align-items:baseline;gap:12px;
+            flex-wrap:wrap}
+.entry h3{font-family:var(--sans);font-size:20px;font-weight:600;margin:0;
+          letter-spacing:-.015em;color:var(--ink)}
+.badge{font-family:var(--sans);font-size:11px;font-weight:600;
+       letter-spacing:.07em;text-transform:uppercase;color:var(--ink-3);
+       border:1px solid var(--rule);border-radius:999px;padding:3px 10px;
+       background:var(--panel);white-space:nowrap}
+
+.entry figure{grid-area:fig;margin:0;background:var(--panel);
               border:1px solid var(--rule);border-radius:6px;padding:4px}
 .entry figure svg{display:block;width:100%;height:auto}
 .entry figure.none{display:grid;place-items:center;min-height:112px;
                    background:none;border-style:dashed;font-family:var(--sans);
                    font-size:13px;color:var(--ink-3)}
-@media (max-width:720px){.entry figure{grid-row:auto;max-width:260px}}
+@media (max-width:760px){.entry figure{max-width:280px}}
 
-.entry h3{font-family:var(--sans);font-size:17px;font-weight:600;
-          margin:0 0 3px;letter-spacing:-.01em;color:var(--ink)}
-.entry .meta{font-family:var(--sans);font-size:12.5px;color:var(--ink-3);
-             margin:0 0 10px;letter-spacing:.02em}
-.entry .meta code{background:none;padding:0;color:var(--ink-2)}
-.entry p{margin:0 0 12px;max-width:64ch}
-.use{font-family:var(--sans);font-size:14px;color:var(--ink-2);margin:0 0 10px;
-     padding-left:13px;border-left:2px solid var(--accent)}
-.use b{color:var(--ink);font-weight:600}
-pre{margin:0;font-family:var(--sans);font-size:12.5px;line-height:1.5;
-    background:var(--tint);border-radius:5px;padding:9px 12px;
-    overflow-x:auto;color:var(--ink-2);white-space:pre-wrap;word-break:break-word}
+.entry-body{grid-area:body}
+.entry-body>p:first-child{margin-top:-3px}
+.entry p{margin:0 0 14px;max-width:64ch}
+.example{font-family:var(--sans);font-size:14.5px;color:var(--ink-2);
+         margin:0 0 16px;padding-left:14px;border-left:2px solid var(--accent)}
+.example b{color:var(--ink);font-weight:600}
+
+/* How it is written. The JSON alone was the part readers could not place —
+   correct, and with nothing above it saying what to do with it. */
+.written{border:1px solid var(--rule);border-radius:6px;overflow:hidden;
+         max-width:64ch}
+.written .cap{font-family:var(--sans);font-size:12.5px;color:var(--ink-3);
+              margin:0;padding:8px 14px;background:var(--panel);
+              border-bottom:1px solid var(--rule);max-width:none}
+.written .cap code{background:none;padding:0;color:var(--ink-2);font-size:12.5px}
+.written pre{margin:0;font-family:var(--mono);font-size:13px;line-height:1.55;
+             background:var(--tint);padding:12px 14px;overflow-x:auto;
+             color:var(--ink-2)}
 
 footer{margin-top:64px;padding-top:22px;border-top:1px solid var(--rule);
        font-family:var(--sans);font-size:13.5px;color:var(--ink-3)}
+footer a{color:var(--ink-2)}
+footer a:hover{color:var(--accent)}
 </style>
 </head>
 <body>
@@ -125,9 +166,10 @@ footer{margin-top:64px;padding-top:22px;border-top:1px solid var(--rule);
 
 <div class="intro">
 <p>A thermal network says three kinds of thing. <strong>Nodes</strong> are
-places that have a temperature. <strong>Branches</strong> are paths heat takes
-between two places. <strong>Sources</strong> are heat crossing into or out of
-one place from outside the network. Everything below is one of those three.</p>
+places that have a temperature. <strong>Paths</strong> are the routes heat
+takes between two places. <strong>Sources</strong> are heat crossing into or
+out of one place from outside the network. Every symbol below is one of those
+three, and each entry is tagged with which.</p>
 
 <p>The drawings are in heat-transfer notation rather than circuit notation: a
 path is a hatched box, not a zigzag. The reason is that a box has interior room
@@ -150,6 +192,8 @@ two solids meeting. One rule generates all four, so it is learned once.</p>
   <li><b>No colour</b>The whole set is monochrome, which leaves colour free for
   temperature maps and path highlighting.</li>
 </ul>
+
+{{INDEX}}
 </div>
 
 {{ENTRIES}}
@@ -158,7 +202,8 @@ two solids meeting. One rule generates all four, so it is learned once.</p>
 Each drawing here is rendered by the library itself, at 0°. Every symbol also
 works at any angle — see <a href="docs/symbol-reference.html">the symbol
 reference</a> for all eight orientations and the reasoning behind each glyph,
-and <a href="docs/schema.md">the schema</a> for the full set of fields.
+and <a href="docs/schema.md">the schema</a> for the full set of fields and how
+the pieces above fit into one file.
 </footer>
 
 </div>
