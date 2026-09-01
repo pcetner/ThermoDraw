@@ -63,15 +63,21 @@ a{color:var(--accent);text-decoration-thickness:1px;text-underline-offset:2px}
 code{font-family:var(--mono);font-size:.85em;background:var(--tint);
      padding:1px 5px;border-radius:3px;color:var(--ink)}
 
-/* The reading rules, before the entries. */
+/* What a reader needs before the entries, and nothing else. The four
+   textures, the label convention and the subscript rule all used to stand
+   here, and none of them is answerable in the abstract — each one is shown
+   in the entry it belongs to. */
 .intro{margin-top:34px;padding-top:26px;border-top:1px solid var(--rule)}
-.rules{margin:22px 0 0;padding:0;list-style:none;display:grid;gap:14px;
-       grid-template-columns:repeat(auto-fit,minmax(250px,1fr))}
+.intro>p:first-child{margin-bottom:16px;color:var(--ink);font-size:18px}
+.rules{margin:0;padding:0;list-style:none;display:grid;gap:14px;
+       grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
 .rules li{background:var(--panel);border:1px solid var(--rule);border-radius:6px;
           padding:14px 16px;font-family:var(--sans);font-size:14.5px;
           line-height:1.5;color:var(--ink-2)}
-.rules b{display:block;color:var(--ink);font-weight:600;font-size:12px;
-         letter-spacing:.05em;text-transform:uppercase;margin-bottom:5px}
+.rules b{display:block;color:var(--ink);font-weight:600;font-size:11px;
+         letter-spacing:.07em;text-transform:uppercase;margin-bottom:5px}
+.rule{font-family:var(--sans);font-size:14.5px;margin:18px 0 0;
+      padding-left:14px;border-left:2px solid var(--accent)}
 
 /* Contents. Nineteen entries is past the point where scrolling for one is
    reasonable. */
@@ -165,33 +171,16 @@ footer a:hover{color:var(--accent)}
 </header>
 
 <div class="intro">
-<p>A thermal network says three kinds of thing. <strong>Nodes</strong> are
-places that have a temperature. <strong>Paths</strong> are the routes heat
-takes between two places. <strong>Sources</strong> are heat crossing into or
-out of one place from outside the network. Every symbol below is one of those
-three, and each entry is tagged with which.</p>
-
-<p>The drawings are in heat-transfer notation rather than circuit notation: a
-path is a hatched box, not a zigzag. The reason is that a box has interior room
-for a mechanism and a zigzag does not, and in this vocabulary
-<strong>the interior of a box states what the heat is crossing</strong>.
-Section hatching is solid material, streamlines are a moving fluid, wave arrows
-cross an empty box because radiation needs no medium, and opposed hatching is
-two solids meeting. One rule generates all four, so it is learned once.</p>
+<p>Every symbol here is one of three things.</p>
 
 <ul class="rules">
-  <li><b>Boxes resist, arrows carry</b>A box is a resistance: heat crosses it
-  and drops in temperature. An arrow is a rate: heat being delivered or
-  carried, with no resistance stated.</li>
-  <li><b>The label</b>One text block per symbol, on one side of the path. Your
-  words are the top line at every orientation; under them the symbol and its
-  value, joined by an equals sign.</li>
-  <li><b>Two kinds of subscript</b>On a resistance it is structural and the
-  library sets it — it names the physics. On <em>T</em>, <em>C</em>,
-  <em>P</em> and <em>q</em> it is identity, and it is yours to set.</li>
-  <li><b>No colour</b>The whole set is monochrome, which leaves colour free for
-  temperature maps and path highlighting.</li>
+  <li><b>Node</b>A place that has a temperature.</li>
+  <li><b>Path</b>A route heat takes between two places.</li>
+  <li><b>Source</b>Heat arriving from outside the network.</li>
 </ul>
+
+<p class="rule">A box is a resistance: heat crosses it and drops in
+temperature. An arrow is a rate.</p>
 
 {{INDEX}}
 </div>

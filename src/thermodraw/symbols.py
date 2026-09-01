@@ -482,16 +482,30 @@ DW, DPAD = 152, 12
 DCX = DW / 2
 
 
-def card(sym, fluid=False):
+# "use the Symbol's own sample", which None cannot say: None is a real value
+# for all three of these and means "draw no such line".
+SAMPLE = object()
+
+
+def card(sym, fluid=False, user=SAMPLE, name=SAMPLE, value=SAMPLE):
     """One symbol at 0°, labelled as the library would label it.
 
     Measured twice: once to find where the solver put the text, and again to
     draw it once the frame that holds both is known.
+
+    The three text overrides are for the dictionary, where each entry carries
+    a worked example and the drawing should say what the example says rather
+    than repeating a sample from somewhere else. The geometry is the
+    library's either way — only the words change.
     """
+    user = sym.user if user is SAMPLE else user
+    name = sym.text if name is SAMPLE else name
+    value = sym.value if value is SAMPLE else value
+
     def place(cy, out):
         out.append(f'<g transform="{S.xf(DCX, cy, 0)}">{sym.draw(0)}</g>')
-        return S.annotate(DCX, cy, 0, out, user=sym.user, name=sym.text,
-                          value=sym.value, half=sym.half,
+        return S.annotate(DCX, cy, 0, out, user=user, name=name,
+                          value=value, half=sym.half,
                           half_len=sym.half_len)
 
     _, top, _, bh = place(0.0, [])
