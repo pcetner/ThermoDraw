@@ -377,7 +377,7 @@ SYMBOLS = [
                 "asserts one-dimensional conduction, which is exactly what a "
                 "spreading path is not."),
     Symbol(key="pipe", name="Isothermal link", draw=g_pipe, texture=tex_pipe,
-           text=S_("R", "pipe"), value="0.0018 K/W", user="Heat pipe",
+           text=S_("R", "pipe"), value="0.10 K/W", user="Heat pipe",
            half=S.BH / 2, half_len=S.BW / 2,
            reach=(S.BW / 2 + LEAD, S.BH / 2),
            note="Vapour out along one face, condensate back along the other. It "
