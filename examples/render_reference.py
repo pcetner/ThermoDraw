@@ -16,10 +16,10 @@ def main():
     OUT.mkdir(exist_ok=True)
     for sym in symbols.SYMBOLS:
         svg = symbols.strip(sym)
-        (OUT / f"{sym['key']}.svg").write_text(theme.with_variables(svg))
+        (OUT / f"{sym['key']}.svg").write_text(theme.with_variables(svg), encoding="utf-8")
     for mode in ("light", "dark"):
         (OUT / f"example-{mode}.svg").write_text(
-            theme.bake(symbols.diagonal_demo(), mode))
+            theme.bake(symbols.diagonal_demo(), mode), encoding="utf-8")
     print(f"wrote {len(symbols.SYMBOLS) + 2} files to {OUT}")
 
 
