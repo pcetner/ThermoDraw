@@ -430,6 +430,17 @@ class Diagram:
                 raise DiagramError(
                     f"branch {b.source}-{b.target} is a break, which carries "
                     f"no heat and so no rate; got {b.rate!r}")
+            # The other end of the same rule. A `rate` is what a path carries
+            # beside the quantity it presents, so a path that already presents
+            # a rate has nothing to put beside. `flow` states `q` as its own
+            # value, and a second one drew `q = 5 W` twice. Derived from the
+            # tables rather than naming the kind, so a second rate-valued kind
+            # is covered the day it is added.
+            if QUANTITY.get(b.kind) == RATE and b.rate is not None:
+                raise DiagramError(
+                    f"branch {b.source}-{b.target} is a {b.kind}, whose value "
+                    f"is already a rate in {RATE!r}; got a second one "
+                    f"{b.rate!r}. Put the number in `value`")
             if b.rate is not None:
                 _value(b.rate, f"branch {b.source}-{b.target}")
                 if not self.units.get(RATE):
