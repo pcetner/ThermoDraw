@@ -27,26 +27,27 @@ class DiagramBuilder:
 
     # ------------------------------------------------------------- the parts
     def node(self, node_id, label=None, value=None, at=None, kind="free",
-             sub="", angle=0.0):
+             sub="", angle=0.0, side="auto"):
         self.diagram.nodes.append(M.Node(
             id=node_id, kind=kind, label=label, sub=sub, value=value,
-            at=at, angle=angle))
+            at=at, angle=angle, side=side))
         return self
 
     def branch(self, source, target, kind="cond", label=None, value=None,
-               sub="", via=None, at=None, angle=None):
+               sub="", via=None, at=None, angle=None, side="auto"):
         """`sub` is only meaningful on a capacitance, where the subscript
         names a place. A resistance carries its own, naming the mechanism."""
         self.diagram.branches.append(M.Branch(
             source=source, target=target, kind=kind, label=label, sub=sub,
-            value=value, via=list(via or []), at=at, angle=angle))
+            value=value, via=list(via or []), at=at, angle=angle,
+            side=side))
         return self
 
     def source(self, target, kind="diss", label=None, value=None, sub="",
-               at=None, angle=0.0):
+               at=None, angle=0.0, side="auto"):
         self.diagram.sources.append(M.Source(
             target=target, kind=kind, label=label, sub=sub, value=value,
-            at=at, angle=angle))
+            at=at, angle=angle, side=side))
         return self
 
     def rail(self, reference, y, span=None):

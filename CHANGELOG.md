@@ -5,6 +5,28 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **`side` on nodes, branches and sources.** `core.annotate` has taken an
+  explicit label side since the occupancy work, and `layout.Label` has carried
+  the field, but the model had nowhere to write it — so the override existed
+  in Python and was unreachable from a diagram written as data. A parallel
+  pair is where it is missed: both branches are horizontal, both labels choose
+  "up", and the lower one lands inside the loop. Accepts `auto` (the default,
+  and the previous behaviour exactly), `up`, `down`, `left`, `right`.
+
+### Changed
+
+- `docs/schema.md` documents `side`, the per-kind unit each source reads, and
+  two layout habits that were previously only visible by reading `hero.json`:
+  turn a `via` clear of the node before going vertical, and set `side` on a
+  parallel pair. The old advice — "put parallel paths 80 above and below the
+  main line" — led straight into both problems.
+- `angle` on a `fixed` node is documented as not turning the boundary wall,
+  which it never did.
+
 ## [0.2.0] - 2026-08-31
 
 0.1.0 was a symbol library: it drew one symbol at a time, at coordinates you

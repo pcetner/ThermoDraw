@@ -129,7 +129,8 @@ def layout(diagram):
                                   if M.BRANCH_SUB[b.kind] is not None
                                   else b.sub),
                         value=diagram.value_text(b.kind, b.value),
-                        half=sym.half, half_len=sym.half_len)))
+                        half=sym.half, half_len=sym.half_len,
+                        side=b.side)))
 
     if diagram.rail:
         xs = [n.at[0] for n in diagram.nodes if n.at]
@@ -149,7 +150,8 @@ def layout(diagram):
             label=Label(user=s.label,
                         name=S.S_(M.SOURCE_SYMBOL[s.kind], s.sub),
                         value=diagram.value_text(s.kind, s.value),
-                        half=sym.half, half_len=sym.half_len)))
+                        half=sym.half, half_len=sym.half_len,
+                        side=s.side)))
         rad = math.radians(angle)
         head = (centre[0] + math.cos(rad) * sym.half_len,
                 centre[1] + math.sin(rad) * sym.half_len)
@@ -171,7 +173,8 @@ def layout(diagram):
             "node", at=at, angle=n.angle,
             label=Label(user=n.label, name=S.S_("T", n.sub),
                         value=diagram.value_text(n.kind, n.value),
-                        half=half, half_len=half_len)))
+                        half=half, half_len=half_len,
+                        side=n.side)))
         if n.kind == "fixed":
             out.append(Placement("wire", points=[at, (at[0], at[1] + 12)]))
             out.append(Placement("ground", at=(at[0], at[1] + 12), angle=90))
