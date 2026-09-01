@@ -466,6 +466,42 @@ def strip(sym, fluid=False):
     return canvas(CW * len(ANGLES), CH, "".join(body), fluid)
 
 
+# One card, for the dictionary: a single symbol at 0° with its label.
+#
+# The width is the same for every card and the height is not, which is the
+# whole trick. A card is published at width="100%", so the width alone fixes
+# the scale: every glyph on the page is drawn at one size and a reader
+# comparing two cards is comparing the drawings rather than two zoom levels.
+# The height is then free to fit each symbol, and it should — a free node
+# padded out to a thermal break's depth sits in a third of its own frame with
+# nothing under it.
+#
+# 76 is measured, not guessed: a box symbol's leads reach 62 either side and
+# the widest label is a heat pipe's at 58.
+DW, DPAD = 152, 12
+DCX = DW / 2
+
+
+def card(sym, fluid=False):
+    """One symbol at 0°, labelled as the library would label it.
+
+    Measured twice: once to find where the solver put the text, and again to
+    draw it once the frame that holds both is known.
+    """
+    def place(cy, out):
+        out.append(f'<g transform="{S.xf(DCX, cy, 0)}">{sym.draw(0)}</g>')
+        return S.annotate(DCX, cy, 0, out, user=sym.user, name=sym.text,
+                          value=sym.value, half=sym.half,
+                          half_len=sym.half_len)
+
+    _, top, _, bh = place(0.0, [])
+    across = sym.ink[1]
+    y0, y1 = min(-across, top), max(across, top + bh)
+    body = []
+    place(DPAD - y0, body)
+    return canvas(DW, (y1 - y0) + 2 * DPAD, "".join(body), fluid)
+
+
 REGION_SLOTS = ["top left", "top", "top right", "left", "centre", "right",
                 "bottom left", "bottom", "bottom right"]
 
