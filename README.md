@@ -90,6 +90,11 @@ clean, 1 on a warning or an error, 2 when the file could not be read. A note
 is advice and does not fail the run — the report above exits 0 — unless you
 pass `--strict`. Every finding names the schema field that fixes it.
 
+`--physics` asks a different question: whether the numbers agree with each
+other — what arrives at each node against what its temperatures and
+resistances say leaves. It is opt-in, because a sketch with placeholder
+numbers is a diagram too; ask for it when you believe the numbers.
+
 A clean report is not the same as the right diagram, so there is a second
 question:
 

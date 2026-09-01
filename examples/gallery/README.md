@@ -80,4 +80,6 @@ severed network their agents could only describe in prose. `03-cryogenic`
 reports `parallel-pair-same-side` twice: its agent set `side` explicitly to
 silence that note, as the remedy said to, and the note later stopped being
 silenceable by its own remedy. All three are left as they were drawn: the
-findings are the point.
+findings are the point. And all five fail `thermodraw check --physics`, added
+later still: the numbers their agents were given, or chose, do not close at
+every node. That too is left as drawn — these are evidence, not examples.

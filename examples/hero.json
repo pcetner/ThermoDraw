@@ -2,9 +2,9 @@
   "title": "A power device from junction to still air",
   "units": {"R": "K/W", "C": "J/K", "T": "°C", "P": "W"},
   "nodes": [
-    {"id": "j", "label": "Junction", "sub": "j", "value": "112", "at": [200, 150]},
-    {"id": "c", "label": "Case", "sub": "c", "value": "78", "at": [424, 150]},
-    {"id": "s", "label": "Sink base", "sub": "s", "value": "61", "at": [648, 150]},
+    {"id": "j", "label": "Junction", "sub": "j", "value": "126", "at": [200, 150]},
+    {"id": "c", "label": "Case", "sub": "c", "value": "110", "at": [424, 150]},
+    {"id": "s", "label": "Sink base", "sub": "s", "value": "103", "at": [648, 150]},
     {"id": "amb", "kind": "fixed", "label": "Still air", "sub": "amb",
      "value": "40", "at": [936, 372], "angle": 90}
   ],
