@@ -9,7 +9,7 @@ polyline{fill:none;stroke:#1b1b1f;stroke-width:1.8;stroke-linecap:round;stroke-l
 .gapfill{fill:#ffffff;stroke:none}
 .region{fill:none;stroke:#6b7078;stroke-width:1.4;stroke-dasharray:6 5}
 .tick{stroke:#e2e4e9;stroke-width:1}
-text{font-family:"IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;fill:#16181d}
+text{font-family:"IBM Plex Sans","ThermoDraw Sans","Helvetica Neue",Arial,sans-serif;fill:#16181d}
 .lbl{font-size:13px;font-style:italic}
 .val{font-size:13px;fill:#16181d;font-style:normal}
 .eq{font-size:13px;fill:#16181d;font-style:normal}

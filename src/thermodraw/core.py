@@ -24,6 +24,9 @@ import hashlib
 import math
 import re
 
+from ._metrics import FALLBACK as _FALLBACK
+from ._metrics import WIDTHS as _WIDTHS
+
 SW = 1.8
 
 
@@ -41,26 +44,28 @@ def uid(prefix, *parts):
 
 
 # --------------------------------------------------------------- text metrics
-CHW = {"i": .30, "j": .30, "l": .30, "t": .38, "f": .35, "r": .40, "I": .34,
-       "m": .85, "w": .75, "M": .85, "W": .95, " ": .28, ".": .28, ",": .28,
-       "1": .50, "°": .40, "→": .95, "″": .34, "-": .35}
+# Which face each text class is drawn in, so a run is measured in the face
+# that will actually render it. The user label is semibold and runs about 4%
+# wider than regular — the same size as the error the measured tables remove.
+CLASS_FACE = {"user": "semibold", "lbl": "italic"}
 
 
 _ENT = re.compile(r"&(#\d+|#x[0-9a-fA-F]+|[a-zA-Z]+);")
 
 
-def text_w(s, size):
+def text_w(s, size, face="regular"):
     s = _ENT.sub("\u2033", s)
-    return sum(CHW.get(c, .55) for c in s) * size
+    table, fallback = _WIDTHS[face], _FALLBACK[face]
+    return sum(table.get(c, fallback) for c in s) * size
 
 
-def measure(s, size):
+def measure(s, size, face="regular"):
     """Width of a run that may contain one smaller <tspan> subscript."""
     if "<tspan" not in s:
-        return text_w(s, size)
+        return text_w(s, size, face)
     base, _, rest = s.partition("<tspan")
     inner = rest.partition(">")[2].partition("</tspan>")[0]
-    return text_w(base, size) + text_w(inner, size * 0.7)
+    return text_w(base, size, face) + text_w(inner, size * 0.7, face)
 
 
 def sym_text(base, subscript=None):
@@ -134,7 +139,7 @@ WRAP_AT = 168
 
 
 def _line_w(line):
-    return (sum(measure(t, s) for t, s, _ in line)
+    return (sum(measure(t, s, CLASS_FACE.get(c, "regular")) for t, s, c in line)
             + RUN_GAP * (len(line) - 1))
 
 
@@ -197,7 +202,7 @@ def annotate(cx, cy, a, out, user=None, name=None, value=None, half=10,
         for txt, sz, cls in line:
             out.append(f'<text class="{cls}" x="{x:.1f}" y="{base:.1f}" '
                        f'text-anchor="start">{txt}</text>')
-            x += measure(txt, sz) + RUN_GAP
+            x += measure(txt, sz, CLASS_FACE.get(cls, "regular")) + RUN_GAP
         y += lh
 
 

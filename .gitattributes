@@ -3,3 +3,8 @@
 # stable across platforms.
 * text=auto eol=lf
 *.svg text eol=lf
+
+# Fonts are binary: eol conversion would corrupt them.
+*.woff2 binary
+*.ttf binary
+*.otf binary
