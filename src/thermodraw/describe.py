@@ -63,7 +63,11 @@ def label_text(label):
         return ""
     stated = " = ".join(x for x in (label.name, label.value) if x)
     parts = [x for x in (label.user, stated) if x]
-    parts += [x for x in getattr(label, "extra", ()) if x]
+    # An extra is prose or a `(symbol, value)` pair; a pair reads the same
+    # way the value line above it does.
+    for x in getattr(label, "extra", ()):
+        if x:
+            parts.append(x if isinstance(x, str) else " = ".join(x))
     plain = _TAG.sub("", _TSPAN.sub(r"_\1", " | ".join(parts)))
     return html.unescape(plain)
 

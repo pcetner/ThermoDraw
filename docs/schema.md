@@ -127,7 +127,7 @@ A path heat takes between two nodes.
 | `label` | the words above the box |
 | `sub` | **only** for `cap`, where the subscript names a place |
 | `value` | unit appended from `units.R` (`units.C` for `cap`, `units.q` for `flow`). Optional: a path with no number draws its label alone |
-| `rate` | what this path actually carries, in `units.q`, beside the resistance it presents |
+| `rate` | what this path actually carries. Drawn as `q = 12 W` on its own line, in `units.q`, under the resistance it presents |
 | `count` | how many identical ones there are |
 | `arrangement` | `parallel` or `series`. Required with `count` |
 | `via` | `[[x, y], ...]` waypoints, for a path that is not a straight line |

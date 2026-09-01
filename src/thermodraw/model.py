@@ -333,7 +333,12 @@ class Diagram:
         return self.units.get(QUANTITY.get(kind, ""), "")
 
     def rate_text(self, value):
-        """A heat rate as it will be drawn, or None. Always in `units.q`."""
+        """A heat rate with its unit, or None. Always in `units.q`.
+
+        The number and unit only. `layout` pairs it with `RATE` so it is
+        drawn `q = 12 W`, because a bare quantity under a resistance is an
+        unexplained second number.
+        """
         text = _fmt(value)
         if text is None:
             return None

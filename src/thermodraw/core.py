@@ -296,6 +296,19 @@ def _line_h(line):
     return max(s for _, s, _ in line) * LINE_LEAD
 
 
+def _stated(name, value, size, vsize):
+    """`symbol = value` as one line, or two when it will not fit.
+
+    One copy, because every quantity on the page is written this way and a
+    second copy of the wrap rule is how the extra lines would drift from the
+    value line they sit under.
+    """
+    eq = [(name, size, "lbl"), ("=", size, "eq"), (value, vsize, "val")]
+    if _line_w(eq) > WRAP_AT:
+        return [[eq[0]], [eq[1], eq[2]]]
+    return [eq]
+
+
 def build_block(user=None, name=None, value=None, extra=(),
                 size=13, vsize=13, usize=11.5):
     """Lay the texts into lines. User label always first.
@@ -304,29 +317,36 @@ def build_block(user=None, name=None, value=None, extra=(),
     size and weight, because that is what they are: two sides of one
     statement. Only the italic marks the variable.
 
-    `extra` is further statements about the same element, one line each, in
-    the value's own style: the heat rate a path carries, or how many of it
-    there are. They are separate lines rather than a suffix on the value
-    because the value line already wraps at `WRAP_AT`, and a suffix would
-    have to wrap with it and then read as part of the number.
+    `extra` is further statements about the same element, one line each.
+    They are separate lines rather than a suffix on the value because the
+    value line already wraps at `WRAP_AT`, and a suffix would have to wrap
+    with it and then read as part of the number.
+
+    An extra is either prose, set in the value's style, or a
+    `(symbol, value)` pair set exactly like the value line above it. The
+    pair form exists because a bare quantity is not a statement: a path
+    carrying 12 W drew `12 W` under `R_cond = 0.35 K/W`, an unlabelled
+    number in the same style as the resistance, with nothing to say which
+    was specified and which is what the path turned out to carry. Prose
+    names itself — "8 in parallel" cannot be read as a quantity — so it
+    stays a plain string.
     """
     lines = []
     if user:
         lines.append([(user, usize, "user")])
     if name and value:
-        eq = [(name, size, "lbl"), ("=", size, "eq"), (value, vsize, "val")]
-        if _line_w(eq) > WRAP_AT:
-            lines.append([eq[0]])
-            lines.append([eq[1], eq[2]])
-        else:
-            lines.append(eq)
+        lines += _stated(name, value, size, vsize)
     elif name:
         lines.append([(name, size, "lbl")])
     elif value:
         lines.append([(value, vsize, "val")])
     for line in extra:
-        if line:
+        if not line:
+            continue
+        if isinstance(line, str):
             lines.append([(line, vsize, "val")])
+        else:
+            lines += _stated(line[0], line[1], size, vsize)
     return lines
 
 

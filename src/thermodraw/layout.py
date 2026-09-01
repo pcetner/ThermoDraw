@@ -12,7 +12,7 @@ parallel path is expressed until the router can find one for itself.
 """
 import math
 from dataclasses import dataclass, field
-from typing import List, Optional, Sequence, Tuple
+from typing import List, Optional, Sequence, Tuple, Union
 
 from . import model as M
 from . import symbols as S
@@ -41,7 +41,8 @@ class Label:
     user: Optional[str] = None
     name: Optional[str] = None
     value: Optional[str] = None
-    extra: Sequence[str] = ()
+    # Prose, or a `(symbol, value)` pair written like the value line.
+    extra: Sequence[Union[str, Sequence[str]]] = ()
     half: float = 5.5
     half_len: float = 5.5
     side: str = "auto"
@@ -370,11 +371,15 @@ def layout(diagram):
         base = M.BRANCH_SYMBOL[b.kind]
         sub = (M.BRANCH_SUB[b.kind] if M.BRANCH_SUB[b.kind] is not None
                else b.sub)
+        # A rate is written `q = 12 W`, not `12 W`. It is a quantity, and
+        # every quantity on the page is stated with its own symbol; without
+        # one it reads as a second, unexplained number under the resistance.
+        rate = diagram.rate_text(b.rate)
         label = Label(user=b.label,
                       name=S.S_(base, sub) if base else None,
                       value=diagram.value_text(b.kind, b.value),
                       extra=[x for x in (
-                          diagram.rate_text(b.rate),
+                          (S.S_(M.RATE), rate) if rate else None,
                           diagram.count_text(b.count, b.arrangement)) if x],
                       half=sym.half, half_len=sym.half_len,
                       side=b.side)
