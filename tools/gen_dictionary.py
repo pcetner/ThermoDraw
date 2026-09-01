@@ -48,7 +48,7 @@ WHERE = {"node": ("Node", "nodes", "A place that has a temperature."),
          "branch": ("Path", "branches",
                     "A route heat takes between two places."),
          "source": ("Source", "sources",
-                    "Heat arriving from outside the network.")}
+                    "Heat entering or leaving the network at one place.")}
 CATEGORIES = ("node", "branch", "source")
 
 # What each symbol says, when to use it, and how it is written.
@@ -71,12 +71,15 @@ ENTRIES = {
     "free": dict(
         where="node",
         what="A place in the network that has a temperature, with nothing "
-             "holding it there. Its temperature is whatever the paths meeting "
-             "at it settle on, which usually makes it the thing you are "
-             "trying to work out. Most nodes are free ones. It is also the "
-             "default, so leaving <code>kind</code> out gives you this.",
-        use="The outside of a mug of tea. Nothing sets its temperature "
-            "directly; it lands wherever the tea and the room leave it.",
+             "holding it there. Its temperature is set by the heat arriving "
+             "and leaving: at steady state the two must be equal, and that "
+             "is the condition you solve for it. This is usually the "
+             "temperature you are trying to find. Most nodes are free ones, "
+             "and it is the default, so leaving <code>kind</code> out gives "
+             "you this.",
+        use="The outside of a mug of tea. Nothing fixes its temperature; it "
+            "takes the value that balances heat in from the tea against "
+            "heat out to the room.",
         code={"id": "mug", "kind": "free", "label": "Mug surface",
               "sub": "s", "value": "48"}),
     "fixed": dict(
@@ -84,7 +87,7 @@ ENTRIES = {
         what="A temperature imposed from outside, which nothing the network "
              "does can change. The wire runs down into a hatched wall, the "
              "drafting mark for a boundary: heat may cross it in either "
-             "direction, at any rate, without moving the number.",
+             "direction, at any rate, without changing its temperature.",
         use="The air in the room. One mug of tea cannot warm it up, so its "
             "temperature is a given rather than an answer.",
         code={"id": "room", "kind": "fixed", "label": "Room air",
@@ -93,9 +96,10 @@ ENTRIES = {
         where="node",
         what="A boundary the network touches mechanically but not thermally. "
              "It is the fixed node with its connecting stub taken away, and "
-             "the visible gap is the entire statement: nothing crosses here. "
-             "There is no heat path, so usually no temperature to state "
-             "either, and the label stands alone.",
+             "that gap is the only difference between the two: nothing "
+             "crosses here. With no heat path there is usually no "
+             "temperature worth stating, so most break nodes carry a label "
+             "and no value.",
         use="The rubber feet under a laptop. They hold it to the desk without "
             "letting heat into it.",
         code={"id": "desk", "kind": "break", "label": "Rubber feet"}),
@@ -113,18 +117,18 @@ ENTRIES = {
     "cond": dict(
         where="branch",
         what="Heat crossing solid material. Section hatching is the drafting "
-             "convention for solid material, so the interior says exactly "
-             "what is being crossed. The thicker the material and the worse "
-             "it conducts, the larger the resistance.",
+             "convention for solid material, which is what the interior of "
+             "the box is naming. The thicker the material and the worse it "
+             "conducts, the larger the resistance.",
         use="The wall of a mug, between the tea inside and your hand outside.",
         code={"from": "tea", "to": "mug", "kind": "cond", "label": "Mug wall",
               "value": "0.35"}),
     "conv": dict(
         where="branch",
         what="Heat leaving a surface into a moving fluid. The streamlines "
-             "inside the box are the fluid passing over the surface. The "
-             "faster it moves and the more surface it touches, the smaller "
-             "the resistance.",
+             "inside the box stand for that fluid passing over the surface. "
+             "The faster it moves and the more surface it touches, the "
+             "smaller the resistance.",
         use="A hot drink cooling into the air around it, and cooling faster "
             "when you blow across the top.",
         code={"from": "mug", "to": "room", "kind": "conv",
@@ -145,8 +149,11 @@ ENTRIES = {
     "contact": dict(
         where="branch",
         what="The resistance of two solids pressed together. No two surfaces "
-             "are perfectly flat, so they touch only in places and heat is "
-             "held up at the join. Each half is hatched in the opposite "
+             "are perfectly flat, so they touch only in places. The area "
+             "actually carrying heat is a fraction of the area you can "
+             "measure, which is what makes the resistance, and there is a "
+             "step in temperature across the join. Each half is hatched in "
+             "the opposite "
              "direction with a seam between them, which is the drafting "
              "convention for two parts meeting in section. Hatched the "
              "same way, it would read as one solid block.",
@@ -169,8 +176,9 @@ ENTRIES = {
               "label": "Flame → Pan base", "value": "0.15"}),
     "pipe": dict(
         where="branch",
-        what="A link so good that both ends sit at nearly the same "
-             "temperature. Inside it a fluid boils at the hot end and "
+        what="A path of such low resistance that both ends sit at nearly "
+             "the same temperature. Inside it a fluid boils at the hot end "
+             "and "
              "condenses at the cold one, which is what the opposed arrows "
              "show: vapour out along one face, liquid back along the other. "
              "It is still drawn as a box with a resistance, because a real "
@@ -194,11 +202,12 @@ ENTRIES = {
               "sub": "window", "label": "Double glazing", "value": "0.31"}),
     "cap": dict(
         where="branch",
-        what="Thermal mass: the heat a thing has to take in before its "
-             "temperature will rise. It stores rather than conducts, so it "
-             "hangs from a node down to the reference rail instead of lying "
-             "between two places. It matters only while things are "
-             "changing. Once everything has settled it carries nothing.",
+        what="Thermal mass: how much heat it takes to raise something one "
+             "degree, in joules per kelvin. It stores heat rather than "
+             "conducting it, so it hangs from a node down to the reference "
+             "rail instead of lying between two places. It matters only "
+             "while things are changing. Once everything has settled it "
+             "carries nothing.",
         use="A cast-iron pan: slow to heat up, and just as slow to cool down "
             "again.",
         unit="J/K",
@@ -226,16 +235,18 @@ ENTRIES = {
              "names no quantity, so it takes no value and gets no second line "
              "of text.",
         use="The plastic handle on a saucepan. It is bolted on to hold the "
-            "pan, and chosen so that heat does not follow.",
+            "pan, and made of something that conducts too badly to carry "
+            "heat worth counting.",
         code={"from": "pan", "to": "handle", "kind": "break",
               "label": "Plastic handle"}),
 
     "diss": dict(
         where="source",
-        what="Heat appearing at a place because something there is making it. "
-             "It is an arrow rather than a box, because heat generated at a "
-             "place does not travel to it from anywhere else. It simply "
-             "appears there, so the arrow always points inward.",
+        what="Heat released at a place because energy in another form is "
+             "being converted there, usually electrical work. It is an "
+             "arrow rather than a box, because that heat does not travel to "
+             "the place from anywhere else; it is produced there, so the "
+             "arrow always points inward.",
         use="A light bulb, which turns most of the power it draws straight "
             "into heat.",
         code={"to": "bulb", "kind": "diss", "label": "Bulb power",
@@ -262,11 +273,12 @@ ENTRIES = {
         code={"from": "room", "kind": "flow", "value": "38"}),
     "flux": dict(
         where="source",
-        what="A heat rate per unit area going into or out of a surface. "
-             "Several arrows stand against a hatched band, because a flux is "
-             "spread over an area and has no single line of action to borrow "
-             "the heat-flow arrow. It is measured in its own quantity, "
-             "<em>q&#8243;</em>, and never shares units with a heat rate.",
+        what="A heat rate per unit area going into or out of a surface. It "
+             "is spread across that surface rather than concentrated on one "
+             "line, which is why it is drawn as several arrows against a "
+             "hatched band instead of as the single heat-flow arrow. It is "
+             "measured in its own quantity, <em>q&#8243;</em>, and never "
+             "shares units with a heat rate.",
         use="Sunshine on a roof, given per unit of area rather than as one "
             "total for the whole roof.",
         code={"to": "roof", "kind": "flux", "label": "Sun on roof",
@@ -434,10 +446,11 @@ def _slug(title):
 # This is the primer, not an entry.
 SHAPES = [
     ("cond", "A box is a resistance",
-     "Heat crosses it and comes out colder. The resistance is how much "
-     "temperature drop each watt costs, in kelvin per watt. The pattern "
-     "inside names what the heat is crossing: hatching for solid material, "
-     "streamlines for a moving fluid, wave arrows for radiation."),
+     "The same heat comes out as went in, but the far end is colder than "
+     "the near one. The resistance is how much of that temperature drop "
+     "each watt costs, in kelvin per watt. The pattern inside names what "
+     "the heat is crossing: hatching for solid material, streamlines for "
+     "a moving fluid, wave arrows for radiation."),
     ("diss", "An arrow is a rate",
      "A rate is heat per unit time, in watts. An arrow states how much heat "
      "arrives at one place, or leaves it, and states no resistance at all. "
