@@ -1,0 +1,55 @@
+{
+  "title": "Two-zone house with a ground-coupled slab, winter design day",
+  "units": {"R": "K/W", "C": "MJ/K", "T": "°C", "P": "W", "q": "W"},
+  "nodes": [
+    {"id": "roof", "label": "Roof surface", "sub": "roof", "value": "8", "at": [900, 100]},
+    {"id": "sky", "kind": "fixed", "label": "Sky", "sub": "sky", "value": "-15", "at": [2240, 100]},
+    {"id": "zu", "label": "Upper zone air", "sub": "up", "value": "23", "at": [620, 380]},
+    {"id": "zg", "label": "Ground zone air", "sub": "gf", "value": "21", "at": [900, 620], "angle": 135},
+    {"id": "w1", "kind": "corner", "at": [1160, 620]},
+    {"id": "w2", "kind": "corner", "at": [1420, 620]},
+    {"id": "w3", "kind": "corner", "at": [1680, 620]},
+    {"id": "w4", "kind": "corner", "at": [1940, 620]},
+    {"id": "out", "kind": "fixed", "label": "Outdoor air", "sub": "out", "value": "-4", "at": [2240, 620], "angle": 135},
+    {"id": "grd", "kind": "fixed", "label": "Deep ground", "sub": "grd", "value": "10", "at": [900, 1240], "side": "right"}
+  ],
+  "branches": [
+    {"from": "zg", "to": "w1", "kind": "cond", "label": "Gypsum board", "value": "0.011"},
+    {"from": "w1", "to": "w2", "kind": "cond", "label": "Mineral wool", "value": "0.185"},
+    {"from": "w2", "to": "w3", "kind": "cond", "label": "OSB sheathing", "value": "0.014"},
+    {"from": "w3", "to": "w4", "kind": "cond", "label": "Brick outer leaf", "value": "0.008"},
+    {"from": "w4", "to": "out", "kind": "conv", "label": "Outer face to air", "value": "0.012", "side": "down"},
+
+    {"from": "zg", "to": "out", "kind": "cond", "label": "Steel lintel bridge", "value": "0.42",
+     "via": [[960, 620], [960, 820], [2400, 820], [2400, 620]], "at": [1680, 820], "side": "up"},
+    {"from": "zg", "to": "out", "kind": "cond", "label": "Double glazing", "value": "0.31",
+     "via": [[940, 620], [940, 980], [2560, 980], [2560, 620]], "at": [1740, 980], "side": "down"},
+
+    {"from": "zg", "to": "grd", "kind": "cond", "label": "Slab to deep ground", "value": "0.6",
+     "at": [900, 1060], "side": "right"},
+
+    {"from": "zu", "to": "zg", "kind": "cond", "label": "Intermediate floor", "value": "0.09",
+     "via": [[900, 380]], "at": [900, 460], "side": "left"},
+
+    {"from": "roof", "to": "out", "kind": "conv", "label": "Roof to outdoor air", "value": "0.14",
+     "via": [[980, 100], [980, 240], [2240, 240]], "at": [1610, 240], "side": "down"},
+    {"from": "roof", "to": "sky", "kind": "rad", "label": "Roof to sky", "value": "0.22",
+     "at": [1570, 100], "side": "up"},
+
+    {"from": "zg", "to": "rail", "kind": "cap", "label": "Ground zone mass", "sub": "gf", "value": "2.1",
+     "via": [[620, 620], [620, 1420]], "at": [620, 1300], "side": "left"},
+    {"from": "zu", "to": "rail", "kind": "cap", "label": "Upper zone mass", "sub": "up", "value": "1.8",
+     "via": [[380, 380], [380, 1420]], "at": [380, 1300], "side": "left"}
+  ],
+  "sources": [
+    {"to": "zg", "kind": "diss", "label": "Internal gains", "sub": "int", "value": "600",
+     "at": [760, 760], "angle": 315},
+    {"to": "zg", "kind": "radin", "label": "Solar through glazing", "sub": "sol", "value": "850",
+     "at": [1120, 420], "angle": 135},
+    {"from": "zg", "kind": "flow", "label": "Infiltration 0.5 ACH", "sub": "inf", "value": "185",
+     "at": [760, 1060], "angle": 135},
+    {"to": "zu", "kind": "flow", "label": "Stairwell from lower zone", "sub": "st", "value": "240",
+     "at": [440, 240], "angle": 45}
+  ],
+  "rail": {"reference": "out", "y": 1420, "span": [380, 2240]}
+}

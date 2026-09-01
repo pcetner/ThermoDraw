@@ -1,0 +1,53 @@
+{
+  "title": "Liquid-helium dewar with a two-stage pulse-tube cryocooler",
+  "units": {"R": "K/W", "C": "J/K", "T": "K", "P": "W", "q": "W"},
+
+  "nodes": [
+    {"id": "v",  "kind": "fixed", "label": "Vacuum vessel", "sub": "v",
+     "value": "300", "at": [220, 460]},
+    {"id": "sh", "label": "Radiation shield", "sub": "sh",
+     "value": "40", "at": [760, 460], "angle": 135},
+    {"id": "cm", "label": "Cold mass", "sub": "cm",
+     "value": "4.2", "at": [1300, 460], "angle": 135}
+  ],
+
+  "branches": [
+    {"from": "v", "to": "sh", "kind": "cond",
+     "label": "G10 support struts, 0.6 W", "value": "433", "side": "down"},
+
+    {"from": "v", "to": "sh", "kind": "rad",
+     "label": "MLI blanket, 0.9 W", "value": "289",
+     "via": [[320, 460], [320, 310], [760, 310]]},
+
+    {"from": "v", "to": "sh", "kind": "cond",
+     "label": "HTS current leads", "value": "1720",
+     "via": [[320, 460], [320, 160], [760, 160]]},
+
+    {"from": "sh", "to": "cm", "kind": "cond",
+     "label": "G10 support struts, 0.05 W", "value": "716", "side": "down"},
+
+    {"from": "sh", "to": "cm", "kind": "rad",
+     "label": "MLI blanket, 0.02 W", "value": "1790",
+     "via": [[940, 460], [940, 310], [1300, 310]]},
+
+    {"from": "sh", "to": "cm", "kind": "cond",
+     "label": "Instrumentation wiring, 0.15 W", "value": "239",
+     "via": [[940, 460], [940, 160], [1300, 160]]},
+
+    {"from": "cm", "to": "rail", "kind": "cap",
+     "label": "Cold mass", "sub": "cm", "value": "900", "side": "left"}
+  ],
+
+  "sources": [
+    {"to": "sh", "kind": "diss", "label": "HTS lead Joule heating",
+     "sub": "J", "value": "1.2", "at": [600, 640], "angle": 315},
+
+    {"from": "sh", "kind": "flow", "label": "Cryocooler stage 1",
+     "sub": "1", "value": "35", "at": [920, 640], "angle": 45},
+
+    {"from": "cm", "kind": "flow", "label": "Cryocooler stage 2",
+     "sub": "2", "value": "1.5", "at": [1460, 640], "angle": 45}
+  ],
+
+  "rail": {"reference": "v", "y": 760, "span": [220, 1300]}
+}
