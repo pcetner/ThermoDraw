@@ -4,10 +4,15 @@ A ThermoDraw diagram is plain data. This page is the whole format; it is
 written to be pasted into a prompt.
 
 ```python
-from thermodraw import Diagram, render, layout
+from thermodraw import Diagram, layout, render, theme
 
-svg = render(layout(Diagram.from_json(text)))
+svg = theme.with_variables(render(layout(Diagram.from_json(text))))
 ```
+
+`render` alone emits CSS custom properties with no fallback, so pass its
+output through `theme` before saving it: `with_variables` for the web,
+`bake` for Word, slides and rasterisers. Without one of them the file draws
+nothing.
 
 ## Shape
 
@@ -68,7 +73,7 @@ A place with a temperature.
 | `label` | the words above the symbol — the top line, always |
 | `sub` | subscript on `T`. Identity: you choose it, it names a place |
 | `value` | temperature, unit appended from `units.T` |
-| `at` | `[x, y]`. **Required in 0.2** |
+| `at` | `[x, y]`. **Required** until the network layer lands |
 | `angle` | turns the node's label frame, in degrees. It moves the label and nothing else |
 | `side` | `auto` (default), `up`, `down`, `left`, `right` — where the label goes |
 
@@ -125,9 +130,9 @@ A path heat takes between two nodes.
 | `from`, `to` | node ids, or the literal `"rail"` |
 | `kind` | `cond`, `conv`, `rad`, `contact`, `spread`, `pipe`, `mixed`, `cap`, `flow`, `break` |
 | `label` | the words above the box |
-| `sub` | **only** for `cap`, where the subscript names a place |
-| `value` | unit appended from `units.R` (`units.C` for `cap`, `units.q` for `flow`). Optional: a path with no number draws its label alone |
-| `rate` | what this path actually carries. Drawn as `q = 12 W` on its own line, in `units.q`, under the resistance it presents |
+| `sub` | yours on the kinds whose subscript the library does not set: `cap`, where it names a place; `mixed`, where it names the mechanism; `flow`. Ignored on `break`, and overridden on every resistance kind |
+| `value` | unit appended from `units.R` (`units.C` for `cap`, `units.q` for `flow`). Optional: a path with no number draws its label alone. Refused on `break` |
+| `rate` | what this path actually carries. Drawn as `q = 12 W` on its own line, in `units.q`, under the resistance it presents. Needs `units.q`. Refused on `flow`, whose value already is a rate, and on `break` |
 | `count` | how many identical ones there are |
 | `arrangement` | `parallel` or `series`. Required with `count` |
 | `via` | `[[x, y], ...]` waypoints, for a path that is not a straight line |
@@ -151,11 +156,12 @@ the only **directed** branch: `from` and `to` are the way the heat goes, and
 `angle` is refused on one, since turning the symbol would let the drawing
 contradict the data. Route it with `via` instead.
 
-The subscript on a resistance is **not** yours to set: `cond`, `conv`, `rad`
-and `contact` each carry their own, and they name the physics. `mixed` is the
-exception, being the one kind whose mechanism the library does not know. Which
-conduction path this is belongs in `label`, so nothing is named twice. On a
-capacitance the subscript names a place, so `sub` is yours.
+The subscript on a resistance is **not** yours to set: `cond`, `conv`, `rad`,
+`contact`, `spread` and `pipe` each carry their own, and they name the
+physics. `mixed` is the exception, being the one kind whose mechanism the
+library does not know. Which conduction path this is belongs in `label`, so
+nothing is named twice. On a capacitance the subscript names a place, so
+`sub` is yours; on `flow` it is yours too.
 
 `"to": "rail"` drops straight down to the reference rail from wherever the
 other end is. That is how thermal mass is hung off a transient model.
@@ -198,8 +204,9 @@ chain; `check` reports the overlap if they are not.
 `break` is the odd one out: it draws an open circuit — wire, crossbar, gap,
 crossbar, wire — for a mechanical connection that carries no heat, such as a
 standoff or a mount. It names no quantity, so it takes **no `value` and no
-`sub`**, and one given a value is refused. Everything else on the table works
-on it. The same word is also a node `kind`, and it means the same thing there:
+`rate`**, and one given either is refused. `sub` is accepted and does
+nothing, there being no symbol for it to sit under. Everything else on the
+table works on it. The same word is also a node `kind`, and it means the same thing there:
 a break at a boundary rather than between two nodes.
 
 ## Sources
@@ -227,7 +234,8 @@ unit area).
 
 A source also takes `count`, for several identical ones. They simply add, so there is no `arrangement` to state.
 
-Only the two annotation kinds may point away. `diss` is dissipation
+Only `flow` and `flux` may point away — they annotate heat crossing a
+boundary, in either direction. `diss` is dissipation
 *appearing* at a node rather than travelling to it, and `radin` is radiation
 *arriving* — for radiation leaving, draw a `rad` branch to a boundary node,
 which is the thing that actually carries it.
@@ -307,12 +315,12 @@ the README.
 
 ## Coordinates
 
-Every node needs `at` in 0.2. The library places what you give it and works
+Every node needs `at` for now. The library places what you give it and works
 out the wire runs, the label positions and the canvas size for itself.
 
-Solving for coordinates you leave out is the network layer, in 0.3. It changes
-one stage — `layout` — and nothing in this schema. A diagram written today
-keeps working; it just stops needing the numbers.
+Solving for coordinates you leave out is the network layer, which is not
+built yet. It changes one stage — `layout` — and nothing in this schema. A
+diagram written today keeps working; it just stops needing the numbers.
 
 Until then, a workable habit: heat runs left to right, hottest node on the
 left, the reference rail along the bottom. Space nodes about 220 apart and put
@@ -386,8 +394,9 @@ note: [parallel-pair-same-side] branch 2 s->amb and branch 3 s->amb run
 "11 labels placed" is every node except `corner` ones, plus every branch and
 every source — so it is the count you can work out from the file, and a
 number lower than that means a label was dropped rather than moved. It exits
-0 when clean, 1 when it found something, and 2 when the file could not be
-read. `--json` for a machine, `--strict` to fail on notes too,
+0 when clean, 1 on a warning or an error, and 2 when the file could not be
+read or was not a diagram. A note is advice and does not fail the run — the
+report above exits 0 — unless you pass `--strict`. `--json` for a machine,
 `--quiet` for findings alone. From Python it is `check(diagram)`, returning a
 report with `.ok`, `.findings` and `.text()`; a `DiagramBuilder` has `.check()`
 beside `.svg()`.
@@ -443,39 +452,43 @@ placements: ground x1, node x4, symbol/cap x2, symbol/cond x1,
             symbol/contact x1, symbol/conv x1, symbol/diss x1, symbol/rad x1,
             wire x15
 
-nodes:
-  j              free     at (200, 150)
-  ...
-
 rail: y 372, span (200, 936), reference 'amb'
 
-nodes:
-  j              free     at (200, 150)
-  ...
-
-elements:
-  branch 0 j->c    symbol/cond   (312, 150)       above   103x33  Die attach | R_cond = 0.35 K/W
-  branch 2 s->amb  symbol/conv   (816, 70)        above   102x33  Fins → air | R_conv = 1.80 K/W
-  branch 3 s->amb  symbol/rad    (816, 238)       above    97x33  Case → walls | R_rad = 6.40 K/W
-  branch 4 j->rail symbol/cap    (200, 278) a90   right    72x33  Die | C_j = 0.9 J/K
-  ...
-```
-
-Element counts against what you wrote, the canvas you will get, where each
-symbol sits and which way it is turned, what each label reads, and which way
-it went — including `flipped` and `pushed N` where the solver had to work for
-it. Above, `branch 2` and `branch 3` both went "above", which is the parallel
-pair `check` notes, visible directly rather than only graded.
-
-It also prints the **network**: which nodes are joined to which, and by what.
-
-```
 network:
   j --cond-- c
   c --contact-- s
   s --conv/rad-- amb
   j --cap-- rail
+  s --cap-- rail
+
+nodes:
+  j              free     at (200, 150)
+  c              free     at (424, 150)
+  s              free     at (648, 150)
+  amb            fixed    at (936, 372)
+
+elements:
+  branch 0 j->c          symbol/cond     (312, 150)        above         103x33   Die attach | R_cond = 0.35 K/W
+  branch 1 c->s          symbol/contact  (536, 150)        above         113x33   Grease | R_contact = 0.15 K/W
+  branch 2 s->amb        symbol/conv     (816, 70)         above         102x33   Fins → air | R_conv = 1.80 K/W
+  branch 3 s->amb        symbol/rad      (816, 238)        above          97x33   Case → walls | R_rad = 6.40 K/W
+  branch 4 j->rail       symbol/cap      (200, 278) a90    right          72x33   Die | C_j = 0.9 J/K
+  branch 5 s->rail       symbol/cap      (648, 278) a90    right          70x33   Sink | C_s = 86 J/K
+  source 0 -> j          symbol/diss     (96, 150)         above          77x33   Switching loss | P_d = 45 W
+  node 'j'               node            (200, 150)        above          70x33   Junction | T_j = 112 °C
+  node 'c'               node            (424, 150)        above          64x33   Case | T_c = 78 °C
+  node 's'               node            (648, 150)        above          64x33   Sink base | T_s = 61 °C
+  node 'amb'             node            (936, 372) a90    right          78x33   Still air | T_amb = 40 °C
 ```
+
+That is the real output for `examples/hero.json`, not an abridgement. Element
+counts against what you wrote, the canvas you will get, where each symbol
+sits and which way it is turned, what each label reads, and which way it
+went — including `flipped` and `pushed N` where the solver had to work for
+it. Above, `branch 2` and `branch 3` both went "above", which is the parallel
+pair `check` notes, visible directly rather than only graded.
+
+The **network** block is which nodes are joined to which, and by what.
 
 Two mechanisms on one line, as with `s --conv/rad-- amb`, are two branches
 between the same pair. If the drawing is in more than one piece it says so

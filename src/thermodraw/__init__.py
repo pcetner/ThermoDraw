@@ -6,10 +6,14 @@ turn it into a document:
     dict / JSON  ->  Diagram  ->  placements  ->  SVG
                       model      layout        render
 
-    from thermodraw import Diagram, layout, render, save
+    from thermodraw import Diagram, layout, render, save, theme
 
     d = Diagram.from_json(open("diagram.json").read())
-    save(render(layout(d)), "out.svg")
+    save(theme.with_variables(render(layout(d))), "out.svg")
+
+`render` emits CSS custom properties with no fallback, so its output goes
+through `theme` before it is saved: `with_variables` for the web, `bake` for
+Word, slides and rasterisers. Without one of them the file draws nothing.
 
 `DiagramBuilder` is sugar over the same data, and `symbols` still places one
 symbol at a time for anything the model does not yet cover.
@@ -28,7 +32,7 @@ from .io import save
 from .model import Branch, Diagram, DiagramError, Node, Rail, Source
 from .symbols import SYMBOLS, Symbol
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 __all__ = [
     # the data
     "Diagram", "Node", "Branch", "Source", "Rail", "DiagramError",

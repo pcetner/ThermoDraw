@@ -28,7 +28,7 @@ def build(**parts):
     ([0, 0, 0], "exactly two"),
     ([0], "exactly two"),
     ("0,0", "pair of numbers"),
-    (None, "0.3"),
+    (None, "network layer"),
 ])
 def test_bad_coordinates_are_caught_before_drawing(at, expected):
     with pytest.raises(DiagramError, match=expected):
