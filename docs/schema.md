@@ -432,9 +432,26 @@ advance, because they are the ones a first draft hits:
 - `parallel-pair-same-side` is a note rather than a warning because the hero
   diagram breaks it and is fine. Take it as a prompt to look, not an error.
 
-Two things it does not check: whether the numbers are right, and whether the
-network is the one you meant. It reports how the drawing reads, not what it
-says.
+Two things it does not check by default: whether the numbers are right, and
+whether the network is the one you meant. It reports how the drawing reads,
+not what it says.
+
+Behind `--physics` — from Python, `check(diagram, physics=True)` — is a
+prototype that asks the first of those, in the only form that needs no model
+of anything: do the stated numbers agree with each other? At every `free`
+node with a temperature, what arrives by sources and `flow` must leave by
+resistances at `(T_here − T_there) / R`, with `count` folding a group the way
+this page says a count folds, and a `corner` folded into the path through it.
+Two codes, both warnings: `node-does-not-balance`, which lists every term so
+you can see which one is off, and `rate-does-not-match`, for a branch whose
+`rate` disagrees with what its ends imply. A fixed node is a reservoir and is
+not asked; a `phase` node is holding latent heat this cannot see; a `flux`
+source has no area, so its node is skipped; a unit the check does not know
+skips the diagram rather than guessing.
+
+It is off by default for one reason: every diagram in this repository fires
+it, the hero included, because none of them was ever made to close. That is a
+statement about the diagrams, not the check.
 
 ## Seeing what got drawn
 

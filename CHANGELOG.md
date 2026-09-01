@@ -7,7 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- **`check --physics`: do the numbers on the page agree with each other?** A
+  prototype, and the first check that reads a value. Ten checks say how the
+  drawing reads; none said what it says, while `model` held every number a
+  thermal network needs. This is Kirchhoff at a free node from stated values
+  only — a resistance between two stated temperatures implies `ΔT/R`, sources
+  and flows are what they say, `count` folds a group, a corner folds into the
+  path through it — reported as `node-does-not-balance` with every term
+  listed, plus `rate-does-not-match` for a branch whose `rate` disagrees with
+  its ends.
+
+  Run over the hero and the five gallery diagrams it fired on all six,
+  seventeen nodes, and every finding is arithmetic a reader can redo: the
+  hero's first branch implies 97 W leaving a node that receives 45; the rack's
+  "each of 8 processors" box has no `count` and implies 400 W where 3,200
+  arrive; the house's roof loses 190 W and is fed by nothing, because it is
+  joined to neither zone — a modelling gap no layout check can see. None of
+  the six diagrams' numbers close. It ships off by default until the hero and
+  the gallery are made to, because the alternative — every committed diagram
+  going red — is the rule an author learns to ignore.
 
 ## [0.3.0] - 2026-09-01
 
