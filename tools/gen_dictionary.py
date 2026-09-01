@@ -434,33 +434,46 @@ def _slug(title):
     return re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")
 
 
-# The three shapes a path or a source can take, and the symbols that show
-# them. Drawn without labels, because the point here is the shape.
+# How a path or a source is drawn. Not a fourth category beside node, path
+# and source: every box here *is* a path, and every arrow *is* a source, so
+# each heading says which, or the primer reads as a rival classification. It
+# did, and the first reader asked why boxes were being covered separately
+# from paths.
 #
-# Each panel has to answer the question its own picture raises. The first
-# draft showed a hatched box and never said why it was hatched, and never
-# said what a rate is; chevrons, which are a third of the vocabulary's
-# shapes, went unmentioned entirely.
+# Each panel also has to answer the question its own picture raises. An
+# earlier draft showed a hatched box without saying why it was hatched, never
+# said what a rate is, and left chevrons out altogether.
 #
 # `cond`, `diss` and `flow-branch` appear again below with worked examples.
 # This is the primer, not an entry.
 SHAPES = [
-    ("cond", "A box is a resistance",
-     "The same heat comes out as went in, but the far end is colder than "
-     "the near one. The resistance is how much of that temperature drop "
-     "each watt costs, in kelvin per watt. The pattern inside names what "
-     "the heat is crossing: hatching for solid material, streamlines for "
-     "a moving fluid, wave arrows for radiation."),
-    ("diss", "An arrow is a rate",
-     "A rate is heat per unit time, in watts. An arrow states how much heat "
-     "arrives at one place, or leaves it, and states no resistance at all. "
-     "Which end of the arrow touches the place decides which of the two it "
-     "is."),
-    ("flow-branch", "Chevrons carry a rate",
-     "Chevrons in a line are heat moving from one place to another because a "
-     "fluid is moving and carrying it. Nothing is crossed, so there is no box "
-     "and no resistance to give, only the rate."),
+    ("cond", "A box is a path that resists",
+     "Every box is a path. It is the kind that resists: the same heat comes "
+     "out as went in, but the far end is colder than the near one. The "
+     "resistance is how much of that temperature drop each watt costs, in "
+     "kelvin per watt. The pattern inside names what the heat is crossing: "
+     "hatching for solid material, streamlines for a moving fluid, wave "
+     "arrows for radiation."),
+    ("flow-branch", "Chevrons are a path that carries",
+     "Also a path, but it states a rate rather than a resistance. A rate is "
+     "heat per unit time, in watts. It is drawn without a box because nothing "
+     "is being crossed: a fluid is moving from one place to the other and "
+     "taking the heat with it."),
+    ("diss", "An arrow is a source",
+     "Not a path at all. An arrow is heat entering or leaving the network at "
+     "a single place, at a stated rate, with no route drawn for it. Which end "
+     "of the arrow touches the place decides which of the two it is."),
 ]
+
+# The two path shapes the primer does not show. Naming them costs a sentence
+# and stops the panels from reading as the complete set, which they are not:
+# a reader who meets the capacitance plates below with no warning has been
+# told, in effect, that every path is a box or a chevron.
+SHAPES_NOTE = (
+    "Two more path shapes appear further down: a pair of upright plates for "
+    "a capacitance, which stores heat rather than passing it on, and an open "
+    "circuit for a thermal break, which passes none. A node is always a "
+    "circle, whatever is attached to it.")
 
 
 def shapes(by_key):
@@ -472,16 +485,16 @@ def shapes(by_key):
     nineteen drawings one at a time.
     """
     out = ['<section id="grp-shapes"><div class="section-head">'
-           "<h2>Boxes, arrows and chevrons</h2>"
-           '<p class="lede">Three shapes. A box states a resistance. Arrows '
-           "and chevrons state a rate.</p></div>"
+           "<h2>What the shapes mean</h2>"
+           '<p class="lede">The panels above say what a symbol is. Its shape '
+           "says what it does.</p></div>"
            '<div class="shapes">']
     for key, head, body in SHAPES:
         card = symbols.card(by_key[key], fluid=True, user=None, name=None,
                             value=None)
         out.append(f'<div class="shape"><figure>{card}</figure>'
                    f"<h3>{head}</h3><p>{body}</p></div>")
-    out.append("</div></section>")
+    out.append(f'</div><p class="shapes-note">{SHAPES_NOTE}</p></section>')
     return "".join(out)
 
 

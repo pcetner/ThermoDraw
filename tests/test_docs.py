@@ -203,8 +203,33 @@ class TestTheDictionary:
         sys.path.insert(0, str(ROOT / "tools"))
         import gen_dictionary
 
-        assert "<h2>Boxes, arrows and chevrons</h2>" in page
+        assert "<h2>What the shapes mean</h2>" in page
         assert page.count('<div class="shape">') == len(gen_dictionary.SHAPES)
+
+    def test_the_primer_places_its_shapes_inside_the_categories(self):
+        """A box *is* a path and an arrow *is* a source, so the primer must
+        say which. Headed "Boxes, arrows and chevrons" it read as a fourth
+        classification beside node, path and source, and the first reader
+        asked why boxes were covered separately from paths.
+        """
+        sys.path.insert(0, str(ROOT / "tools"))
+        import gen_dictionary
+
+        for key, head, _ in gen_dictionary.SHAPES:
+            assert "path" in head.lower() or "source" in head.lower(), \
+                f"{key}: heading does not say which category it is"
+
+    def test_the_primer_admits_the_shapes_it_does_not_show(self):
+        """Three panels are not the whole vocabulary: a capacitance draws two
+        plates and a break draws an open circuit, and both are paths. Left
+        unsaid, the panels claim every path is a box or a chevron."""
+        sys.path.insert(0, str(ROOT / "tools"))
+        import gen_dictionary
+
+        shown = {k for k, _, _ in gen_dictionary.SHAPES}
+        note = gen_dictionary.SHAPES_NOTE.lower()
+        assert "cap" not in shown and "break-branch" not in shown
+        assert "capacitance" in note and "break" in note
 
     def test_a_symbol_with_nothing_to_say_still_gets_a_frame(self):
         """The primer draws its glyphs bare, so `annotate` places no block
