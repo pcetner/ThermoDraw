@@ -1,4 +1,4 @@
-"""Thermal network symbols — draft 4.
+"""Thermal network symbols: text metrics, transforms, the solver.
 
 Text model
 ----------
