@@ -31,7 +31,11 @@ dependencies = []
 thermodraw = "thermodraw.__main__:main"
 
 [project.optional-dependencies]
-dev = ["pytest", "cairosvg", "pillow", "fonttools", "brotli"]
+# fonttools and brotli are for tools/subset_font.py and gen_metrics.py; the
+# suite itself needs only pytest. Nothing here rasterises: cairosvg and
+# pillow were declared for a while, imported nowhere, and kept alive by a
+# CI job whose only purpose was to notice if they stopped installing.
+dev = ["pytest", "fonttools", "brotli"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

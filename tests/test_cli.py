@@ -113,9 +113,15 @@ class TestRender:
         assert "var(--" in plain.read_text(encoding="utf-8")
         assert "var(--" not in baked.read_text(encoding="utf-8")
 
-    def test_dash_writes_to_stdout(self, capsys):
+    def test_dash_writes_the_same_bytes_to_stdout_as_to_a_file(
+            self, capsys, tmp_path):
+        """One writer. `-o -` used to leave out the XML declaration that the
+        file got, because the file path typed the declaration out by hand."""
+        out_file = tmp_path / "hero.svg"
+        run(capsys, "render", str(HERO), "-o", str(out_file))
         code, out = run(capsys, "render", str(HERO), "-o", "-")
-        assert code == 0 and out.startswith("<svg")
+        assert code == 0
+        assert out == out_file.read_text(encoding="utf-8")
 
 
 class TestBadInput:
@@ -123,6 +129,25 @@ class TestBadInput:
 
     def test_a_missing_file(self, capsys):
         assert run(capsys, "check", "no-such-file.json")[0] == 2
+
+    def test_a_file_that_is_not_utf8(self, capsys, tmp_path):
+        """UnicodeDecodeError is a ValueError, not an OSError, so a cp1252
+        diagram used to escape as a traceback with exit 1 — the code that
+        means "findings". Exactly the failure io.py's docstring is about,
+        unhandled on the read side."""
+        bad = tmp_path / "latin.json"
+        bad.write_bytes('{"units": {"T": "°C"}, "nodes": []}'.encode("cp1252"))
+        # `run` keeps stdout only; the reason lands on stderr, so read it here.
+        with pytest.raises(SystemExit) as exit_:
+            main(["check", str(bad)])
+        assert exit_.value.code == 2
+        assert "not UTF-8" in capsys.readouterr().err
+
+    def test_a_bom_is_not_an_error(self, capsys, tmp_path):
+        """PowerShell's Out-File writes one, and the file is no less UTF-8."""
+        good = tmp_path / "bom.json"
+        good.write_bytes(b"\xef\xbb\xbf" + HERO.read_bytes())
+        assert run(capsys, "check", str(good))[0] != 2
 
     def test_something_that_is_not_json(self, capsys, tmp_path):
         path = tmp_path / "bad.json"

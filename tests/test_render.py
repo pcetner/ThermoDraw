@@ -80,6 +80,30 @@ def test_bake_leaves_no_custom_properties(mode):
     assert "var(--" not in theme.bake(symbols.diagonal_demo(), mode)
 
 
+class TestBakeTouchesOnlyTheStylesheet:
+    def test_a_label_that_reads_like_a_variable_is_left_alone(self):
+        """`bake` used to substitute over the whole document, so a label
+        reading "var(--ink)" came out as a hex triplet."""
+        d = (DiagramBuilder(T="°C")
+             .node("a", "Sink var(--ink) at 5", 20, at=(0, 0), sub="a"))
+        svg = d.svg("light")
+        assert "Sink var(--ink) at 5" in svg
+        assert "var(--" not in svg.partition("</style>")[0]
+
+    def test_a_variable_the_palette_does_not_know_is_an_error(self):
+        """Not `#000`. A renamed key used to come out black-on-black in dark
+        mode while the variables path stayed correct."""
+        with pytest.raises(ValueError, match=r"var\(--nope\)"):
+            theme.bake('<svg><style>.x{fill:var(--nope)}</style></svg>')
+
+    def test_every_variable_the_stylesheet_uses_has_a_colour(self):
+        """Also enforced at import, which is what makes a rename fail the
+        suite rather than a reader's eyes."""
+        used = set(theme._VAR_RE.findall(symbols.CSS))
+        for mode, pal in theme.PALETTES.items():
+            assert used <= set(pal), mode
+
+
 def test_save_only_declares_xml_on_svg(tmp_path):
     """save() is the library's one file writer, so it gets used for JSON too.
 

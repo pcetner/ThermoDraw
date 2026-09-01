@@ -13,6 +13,8 @@ import functools
 import pathlib
 import re
 
+from . import symbols
+
 FONT_DIR = pathlib.Path(__file__).parent / "fonts"
 
 # IBM Plex is OFL-1.1 with Reserved Font Name "Plex", and a subset is a
@@ -41,20 +43,34 @@ PALETTES = {
     },
 }
 
-_VARS = """
-  :root{--sym:#1b1b1f;--panel:#fff;--ink:#16181d;--ink-2:#6b7078;
-        --ink-3:#8b909b;--tex:#9aa0ab;--rule:#e2e4e9;--accent:#b4442c;
-        --sans:""" + STACK + """}
-  @media (prefers-color-scheme:dark){
-    :root:not([data-theme="light"]){--sym:#d8d6d1;--panel:#171a1f;
-      --ink:#e9e7e2;--ink-2:#a2a7b2;--ink-3:#727884;--tex:#767c88;
-      --rule:#2a2e36;--accent:#e8996b}}
-  :root[data-theme="dark"]{--sym:#d8d6d1;--panel:#171a1f;--ink:#e9e7e2;
-    --ink-2:#a2a7b2;--ink-3:#727884;--tex:#767c88;--rule:#2a2e36;
-    --accent:#e8996b}
-"""
-
 _VAR_RE = re.compile(r"var\(--([a-z0-9-]+)\)")
+
+# Every variable the stylesheet asks for, checked against every palette at
+# import. `bake` used to fall back to `#000` for a name it did not know, so a
+# renamed key came out black-on-black in dark mode while the variables path
+# stayed correct — a divergence only a rendered pixel would show.
+_USED = frozenset(_VAR_RE.findall(symbols.CSS))
+for _mode, _pal in PALETTES.items():
+    _missing = _USED - set(_pal)
+    if _missing:
+        raise RuntimeError(
+            f"theme.PALETTES[{_mode!r}] has no colour for "
+            + ", ".join(f"--{v}" for v in sorted(_missing)))
+
+
+def _decl(pal):
+    return ";".join(f"--{k}:{v}" for k, v in pal.items())
+
+
+# The custom-property block, generated from PALETTES rather than written out a
+# second, third and fourth time by hand — which is how it was kept, with the
+# `#000` fallback covering any drift between the copies.
+_VARS = (
+    f"\n  :root{{{_decl(PALETTES['light'])}}}\n"
+    "  @media (prefers-color-scheme:dark){\n"
+    f'    :root:not([data-theme="light"]){{{_decl(PALETTES["dark"])}}}}}\n'
+    f'  :root[data-theme="dark"]{{{_decl(PALETTES["dark"])}}}\n'
+)
 
 
 @functools.lru_cache(maxsize=None)
@@ -94,7 +110,19 @@ def with_variables(svg):
 def bake(svg, theme="light", embed_font=True):
     """Resolve every var() to a literal. Use for Word, slides, rasterisers."""
     pal = PALETTES[theme]
-    svg = _VAR_RE.sub(lambda m: pal.get(m.group(1), "#000"), svg)
+
+    def colour(m):
+        name = m.group(1)
+        if name not in pal:
+            raise ValueError(
+                f"no colour for var(--{name}) in the {theme} palette")
+        return pal[name]
+
+    # Inside <style> only. The library's own markup uses var() nowhere else,
+    # and a label reading "var(--ink)" is the author's text — it used to come
+    # out of here as a hex triplet.
+    head, sep, tail = svg.partition("</style>")
+    svg = _VAR_RE.sub(colour, head) + sep + tail
     if embed_font:
         css = "".join(font_face(f) for f in faces_used(svg))
         svg = svg.replace("<style>", "<style>" + css, 1)
