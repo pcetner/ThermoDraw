@@ -1,0 +1,5 @@
+# Golden-file tests compare SVG byte for byte, and the emitted <style> block
+# contains newlines. Normalising to LF everywhere keeps those comparisons
+# stable across platforms.
+* text=auto eol=lf
+*.svg text eol=lf

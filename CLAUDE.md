@@ -1,0 +1,148 @@
+# ThermoDraw
+
+Thermal network diagrams for Python. Emits SVG. No runtime dependencies.
+
+## What this is
+
+A symbol library and label-placement engine for drawing thermal resistance
+networks — the R–C ladders and branch networks used in electronics thermal
+design. It draws them in heat-transfer notation (hatched boxes carrying a
+mechanism texture) rather than circuit notation (resistor zigzags), because a
+box has interior room for a mechanism glyph and a zigzag does not.
+
+The symbol vocabulary is settled. The network layer is not built yet.
+
+## Layout
+
+```
+src/thermodraw/
+  core.py      text metrics, transforms, the label solver, textures
+  symbols.py   the twelve symbols, plus sheet renderers
+  theme.py     CSS variables for web, baked literals for Word/slides
+examples/
+  render_reference.py    renders every symbol at every 45°
+docs/
+  symbol-reference.html  the design record — open this first
+```
+
+`docs/symbol-reference.html` is the visual specification. It shows every
+symbol at eight orientations with the reasoning for each choice. Read it
+before changing any glyph.
+
+## Design decisions, and why
+
+These were argued out over several rounds. Each exists for a reason, and
+several reverse an earlier decision that turned out to be wrong. Do not
+change them without understanding what problem they solved.
+
+### Symbols
+
+- **Boxes, not zigzags.** Uniform 84 × 32 rectangles. Mechanism is carried by
+  the interior texture, not by the outline shape, so a ladder keeps an even
+  rhythm however many mechanisms appear in it.
+- **The interior states what the heat is crossing.** Section hatching is solid
+  material; streamlines are a moving fluid; wavy arrows cross an empty box
+  because radiation needs no medium; hatch-seam-hatch is two solids meeting.
+  One rule generates all four, so a reader learns it once. An earlier draft
+  used four unrelated icons and was unreadable.
+- **Contact hatches its two halves in opposite directions.** The drafting
+  convention for two parts meeting in section. Without it, contact reads as a
+  solid block.
+- **Radiation gets a dashed outline** as redundant coding. It is the one path
+  that is not linear in T, so a reader must notice it before trusting any
+  superposition.
+- **Sources are arrows, not circled elements.** Heat appears at a node; it is
+  not a two-terminal element. A circled source is the circuit convention and
+  is wrong here.
+- **Fixed node connects to its boundary; thermal break does not.** The visible
+  gap is the whole distinction, and it is topological rather than decorative,
+  so the two are never confused without reading text.
+- **Boundaries use a clipped hatch band, not loose tick marks.** Ticks fall
+  apart at intermediate angles whatever shape they outline.
+- **Heat flux is several arrows, not one.** Flux is per unit area and has no
+  single line of action, so it must not borrow heat flow's symbol.
+
+### Rotation
+
+- Geometry is defined in a local frame and placed with a transform. **Text is
+  never rotated** — it is emitted separately, upright.
+- **Textures rotate with their box.** The texture belongs to the block.
+- **Boundary symbols mirror rather than rotate** past vertical
+  (`scale(1,-1)` after the rotation), so a reservoir or wall never arrives
+  upside down. See `core.flips`.
+
+### Text
+
+- **One block per symbol, on one side of the branch, never split across it.**
+  Splitting name above and value below meant running the clearance solver
+  twice and pushed everything further from the component.
+- **Line 1 is the user's label. Line 2 is `symbol = value`.** The user label
+  is always the top line, at every orientation. An earlier version reversed
+  the order depending on which way the block stacked.
+- **Symbol text and value are matched in size and weight.** They are two sides
+  of one statement. Only the italic distinguishes the variable from its units,
+  which is standard maths typesetting.
+- **Two kinds of subscript, doing different jobs.** On a resistance the
+  subscript is structural — `cond`, `conv`, `rad`, `contact` — set by the
+  library and naming physics. On T, C, P and q it is identity: caller-set,
+  empty by default. A subscript on an R names a mechanism; a subscript on a T
+  names a place. The asymmetry is self-explaining in use.
+- **No colour anywhere in the symbol set.** Reserved for later use —
+  temperature maps, path highlighting. The user label is distinguished by
+  weight.
+
+### The label solver (`core.clear_offset`)
+
+The offset is **solved** from the symbol's oriented bounding box support
+distance along the label direction, then refined against a narrowed test box
+(36% of block width).
+
+An earlier version searched outward from a guess until a rectangle test
+passed. That overshoots badly at diagonals: an axis-aligned text block's
+bounding box clips a rotated symbol's corner long before the glyphs would, so
+the search kept pushing. Solving directly is what brought the labels in
+tight. **Do not replace this with an iterative search.**
+
+## Known sharp edges
+
+- **Text widths are estimated** from a hand-written character table
+  (`core.CHW`), not measured from the font. It has held up, but it is why
+  output needs visual checking. Measuring against the embedded font would
+  make the solver exact. This is the highest-value fix.
+- **HTML entities count as one glyph** in `core.text_w` via `_ENT`. Removing
+  that regex silently breaks any label using one — it caused a 40 px phantom
+  gap in the heat-flux label.
+- **Subscripts are pre-centred manually** (`core.measure`) because rasterisers
+  disagree on `<tspan>` metrics under `text-anchor="middle"`. Do not switch to
+  a plain centred `<text>` with a tspan inside.
+- **CSS custom properties do not survive outside a browser.** Word,
+  PowerPoint, cairosvg and librsvg all ignore them; cairosvg throws. Use
+  `theme.bake()` for those targets.
+
+## What is left to build
+
+In rough priority order:
+
+1. **The network layer.** Everything currently places one symbol at a time at
+   coordinates you supply. What is wanted: declare nodes and branches, get a
+   laid-out diagram. A ladder walking left to right with capacitances dropping
+   to a common rail covers most cases; branches and parallel paths need
+   routing. This is the largest remaining piece and the only genuinely hard
+   one.
+2. **Real font metrics**, replacing the estimate table.
+3. **A spreading resistance symbol** — the one gap in the vocabulary. The
+   natural glyph under the current scheme is hatching that fans from a point
+   rather than running parallel, reading as heat diverging into a larger
+   cross-section.
+4. **Region enclosures that auto-size to their contents** rather than taking
+   fixed dimensions.
+5. **Unit handling** — pass `0.35` and have it choose between K/W and mK/W.
+6. **Tests.** There are none. Golden-file SVG comparison is the obvious
+   approach; the rotation strips make good fixtures.
+
+## Conventions
+
+- Units are fixed per diagram: `K/W`, `J/K`, `°C`, `W`, `W/cm²`. Never mixed.
+- Stroke width 1.8 throughout. Geometry on a 10 px grid where practical.
+- Heat runs left to right in a default ladder: hottest node left, coldest
+  right, reference rail at the bottom.
