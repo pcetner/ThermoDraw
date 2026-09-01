@@ -34,9 +34,17 @@ CW, CH = 248, 190
 LEAD = 20
 
 
-def canvas(w, h, body):
+def canvas(w, h, body, fluid=False):
+    """The document. Explicit dimensions by default.
+
+    These are files, and a file loaded through an <img> tag has no column to
+    fill, so width="100%" left it with nothing to size from — the demo had to
+    rewrite the root tag with a regex to publish anything. Pass fluid=True for
+    a fragment inlined in a page that owns its own width.
+    """
+    size = 'width="100%"' if fluid else f'width="{w}" height="{h}"'
     return (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {w} {h}" '
-            f'width="100%" role="img"><style>{CSS}</style>'
+            f'{size} role="img"><style>{CSS}</style>'
             f'{S.hoist_defs(body)}</svg>')
 
 

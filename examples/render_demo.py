@@ -12,12 +12,12 @@ layer that would do this from a node/branch declaration is not built yet.
 """
 import math
 import pathlib
-import re
 import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "src"))
 
-from thermodraw import core as S, save, symbols as sym, theme  # noqa: E402
+from thermodraw import (Diagram, core as S, layout, render, save,  # noqa: E402
+                        symbols as sym, theme)
 
 OUT = pathlib.Path(__file__).resolve().parents[1] / "docs" / "assets"
 
@@ -41,82 +41,29 @@ def ground(x, y, a=90, half=24, depth=13):
     return f'<g transform="{S.xf(x, y, a)}">{S.hatched_wall(0, half, depth)}</g>'
 
 
-def cap(cx, cy, a):
-    return f'<g transform="{S.xf(cx, cy, a)}">{sym.g_cap(a)}</g>'
-
-
 # The four box interiors, taken from the library rather than rebuilt here.
 HATCH, FLOW, WAVE, SEAM = (sym.tex_cond(), sym.tex_conv(),
                            sym.tex_rad(), sym.tex_contact())
 
 
 # ------------------------------------------------------ scene 1 — the ladder
+HERO = pathlib.Path(__file__).resolve().parent / "hero.json"
+
+
 def hero():
     """A power device from junction to still air.
 
-    Series conduction path, a contact resistance at the mounting face, then
-    convection and radiation in parallel to ambient. Two capacitances drop to
-    the reference rail, which is what makes it a transient model rather than
+    Series conduction, a contact resistance at the mounting face, then
+    convection and radiation in parallel to ambient, with two capacitances on
+    the reference rail — which is what makes it a transient model rather than
     a steady-state one.
+
+    Read from hero.json rather than built here. It used to be sixty lines of
+    hand-placed coordinates; the model, the layout and the label solver do
+    that work now, and the file is the same data an LLM would be given.
     """
-    Y, YT, YB, YR, YC = 150, 70, 238, 372, 278
-    XJ, XC, XS = 200, 424, 648
-    XSPLIT, XJOIN = 696, 936
-    B1, B2, B3, XP = 312, 536, 816, 96
-    hb = S.BW / 2
-    b = []
-
-    # heat in
-    b += [f'<g transform="{S.xf(XP, Y, 0)}">'
-          f'<line class="w" x1="-32" y1="0" x2="20" y2="0"/>{S.arrowhead(32)}</g>',
-          wire((XP + 32, Y), (XJ, Y))]
-
-    # series path
-    b += [wire((XJ, Y), (B1 - hb, Y)), block(B1, Y, 0, HATCH),
-          wire((B1 + hb, Y), (B2 - hb, Y)), block(B2, Y, 0, SEAM),
-          wire((B2 + hb, Y), (XSPLIT, Y))]
-
-    # convection and radiation in parallel
-    b += [wire((XSPLIT, YT), (XSPLIT, YB)),
-          wire((XSPLIT, YT), (B3 - hb, YT)), block(B3, YT, 0, FLOW),
-          wire((B3 + hb, YT), (XJOIN, YT)),
-          wire((XSPLIT, YB), (B3 - hb, YB)), block(B3, YB, 0, WAVE, dashed=True),
-          wire((B3 + hb, YB), (XJOIN, YB)),
-          wire((XJOIN, YT), (XJOIN, YR))]
-
-    # reference rail, with the two capacitances hanging off it
-    b.append(wire((XJ, YR), (XJOIN, YR)))
-    for x in (XJ, XS):
-        b += [wire((x, Y), (x, YR)), cap(x, YC, 90)]
-
-    b += [node(XJ, Y), node(XC, Y), node(XS, Y), node(XJOIN, YR),
-          wire((XJOIN, YR), (XJOIN, YR + 12)), ground(XJOIN, YR + 12)]
-
-    lab = S.annotate
-    lab(XP, Y, 0, b, user="Switching loss", name=S.sym_text("P", "d"),
-        value="45 W", half=7, half_len=32)
-    lab(XJ, Y, 0, b, user="Junction", name=S.sym_text("T", "j"),
-        value="112 °C", half=5.5, half_len=5.5)
-    lab(XC, Y, 0, b, user="Case", name=S.sym_text("T", "c"),
-        value="78 °C", half=5.5, half_len=5.5)
-    lab(XS, Y, 0, b, user="Sink base", name=S.sym_text("T", "s"),
-        value="61 °C", half=5.5, half_len=5.5)
-    lab(B1, Y, 0, b, user="Die attach", name=S.sym_text("R", "cond"),
-        value="0.35 K/W", half=S.BH / 2, half_len=hb)
-    lab(B2, Y, 0, b, user="Grease", name=S.sym_text("R", "contact"),
-        value="0.15 K/W", half=S.BH / 2, half_len=hb)
-    lab(B3, YT, 0, b, user="Fins → air", name=S.sym_text("R", "conv"),
-        value="1.80 K/W", half=S.BH / 2, half_len=hb)
-    lab(B3, YB, 0, b, user="Case → walls", name=S.sym_text("R", "rad"),
-        value="6.40 K/W", half=S.BH / 2, half_len=hb)
-    lab(XJ, YC, 90, b, user="Die", name=S.sym_text("C", "j"),
-        value="0.9 J/K", half=15, half_len=15)
-    lab(XS, YC, 90, b, user="Sink", name=S.sym_text("C", "s"),
-        value="86 J/K", half=15, half_len=15)
-    lab(XJOIN, YR, 90, b, user="Still air", name=S.sym_text("T", "amb"),
-        value="40 °C", half=24, half_len=20)
-
-    return sym.canvas(1060, 470, "".join(b))
+    diagram = Diagram.from_json(HERO.read_text(encoding="utf-8"))
+    return render(layout(diagram))
 
 
 # --------------------------------------------------- scene 2 — the rosette
@@ -177,24 +124,10 @@ def vocabulary(cols=4, cw=250, ch=152):
 
 SCENES = {"hero": hero, "rosette": rosette, "vocabulary": vocabulary}
 
-_VIEWBOX = re.compile(r'viewBox="0 0 ([\d.]+) ([\d.]+)"')
-
-
-def sized(svg):
-    """Give the root explicit pixel dimensions.
-
-    `canvas` emits width="100%", which is right for a page that owns its own
-    column. A file loaded through an <img> tag has no column to fill, so it
-    needs a real size to scale from.
-    """
-    w, h = _VIEWBOX.search(svg).groups()
-    return svg.replace('width="100%"', f'width="{w}" height="{h}"', 1)
-
-
 def main():
     OUT.mkdir(parents=True, exist_ok=True)
     for name, fn in SCENES.items():
-        svg = sized(fn())
+        svg = fn()
         for mode in ("light", "dark"):
             save(theme.bake(svg, mode), OUT / f"{name}-{mode}.svg")
     print(f"wrote {2 * len(SCENES)} files to {OUT}")

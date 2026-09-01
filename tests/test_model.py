@@ -1,0 +1,139 @@
+"""The data layer: round trips, validation, and what layout makes of it."""
+import json
+import pathlib
+
+import pytest
+
+from thermodraw import (Diagram, DiagramBuilder, DiagramError, layout, render,
+                        symbols)
+
+HERO = pathlib.Path(__file__).resolve().parents[1] / "examples" / "hero.json"
+
+
+def hero():
+    return Diagram.from_json(HERO.read_text(encoding="utf-8"))
+
+
+# ---------------------------------------------------------------- round trip
+def test_json_round_trip_is_stable():
+    once = hero()
+    twice = Diagram.from_dict(once.to_dict())
+    assert once.to_dict() == twice.to_dict()
+
+
+def test_round_trip_renders_the_same_bytes():
+    once = render(layout(hero()))
+    twice = render(layout(Diagram.from_dict(hero().to_dict())))
+    assert once == twice
+
+
+def test_builder_and_dict_agree():
+    """Anything the builder can say must be expressible as data."""
+    built = (DiagramBuilder(R="K/W", T="°C")
+             .node("j", "Junction", "112", at=(0, 0), sub="j")
+             .node("c", "Case", "78", at=(224, 0), sub="c")
+             .branch("j", "c", "cond", "Die attach", "0.35"))
+    assert DiagramBuilder.from_dict(built.to_dict()).svg() == built.svg()
+
+
+# ---------------------------------------------------------------- validation
+def test_missing_coordinates_say_what_to_do():
+    with pytest.raises(DiagramError, match="0.3"):
+        Diagram.from_dict({"nodes": [{"id": "a"}]})
+
+
+def test_dangling_branch_names_the_node():
+    with pytest.raises(DiagramError, match="nowhere"):
+        Diagram.from_dict({
+            "nodes": [{"id": "a", "at": [0, 0]}],
+            "branches": [{"from": "a", "to": "nowhere", "kind": "cond"}]})
+
+
+def test_duplicate_ids_are_refused():
+    with pytest.raises(DiagramError, match="duplicate"):
+        Diagram.from_dict({"nodes": [{"id": "a", "at": [0, 0]},
+                                     {"id": "a", "at": [1, 1]}]})
+
+
+def test_unknown_kind_lists_the_known_ones():
+    with pytest.raises(DiagramError, match="contact"):
+        Diagram.from_dict({
+            "nodes": [{"id": "a", "at": [0, 0]}, {"id": "b", "at": [9, 0]}],
+            "branches": [{"from": "a", "to": "b", "kind": "magic"}]})
+
+
+def test_rail_branch_without_a_rail_is_refused():
+    with pytest.raises(DiagramError, match="no rail"):
+        Diagram.from_dict({
+            "nodes": [{"id": "a", "at": [0, 0]}],
+            "branches": [{"from": "a", "to": "rail", "kind": "cap"}]})
+
+
+def test_every_kind_in_the_schema_is_a_real_symbol():
+    """The vocabulary and the schema have to be the same list."""
+    from thermodraw import model as M
+    keys = {s.key for s in symbols.SYMBOLS}
+    assert M.BRANCH_KINDS <= keys
+    assert M.SOURCE_KINDS <= keys
+    assert (M.NODE_KINDS - {"corner"}) <= keys
+
+
+# -------------------------------------------------------------------- units
+def test_units_are_appended_from_the_table():
+    d = hero()
+    assert d.value_text("cond", "0.35") == "0.35 K/W"
+    assert d.value_text("cap", "0.9") == "0.9 J/K"
+    assert d.value_text("free", "112") == "112 °C"
+    assert d.value_text("cond", None) is None
+
+
+def test_numbers_do_not_gain_a_precision_they_lack():
+    d = Diagram(units={"R": "K/W"})
+    assert d.value_text("cond", 0.35) == "0.35 K/W"
+    assert d.value_text("cond", 45.0) == "45 K/W"
+    assert d.value_text("cond", "1.80") == "1.80 K/W"
+
+
+# -------------------------------------------------------------------- layout
+def test_layout_is_pure():
+    d = hero()
+    assert [str(p) for p in layout(d)] == [str(p) for p in layout(d)]
+
+
+def test_a_shared_trunk_is_drawn_once():
+    """Two branches routed along the same wire should not stroke it twice."""
+    svg = render(layout(hero()))
+    runs = svg.count("<polyline")
+    assert runs == len(set(
+        p for p in svg.split("<polyline")[1:]))
+
+
+def test_canvas_sizes_itself_to_its_contents():
+    """Everything in page coordinates must land inside the box render chose.
+
+    Symbol interiors are drawn in their own frame — a box edge is at x=-42
+    whatever the page coordinates are — so only the placements can be checked
+    against the viewBox, not every number in the file.
+    """
+    import re
+
+    from thermodraw.render import extent
+
+    placements = layout(hero())
+    svg = render(placements)
+    w, h = (float(v) for v in
+            re.search(r'viewBox="0 0 ([\d.]+) ([\d.]+)"', svg).groups())
+    x0, y0, x1, y1 = extent(placements, [])
+    assert w >= x1 - x0 and h >= y1 - y0
+
+    dx, dy = (float(v) for v in
+              re.search(r'translate\(([-\d.]+),([-\d.]+)\)', svg).groups())
+    for p in placements:
+        for x, y in (p.points or [p.at]):
+            assert -1 <= x + dx <= w + 1, f"{x} outside 0..{w}"
+            assert -1 <= y + dy <= h + 1, f"{y} outside 0..{h}"
+
+
+def test_explicit_size_still_works():
+    svg = render(layout(hero()), size=(1060, 470))
+    assert 'viewBox="0 0 1060 470"' in svg
