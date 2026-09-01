@@ -222,4 +222,6 @@ layout decision — but the reading restriction was not intact, so the
 vocabulary findings are unaffected: knowing the design rationale does not hand
 anyone a spreading-resistance symbol.
 
-Suppress that injection before re-running.
+Suppress that injection before re-running. `RERUN.md` is how, with the
+outcomes written down in advance; it cannot be done from inside this
+checkout, for the same reason this run leaked.
