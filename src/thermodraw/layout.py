@@ -19,6 +19,12 @@ from . import symbols as S
 
 BY_KEY = {s.key: s for s in S.SYMBOLS}
 
+# `break` is both a node kind and a branch kind — the same thing in two
+# positions, which is a feature for whoever writes the JSON. It is a collision
+# in here, because BY_KEY is one namespace, so the branch resolves through
+# this and the node goes straight to BY_KEY.
+BRANCH_SYM = {"break": "break-branch"}
+
 # How a node meets its boundary. A fixed node reaches down STUB units to its
 # wall; a thermal break stops at the circle and its wall stands BREAK_GAP away,
 # with nothing in between. BREAK_WALL is g_break's own (half, depth), not the
@@ -115,6 +121,24 @@ def _split(route, index, centre, half_len):
     return [p for p in (before, after) if len(p) > 1]
 
 
+def _source_offset(sym):
+    """How far from its node a source sits when the author gave no `at`.
+
+    The default was `half_len + 5.5`, which considers only how long the
+    symbol is and never how tall. That suits the three arrow kinds, which are
+    long and thin. `flux` is a 52 x 48 block, and at that offset it blocked
+    the node's label from below while the source's own label blocked it from
+    above — both candidate sides gone, so `annotate` pushed the node's label
+    out instead of flipping it, and the checker called it adrift.
+
+    No constant can be universally right here. Whether a label fits depends
+    on how wide it is, and labels are not solved until `render`. This buys
+    room in proportion to how much of the node's neighbourhood the symbol
+    occupies, and leaves the arrows exactly where they were.
+    """
+    return sym.half_len + 5.5 + max(0.0, 2 * (sym.half - 7))
+
+
 def _rail_point(diagram, node_id, other):
     """Where a branch meets the rail: straight below the node it leaves."""
     return (other[0], diagram.rail.y)
@@ -133,7 +157,7 @@ def layout(diagram):
 
     for i, b in enumerate(diagram.branches):
         ref = f"branch {i} {b.source}->{b.target}"
-        sym = BY_KEY[b.kind]
+        sym = BY_KEY[BRANCH_SYM.get(b.kind, b.kind)]
         # the rail end depends on the other end, so resolve the node first
         if b.source == M.RAIL:
             target = _endpoint(diagram, b.target, (0, 0))
@@ -150,13 +174,15 @@ def layout(diagram):
 
         for run in _split(route, index, centre, sym.half_len):
             out.append(Placement("wire", points=run, ref=ref))
+        # A break names no quantity, so it gets no second line rather than an
+        # invented symbol for a resistance it does not have.
+        base = M.BRANCH_SYMBOL[b.kind]
+        sub = (M.BRANCH_SUB[b.kind] if M.BRANCH_SUB[b.kind] is not None
+               else b.sub)
         out.append(Placement(
             "symbol", at=centre, angle=angle, symbol=sym, ref=ref,
             label=Label(user=b.label,
-                        name=S.S_(M.BRANCH_SYMBOL[b.kind],
-                                  M.BRANCH_SUB[b.kind]
-                                  if M.BRANCH_SUB[b.kind] is not None
-                                  else b.sub),
+                        name=S.S_(base, sub) if base else None,
                         value=diagram.value_text(b.kind, b.value),
                         half=sym.half, half_len=sym.half_len,
                         side=b.side)))
@@ -174,7 +200,7 @@ def layout(diagram):
         node = diagram.node(s.target)
         tip = tuple(node.at)
         centre = tuple(s.at) if s.at else (
-            tip[0] - (sym.half_len + 5.5), tip[1])
+            tip[0] - _source_offset(sym), tip[1])
         angle = s.angle
         out.append(Placement(
             "symbol", at=centre, angle=angle, symbol=sym, ref=ref,

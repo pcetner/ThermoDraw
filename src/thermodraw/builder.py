@@ -13,6 +13,7 @@ the data is the representation, not a serialisation of some object.
     open("out.svg", "w").write(d.svg())
 """
 from . import check as C
+from . import describe as D
 from . import layout as L
 from . import model as M
 from . import render as R
@@ -82,6 +83,16 @@ class DiagramBuilder:
         """
         return C.check(self.placements(), size=size or self.diagram.size,
                        padding=padding)
+
+    def describe(self, size=None, padding=R.PADDING):
+        """What this diagram contains, without rendering it to look.
+
+        `check` says whether the drawing reads well; this says what is in it.
+        Same size and padding as `.svg()`, so what is described is what would
+        be drawn.
+        """
+        return D.describe(self, size=size or self.diagram.size,
+                          padding=padding)
 
     def to_dict(self):
         return self.build().to_dict()

@@ -11,7 +11,8 @@ import pathlib
 
 import pytest
 
-from thermodraw import Diagram, DiagramBuilder, check, core, layout
+from thermodraw import (Diagram, DiagramBuilder, DiagramError, check, core,
+                        layout)
 from thermodraw.check import (_inside, _obb_gap, _segment_rect_gap, cycles,
                               wire_graph)
 from thermodraw.render import LabelRect, compose
@@ -257,6 +258,246 @@ class TestBreakNode:
         """Not render.ground's. The two symbols are drawn at different scales."""
         wall = [p for p in self.one_node("break") if p.element == "ground"][0]
         assert wall.wall == (22, 13)
+
+    def test_the_glyph_draws_what_the_pipeline_draws(self):
+        """The symbol sheet is the visual specification, and it was lying.
+
+        `g_break` showed a crossbar and a wall standing *across* the branch,
+        with no node circle at all. The pipeline draws circle, gap, wall
+        below. Neither `g_break` nor `g_fixed_node` is reachable from
+        `layout` — `render.place` runs only for `element == "symbol"` — so
+        the two arrangements drifted apart with nothing to say so. This is
+        the thing that says so.
+        """
+        import xml.etree.ElementTree as ET
+
+        from thermodraw.layout import BREAK_GAP, BREAK_WALL, BY_KEY
+
+        glyph = ET.fromstring("<svg>" + BY_KEY["break"].draw(0) + "</svg>")
+        half, depth = BREAK_WALL
+
+        # a node circle at the origin, where the pipeline places its node
+        assert [(c.get("cx"), c.get("cy"), c.get("r"))
+                for c in glyph.iter("circle")] == [("0", "0", "5.5")]
+
+        # the wall, at the pipeline's gap below it and at the pipeline's size
+        wall = glyph.find("g")
+        assert wall.get("transform") == f"translate(0,{BREAK_GAP}) rotate(90)"
+        assert wall[0].get("y2") == str(half)
+        assert float(next(glyph.iter("rect")).get("width")) == depth
+
+        # and no stub: the one line outside the wall is the lead coming in
+        # flat, never a segment dropping towards the boundary
+        assert [(l.get("y1"), l.get("y2")) for l in glyph.findall("line")] \
+            == [("0", "0")]
+
+
+class TestASourceGivenNoPlace:
+    """`layout` put every source at `half_len + 5.5` from its node.
+
+    That considers how long the symbol is and never how tall, which suits the
+    three arrow kinds and does not suit `flux`, a 52 x 48 block. At that
+    offset the flux body blocked the node's label from below while the
+    source's own label blocked it from above, so both candidate sides were
+    gone and `annotate` pushed instead of flipping.
+    """
+
+    @staticmethod
+    def one(kind, label="Switching loss"):
+        return (DiagramBuilder(T="°C", P="W", q="W", **{"q″": "W/cm²"})
+                .node("a", "Junction", "110", at=(0, 0))
+                .source("a", kind, label, "45").build())
+
+    @pytest.mark.parametrize("kind", ["diss", "radin", "flow", "flux"])
+    @pytest.mark.parametrize("label", ["Q", "Switching loss",
+                                       "Total switching and conduction loss"])
+    def test_every_kind_checks_clean_where_layout_puts_it(self, kind, label):
+        report = check(self.one(kind, label))
+        assert report.ok, f"{kind}: {codes(report)}"
+
+    def test_the_tight_offset_is_what_it_was_fixing(self):
+        """The old rule, applied by hand, still fails — so this is the fix."""
+        d = (DiagramBuilder(T="°C", **{"q″": "W/cm²"})
+             .node("a", "Junction", "110", at=(0, 0))
+             .source("a", "flux", "Die surface", "1.4",
+                     at=(-(26 + 5.5), 0)).build())
+        assert "label-adrift" in codes(check(d))
+
+    def test_the_arrow_kinds_did_not_move(self):
+        """Nothing that was already right is disturbed to fix `flux`."""
+        from thermodraw.layout import BY_KEY, _source_offset
+        for kind in ("diss", "flow"):
+            sym = BY_KEY[kind]
+            assert _source_offset(sym) == sym.half_len + 5.5
+
+
+class TestTheRemedyNamesTheField:
+    """A finding that lists every field leaves the author to guess.
+
+    Both label findings carried one fixed string offering `side`, `angle` and
+    `via` whatever was in the way. For a source crowding its node the answer
+    is `at`, and it was not in the list at all.
+    """
+
+    @staticmethod
+    def remedy(diagram, code="label-adrift"):
+        return one(check(diagram), code).remedy
+
+    def test_a_wire_culprit_names_via(self):
+        text = self.remedy(TestLabelAdrift.boxed_in())
+        assert "`via`" in text and "`at`" not in text
+
+    def test_a_source_culprit_names_at_and_says_which_way(self):
+        d = (DiagramBuilder(T="°C", **{"q″": "W/cm²"})
+             .node("a", "Junction", "110", at=(0, 0))
+             .source("a", "flux", "Die surface", "1.4",
+                     at=(-(26 + 5.5), 0)).build())
+        text = self.remedy(d)
+        assert "move source 0 -> a further from its node with `at`" in text
+
+    def test_a_branch_symbol_culprit_names_at_too(self):
+        d = (DiagramBuilder(T="°C", R="K/W")
+             .node("a", "A very long label here", "110", at=(0, 0))
+             .node("b", "Another long label", "60", at=(120, 0))
+             .node("c", "C", "40", at=(0, -200))
+             .branch("a", "b", "cond", "L", "0.4")
+             .branch("a", "c", "cond", "M", "0.4").build())
+        texts = [f.remedy for f in check(d).findings if f.code == "label-adrift"]
+        assert any("along its branch with `at`" in t for t in texts)
+
+    def test_two_labels_are_moved_apart_with_side(self):
+        """The pair case, which needs no culprit to be named."""
+        from thermodraw.check import _remedy
+        assert _remedy(None, pair=True) == "set `side` on one of the two"
+
+    def test_side_is_not_offered_once_the_solver_has_tried_both(self):
+        """It is advice already taken, and `angle` is what is left.
+
+        Not keyed on `report["flipped"]`: when the flip fails too, `annotate`
+        falls back to the first candidate and leaves that False, so the case
+        where this matters most is the one it does not mark.
+        """
+        b = DiagramBuilder(T="°C", R="K/W").node("a", "Junction", "110",
+                                                 at=(0, 0))
+        for x, y, n in [(300, 0, "e"), (-300, 0, "w"),
+                        (0, 300, "s"), (0, -300, "n")]:
+            b.node(n, f"Side {n}", "60", at=(x, y))
+            b.branch("a", n, "cond", f"Path {n}", "0.4")
+        text = self.remedy(b.build())
+        assert "`angle`" in text
+        assert "set `side` on this label" not in text
+
+    def test_every_remedy_it_can_write_is_ascii(self):
+        """Fixed text goes to a cp1252 console. An em dash is a crash there."""
+        from thermodraw.check import _remedy
+        from thermodraw.layout import Placement
+        for element in ("wire", "symbol", "ground", "node"):
+            for ref in ("branch 0 a->b", "source 0 -> a", "node 'a'"):
+                p = Placement(element, ref=ref)
+                for exhausted in (False, True):
+                    assert _remedy(p, exhausted).isascii()
+        assert _remedy(None, pair=True).isascii()
+
+
+class TestBreakBranch:
+    """A break you can connect something to.
+
+    The node kind leaves a wall floating: an acceptance agent drawing a
+    fibreglass standoff got a labelled boundary with nothing tying it to the
+    thing it was bolted to, because every branch kind drew a resistance or a
+    capacitance. This is the open circuit — wire, crossbar, gap, crossbar,
+    wire — which is the one reading a plain wire cannot give, since a wire
+    says heat flows.
+    """
+
+    @staticmethod
+    def standoff(**kw):
+        return (DiagramBuilder(T="°C")
+                .node("cell", "Cell stack", "85", at=(0, 0))
+                .node("case", "Case", "30", at=(340, 0))
+                .branch("cell", "case", "break", "Nylon standoff", **kw))
+
+    def test_it_connects_its_two_nodes(self):
+        placements = layout(self.standoff().build())
+        symbol = [p for p in placements if p.symbol is not None][0]
+        assert symbol.symbol.key == "break-branch"
+        assert symbol.ref == "branch 0 cell->case"
+
+    def test_the_wire_stops_either_side_of_it(self):
+        """The gap is the whole content of the symbol, so it must be real."""
+        placements = layout(self.standoff().build())
+        runs = [p for p in placements if p.element == "wire"]
+        assert len(runs) == 2, "one run each side, not one straight through"
+        left = max(q[0] for q in runs[0].points)
+        right = min(q[0] for q in runs[1].points)
+        assert right - left == pytest.approx(2 * 12)
+
+    def test_it_names_no_quantity(self):
+        """No R and no C: a break has neither, so there is no second line."""
+        symbol = [p for p in layout(self.standoff().build())
+                  if p.symbol is not None][0]
+        assert symbol.label.user == "Nylon standoff"
+        assert symbol.label.name is None and symbol.label.value is None
+
+    def test_a_value_on_one_is_refused_and_says_why(self):
+        with pytest.raises(DiagramError) as exc:
+            self.standoff(value="0.4").build().validate()
+        assert "carries no heat" in str(exc.value)
+
+    def test_and_the_drawing_passes_its_own_checker(self):
+        assert check(self.standoff().build()).ok
+
+    def test_the_node_kind_and_the_branch_kind_are_different_symbols(self):
+        """One namespace, two positions. The collision is the hazard."""
+        from thermodraw.layout import BRANCH_SYM, BY_KEY
+        assert BY_KEY["break"] is not BY_KEY[BRANCH_SYM["break"]]
+
+
+# ---------------------------------------------------------------- quantities
+class TestFluxIsItsOwnQuantity:
+    """`q` for a power and `q″` for a flux are not the same measurement.
+
+    They shared one units entry, so a diagram carrying both could only give
+    one of them a unit — and `docs/symbol-reference.html` had been showing
+    `q″` and `W/cm²` for years, which the pipeline could not produce.
+    """
+
+    @staticmethod
+    def both():
+        return (DiagramBuilder(T="°C", P="W", q="W", **{"q″": "W/cm²"})
+                .node("a", "Die", "110", at=(0, 0))
+                .source("a", "flow", "Conducted away", "38", at=(-160, -70))
+                .source("a", "flux", "Surface", "1.4", at=(-160, 70)))
+
+    def test_they_carry_different_units(self):
+        d = self.both().build()
+        assert d.value_text("flow", "38") == "38 W"
+        assert d.value_text("flux", "1.4") == "1.4 W/cm²"
+
+    def test_the_symbol_matches_the_quantity(self):
+        from thermodraw import model as M
+        assert M.SOURCE_SYMBOL["flux"] == M.QUANTITY["flux"] == "q″"
+        assert M.SOURCE_SYMBOL["flow"] == M.SOURCE_SYMBOL["radin"] == "q"
+
+    def test_the_accepted_units_keys_follow_the_table(self):
+        """`known` is derived, so nothing had to be edited twice."""
+        with pytest.raises(DiagramError) as exc:
+            Diagram(units={"nonsense": "W"}).validate()
+        assert "q″" in str(exc.value)
+
+    def test_an_unknown_source_kind_with_a_value_says_so(self):
+        """It used to reach QUANTITY[kind] and raise a bare KeyError.
+
+        `_valued()` yields sources, and the bare-value check ran before the
+        source-kind check. Nodes and branches validate their kinds earlier,
+        so sources were the one exposed case.
+        """
+        d = DiagramBuilder(P="W").node("a", "A", None, at=(0, 0)).build()
+        d.sources.append(__import__("thermodraw").model.Source(
+            target="a", kind="conduction", value="5"))
+        with pytest.raises(DiagramError) as exc:
+            d.validate()
+        assert "unknown kind 'conduction'" in str(exc.value)
 
 
 # ------------------------------------------------------------------- the hero

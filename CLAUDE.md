@@ -22,8 +22,9 @@ src/thermodraw/
   builder.py   sugar over model.py, holding no state the data cannot express
   core.py      text metrics, transforms, the label solver, occupancy, textures
   check.py     is the drawing any good? placements -> findings, no SVG
-  __main__.py  the command line: `thermodraw check`, `thermodraw render`
-  symbols.py   the twelve symbols, plus sheet renderers
+  describe.py  is it the drawing you meant? placements -> prose, no SVG
+  __main__.py  the command line: `check`, `describe`, `render`
+  symbols.py   the thirteen symbols, plus sheet renderers
   theme.py     CSS variables for web, baked literals and fonts for Word/slides
   _metrics.py  generated character widths — do not edit
   fonts/       the vendored subset, OFL-1.1
@@ -89,7 +90,22 @@ change them without understanding what problem they solved.
   is wrong here.
 - **Fixed node connects to its boundary; thermal break does not.** The visible
   gap is the whole distinction, and it is topological rather than decorative,
-  so the two are never confused without reading text.
+  so the two are never confused without reading text. `g_break` is therefore
+  `g_fixed_node` minus the stub, and nothing else. It used to draw a crossbar
+  and a wall standing *across* the branch, with no node circle — an
+  arrangement the data pipeline could not produce and never had, because
+  neither boundary glyph is reachable from `layout`. The symbol sheet is the
+  visual specification, so a glyph it shows that the library cannot draw is
+  worse than no sheet at all. `tests/test_check.py::TestBreakNode` now pins
+  the two to each other.
+- **A break is also a branch kind, and it draws an open circuit.** Wire,
+  crossbar, gap, crossbar, wire — for a standoff or a mount, a mechanical
+  connection carrying no heat. Deliberately *not* a plain wire, which would
+  say heat flows, and not a resistance, which would say how much. It names no
+  quantity, so it takes no value and gets no second label line. The node kind
+  and the branch kind share the word on purpose: same meaning, two positions.
+  They cannot share a `Symbol` key, because `layout.BY_KEY` is one namespace,
+  which is what `layout.BRANCH_SYM` exists to bridge.
 - **Boundaries use a clipped hatch band, not loose tick marks.** Ticks fall
   apart at intermediate angles whatever shape they outline.
 - **Heat flux is several arrows, not one.** Flux is per unit area and has no
@@ -120,6 +136,11 @@ change them without understanding what problem they solved.
   library and naming physics. On T, C, P and q it is identity: caller-set,
   empty by default. A subscript on an R names a mechanism; a subscript on a T
   names a place. The asymmetry is self-explaining in use.
+- **Every quantity is its own symbol, `q″` included.** `radin` and `flow` are
+  both powers and share `q`; a flux is per unit area and is not measured in
+  the same thing, so it reads `units["q″"]`. They shared one entry until the
+  symbol sheet was found to be documenting `q″` and `W/cm²` — an arrangement
+  the pipeline could not produce.
 - **No colour anywhere in the symbol set.** Reserved for later use —
   temperature maps, path highlighting. The user label is distinguished by
   weight.
@@ -198,6 +219,32 @@ find yourself doing that again, the occupancy list is the thing to reach for.
   cp1252: an arrow in a fixed string is a `UnicodeEncodeError` on the machine
   most likely to be running it. Node ids can still carry anything, which is
   why `__main__` also reconfigures stdout with `errors="replace"`.
+- **A remedy names the field that fixes *this* case.** Both label findings
+  carried one fixed string offering `side`, `angle` and `via` whatever was in
+  the way, which leaves the author to work out which applies — and sometimes
+  they cannot, because the answer was not in the list. A source crowding its
+  node is moved with `at`. `check._remedy` chooses on the culprit's element,
+  and drops `side` once the solver has already tried both sides. That last
+  condition is `used > solved`, not `report["flipped"]`: when the flip fails
+  too, `annotate` falls back to the first candidate and leaves `flipped`
+  False, so the case where the advice matters most is the one it does not
+  mark.
+
+### Describing a diagram (`describe.py`)
+
+- **`check` grades; `describe` reports.** Both acceptance agents, given only
+  `docs/schema.md`, asked for the same missing thing, unprompted: the checker
+  says nothing collides and cannot say the drawing is the one they meant.
+  Element counts, canvas size, and which way each label went is enough to
+  confirm intent without a browser.
+- **They stay separate.** Keeping the judgement in one place is why `check`'s
+  summary line can be one trustworthy sentence; a describe that also graded
+  would have to hedge it.
+- **It reads the same `Scene`, for the same reason the checker does.** A
+  description that re-derives the page will drift from the render it claims
+  to describe.
+- **It always exits 0.** The exit code is `check`'s to own. Two questions,
+  two commands, two meanings for the number.
 
 ### Reviewing goldens rather than rubber-stamping them
 
@@ -292,6 +339,10 @@ In rough priority order:
 3. **Region enclosures that auto-size to their contents** rather than taking
    fixed dimensions.
 4. **Unit handling** — pass `0.35` and have it choose between K/W and mK/W.
+   A per-element `unit` override belongs here too: units are one entry per
+   quantity per diagram, which is the rule that keeps `K/W` from mixing with
+   `mK/W`, and the escape hatch has to be deliberate rather than a side effect
+   of the quantity table.
 5. **More checks, as they earn their place.** A finding is worth adding when
    it caught something a browser was needed for. It is not worth adding
    because it is easy to compute.

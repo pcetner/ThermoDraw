@@ -18,22 +18,28 @@ from dataclasses import dataclass, field, fields
 from typing import Any, Dict, List, Optional, Sequence, Union
 
 NODE_KINDS = {"free", "fixed", "break", "corner"}
-BRANCH_KINDS = {"cond", "conv", "rad", "contact", "cap"}
+BRANCH_KINDS = {"cond", "conv", "rad", "contact", "cap", "break"}
 SOURCE_KINDS = {"diss", "radin", "flow", "flux"}
 
 # A subscript on an R is structural: the library sets it and it names the
 # mechanism. A subscript on a C, T, P or q is identity, and the caller sets
 # it. None here means "ask the branch", which is how that asymmetry is kept.
 BRANCH_SUB = {"cond": "cond", "conv": "conv", "rad": "rad",
-              "contact": "contact", "cap": None}
+              "contact": "contact", "cap": None, "break": None}
+# None means the branch names no quantity at all: a thermal break has neither
+# a resistance nor a capacitance, so it carries the user's label and nothing
+# else. `layout` drops the second line rather than inventing a symbol for it.
 BRANCH_SYMBOL = {"cond": "R", "conv": "R", "rad": "R", "contact": "R",
-                 "cap": "C"}
-SOURCE_SYMBOL = {"diss": "P", "radin": "q", "flow": "q", "flux": "q"}
+                 "cap": "C", "break": None}
+SOURCE_SYMBOL = {"diss": "P", "radin": "q", "flow": "q", "flux": "q″"}
 
 # Which quantity each kind is measured in, so one units entry serves many.
+# Each quantity is its own symbol, `q″` included: flux is per unit area, so it
+# is not measured in the same thing as a heat flow and must not share the
+# entry. `radin` and `flow` are both powers and do share `q`.
 QUANTITY = {"cond": "R", "conv": "R", "rad": "R", "contact": "R", "cap": "C",
             "free": "T", "fixed": "T", "break": "T",
-            "diss": "P", "radin": "q", "flow": "q", "flux": "q"}
+            "diss": "P", "radin": "q", "flow": "q", "flux": "q″"}
 
 RAIL = "rail"
 
@@ -278,6 +284,15 @@ class Diagram:
                 raise DiagramError(
                     f"branch {b.source}-{b.target}: unknown kind {b.kind!r}; "
                     "expected one of " + ", ".join(sorted(BRANCH_KINDS)))
+            # Said here rather than left to the units check below. A break
+            # carries no heat, so it has no quantity to be measured in, and
+            # `QUANTITY` only holds "break" for the *node* kind — one
+            # namespace, two positions. Without this the author gets "units
+            # has no entry for 'T'" about a branch, which explains nothing.
+            if b.kind == "break" and b.value is not None:
+                raise DiagramError(
+                    f"branch {b.source}-{b.target} is a break, which carries "
+                    f"no heat and so no value; got {b.value!r}")
             for end in (b.source, b.target):
                 if end == RAIL:
                     if not self.rail:
@@ -308,6 +323,16 @@ class Diagram:
                 raise DiagramError(
                     f"units names {quantity!r}, which is not a quantity here; "
                     "expected one of " + ", ".join(sorted(known)))
+        # Before the value check below, not with the rest of the source
+        # checks after it: `_valued()` yields sources, so an unknown kind
+        # reached `QUANTITY[kind]` and raised a bare KeyError instead of
+        # saying which kinds exist. Nodes and branches validate their kinds
+        # further up, which is why only sources were exposed.
+        for s in self.sources:
+            if s.kind not in SOURCE_KINDS:
+                raise DiagramError(
+                    f"source at {s.target}: unknown kind {s.kind!r}; expected "
+                    "one of " + ", ".join(sorted(SOURCE_KINDS)))
         # Units are fixed per diagram and given once per quantity, so they
         # cannot be mixed. What can still go wrong is a value with no unit
         # at all, which renders as a bare number.
@@ -317,10 +342,6 @@ class Diagram:
                     f"{owner} has the value {value!r} but units has no entry "
                     f"for {QUANTITY[kind]!r}, so it would render bare")
         for s in self.sources:
-            if s.kind not in SOURCE_KINDS:
-                raise DiagramError(
-                    f"source at {s.target}: unknown kind {s.kind!r}; expected "
-                    "one of " + ", ".join(sorted(SOURCE_KINDS)))
             if s.target not in seen:
                 raise DiagramError(f"source: no node named {s.target!r}")
             where = f"source at {s.target}"

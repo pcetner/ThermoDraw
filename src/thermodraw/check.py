@@ -210,6 +210,47 @@ def _name(p):
     return ref
 
 
+def _remedy(culprit, exhausted=False, pair=False):
+    """The schema field that fixes *this* case, not a list of all of them.
+
+    Both label findings used to carry one fixed string offering `side`,
+    `angle` and `via` whatever was in the way, which leaves the author to
+    work out which applies — and sometimes they cannot, because the right
+    answer was not in the list. A source crowding its node is moved with
+    `at`, and nothing ever said so. An acceptance agent was told to "set
+    `side`" at a node that already had all four sides taken.
+
+    `exhausted` is the push loop having run, which happens only when every
+    candidate side was blocked. It is not `report["flipped"]`: when the flip
+    fails too, `annotate` falls back to the first candidate and leaves that
+    False, so the one case where the advice matters most is the one it does
+    not mark.
+    """
+    if pair:
+        options = ["set `side` on one of the two"]
+    elif culprit is None:
+        options = ["set `side` on this label"]
+    elif culprit.element == "wire":
+        options = [f"move a `via` waypoint on {culprit.ref} so it does not "
+                   "run past this label", "set `side` on this label"]
+    elif culprit.element == "symbol":
+        where = ("further from its node" if culprit.ref.startswith("source")
+                 else "along its branch")
+        options = [f"move {culprit.ref} {where} with `at`",
+                   "set `side` on this label"]
+    else:                       # a node, or the boundary wall belonging to one
+        options = [f"move {culprit.ref} with `at`", "set `side` on this label"]
+    if exhausted:
+        # `_sides` tries exactly two directions, the normals of the branch.
+        # Saying "set `side`" bare is advice the solver has already taken.
+        # Naming the other two, and `angle` for what lies between them, is not.
+        options = [o for o in options if not o.startswith("set `side`")]
+        options += ["set `side` to one of the two the solver does not try "
+                    "(it tries only the sides of the branch)",
+                    "`angle` for a direction between those four"]
+    return ", or ".join(options)
+
+
 # --------------------------------------------------------------- the network
 def _round(p):
     return round(p[0], 1), round(p[1], 1)
@@ -364,6 +405,7 @@ def _collisions(scene, out):
         hit = scene.occupancy.blocker(centre, half, owner=rect.owner)
         if hit is None and rect.clear:
             continue
+        culprit, is_pair = (hit.owner if hit else None), False
         if hit is None:
             what = "something it could not get clear of"
         elif hit.kind == "box" and (hit.detail[0], hit.detail[1]) in labels:
@@ -375,13 +417,14 @@ def _collisions(scene, out):
                 continue
             seen.add(pair)
             what = f"the label on {_name(other.owner)}"
+            is_pair = True
         else:
             what = _name(hit.owner)
         out.append(Finding(
             "label-collision", "error", rect.ref or "a label",
             f"{rect.ref}: its label is printed over {what}",
-            remedy="set `side` on it, or `angle` if every side is already "
-                   "taken, or move the two apart",
+            remedy=_remedy(culprit, exhausted=rect.used > rect.solved,
+                           pair=is_pair),
             at=centre))
 
 
@@ -414,9 +457,7 @@ def _adrift(scene, placements, out):
             "label-adrift", "warning", rect.ref or "a label",
             f"{rect.ref}: its label was pushed {rect.used - rect.solved:.0f} "
             f"past its own clearance to get around {_name(culprit)}{closer}",
-            remedy="set `side` on one of the two, or `angle` if every side "
-                   "is already taken, or move a `via` waypoint so the two "
-                   "are not stacked on one line",
+            remedy=_remedy(culprit, exhausted=rect.used > rect.solved),
             at=centre))
 
 
