@@ -72,6 +72,60 @@ def test_a_true_is_not_a_coordinate():
         Diagram.from_dict({"nodes": [{"id": "a", "at": [True, 0]}]})
 
 
+# ------------------------------------------------------------ finiteness
+@pytest.mark.parametrize("bad", [float("nan"), float("inf"), -float("inf")])
+def test_a_coordinate_must_be_finite(bad):
+    """`nan` is a float, so it passed the type check and rendered
+    `width="nan"` — a blank document, the seventh silent way to write a bad
+    `at`."""
+    with pytest.raises(DiagramError, match="finite"):
+        Diagram.from_dict({"nodes": [{"id": "a", "at": [bad, 0]}]})
+
+
+def test_an_angle_must_be_finite():
+    with pytest.raises(DiagramError, match="angle must be a finite number"):
+        Diagram.from_dict({"nodes": [{"id": "a", "at": [0, 0],
+                                      "angle": float("nan")}]})
+
+
+# ------------------------------------------------------------------- ids
+def test_an_id_must_not_be_empty():
+    with pytest.raises(DiagramError, match="non-empty"):
+        Diagram.from_dict({"nodes": [{"id": "", "at": [0, 0]}]})
+
+
+def test_rail_is_reserved_and_the_error_says_so():
+    """`rail` is what a branch names to join the reference rail, so a node
+    called that was silently taken for the rail."""
+    with pytest.raises(DiagramError, match="names the reference rail"):
+        Diagram.from_dict({"nodes": [{"id": "rail", "at": [0, 0]}]})
+
+
+@pytest.mark.parametrize("weird", ["hot side", "o'clock", "a->b", "T_j (°C)"])
+def test_any_other_text_is_a_fine_id(weird):
+    """No code parses an id back out of a string, so nothing constrains what
+    one contains. Forbidding characters would defend a parse that no longer
+    exists — and `a->b` really did break two things, for exactly as long as
+    the parse did."""
+    d = Diagram.from_dict({"nodes": [{"id": weird, "at": [0, 0]},
+                                     {"id": "b", "at": [220, 0]}],
+                           "branches": [{"from": weird, "to": "b",
+                                         "kind": "cond"}]})
+    render(layout(d))
+
+
+# ---------------------------------------------------------- source count
+@pytest.mark.parametrize("bad, expected", [("many", "whole number"),
+                                           (0, "1 or more"),
+                                           (True, "whole number")])
+def test_a_source_count_is_checked_like_a_branchs(bad, expected):
+    """It went through nothing: `count: 0` drew one and `count: "many"` died
+    in `layout` with a TypeError naming no source."""
+    with pytest.raises(DiagramError, match=expected):
+        build(units={"P": "W"},
+              sources=[{"to": "a", "kind": "diss", "value": 5, "count": bad}])
+
+
 # -------------------------------------------------------------- bad keys
 @pytest.mark.parametrize("key, hint", [
     ("name", "label"), ("text", "label"), ("type", "kind"),

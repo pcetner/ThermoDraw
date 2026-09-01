@@ -13,6 +13,7 @@ are the same list. See docs/schema.md.
 """
 import difflib
 import json
+import math
 from dataclasses import MISSING as _MISSING
 from dataclasses import dataclass, field, fields
 from typing import Any, Dict, List, Optional, Sequence, Union
@@ -97,10 +98,15 @@ def _fmt(value):
 # 'str'", naming no node and no field, and one drew the wrong picture in
 # silence. These are cheap and they run first.
 def _number(value, where, name):
-    # bool is an int in Python, and an angle of True is not an angle
+    # bool is an int in Python, and an angle of True is not an angle. `nan`
+    # and `inf` are floats, and a `nan` coordinate rendered `width="nan"` — a
+    # blank document, the seventh silent way to write a bad `at`.
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise DiagramError(
             f"{where}: {name} must be a number, got {value!r}")
+    if not math.isfinite(value):
+        raise DiagramError(
+            f"{where}: {name} must be a finite number, got {value!r}")
     return value
 
 
@@ -117,6 +123,10 @@ def _point(value, where, name):
         if isinstance(item, bool) or not isinstance(item, (int, float)):
             raise DiagramError(
                 f"{where}: {name} must be numbers, got {item!r} in {value!r}")
+        if not math.isfinite(item):
+            raise DiagramError(
+                f"{where}: {name} must be finite numbers, got {item!r} "
+                f"in {value!r}")
     return value
 
 
@@ -362,6 +372,18 @@ class Diagram:
         """Every reason a diagram cannot be drawn, reported before drawing."""
         seen = set()
         for n in self.nodes:
+            # The id is the one string other things point at, so it is
+            # checked before anything can. Nothing constrains what it contains
+            # beyond these two: no code parses an id back out of a string, so
+            # `hot side` and `o'clock` are fine ids.
+            if not isinstance(n.id, str) or not n.id:
+                raise DiagramError(
+                    f"node {n.id!r}: id must be non-empty text")
+            if n.id == RAIL:
+                raise DiagramError(
+                    f"node {n.id!r}: {RAIL!r} names the reference rail, which "
+                    "a branch may join as an endpoint, so a node cannot take "
+                    "it. Give the node another id")
             if n.id in seen:
                 raise DiagramError(f"duplicate node id {n.id!r}")
             seen.add(n.id)
@@ -514,6 +536,11 @@ class Diagram:
                        "`radin` is radiation arriving; for radiation leaving, "
                        "draw a `rad` branch to a boundary node")
                     + ". For heat leaving, use `flow` or `flux`")
+            # A branch's `count` goes through `_count`; a source's went
+            # through nothing, so `count: 0` drew one and `count: "many"`
+            # died in `layout` with a TypeError naming no source.
+            if s.count is not None:
+                _count(s.count, f"source {i}")
         # Units are fixed per diagram and given once per quantity, so they
         # cannot be mixed. What can still go wrong is a value with no unit
         # at all, which renders as a bare number.

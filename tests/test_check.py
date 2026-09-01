@@ -185,7 +185,7 @@ class TestNetworkInPieces:
         found = one(check(self.two_halves()), "network-in-pieces")
         assert found.severity == "warning"
         assert "nothing joins 'cold', 'cool'" in found.message
-        assert found.where == "cold", "the orphan, not the main body"
+        assert found.where == "node 'cold'", "the orphan, not the main body"
 
     def test_the_remedy_names_why_a_source_cannot_join_them(self):
         """Which is the actual gap the two gallery diagrams ran into."""
@@ -232,6 +232,23 @@ class TestNetworkInPieces:
             parts += 1
         assert parts == 2, "the premise of this test"
         assert "network-in-pieces" not in codes(check(d))
+
+    @pytest.mark.parametrize("weird", ["a->b", "hot side", "o'clock"])
+    def test_a_node_id_is_data_not_a_string_to_parse(self, weird):
+        """A node called `a->b` used to sever its own branches: this finding
+        and `describe` both recovered the endpoints by splitting the ref
+        string, and reported a connected diagram as two pieces with the
+        confidence of a tool that had checked. The placement now carries its
+        ends as data, and one builder serves both."""
+        from thermodraw import describe
+        b = (DiagramBuilder(R="K/W", T="C")
+             .node(weird, "Left", "20", at=(0, 0))
+             .node("c", "Right", "80", at=(300, 0))
+             .branch(weird, "c", "cond", "Path", "0.35"))
+        assert "network-in-pieces" not in codes(check(b))
+        d = describe(b)
+        assert d.edges == [(weird, "c", "cond")]
+        assert d.pieces == [sorted([weird, "c"])]
 
 
 class TestLabelCollision:
@@ -555,9 +572,12 @@ class TestTheRemedyNamesTheField:
         from thermodraw._check import _remedy
         from thermodraw._layout import Placement
         for element in ("wire", "symbol", "ground", "node"):
-            for ref in ("branch 0 a->b", "source 0 -> a", "node 'a'"):
-                p = Placement(element, ref=ref)
-                for owner in (None, Placement("node", ref="node 'a'"), p):
+            for ref, role in (("branch 0 a->b", "branch"),
+                              ("source 0 -> a", "source"),
+                              ("node 'a'", "node")):
+                p = Placement(element, ref=ref, role=role)
+                for owner in (None, Placement("node", ref="node 'a'",
+                                              role="node"), p):
                     for free in ((), ("up", "left")):
                         assert _remedy(p, owner, free).isascii()
         assert _remedy(None, pair=True).isascii()
@@ -575,37 +595,42 @@ class TestTheRemedyDoesNotGiveAdviceThatCannotWork:
         has no `via` at all — the validator refuses the field outright."""
         from thermodraw._check import _remedy
         from thermodraw._layout import Placement
-        text = _remedy(Placement("wire", ref="source 1 -> panel"))
+        text = _remedy(Placement("wire", ref="source 1 -> panel",
+                                 role="source", ends=("panel",)))
         assert "`via`" not in text
         assert "move source 1 -> panel with `at`" in text
 
     def test_a_branch_is_still_told_to_move_a_via(self):
         from thermodraw._check import _remedy
         from thermodraw._layout import Placement
-        assert "`via`" in _remedy(Placement("wire", ref="branch 0 a->b"))
+        assert "`via`" in _remedy(Placement("wire", ref="branch 0 a->b",
+                                            role="branch", ends=("a", "b")))
 
-    @pytest.mark.parametrize("ref", ["branch 0 a->b", "source 0 -> a"])
-    def test_angle_is_never_offered_for_a_label_that_is_not_a_nodes(self, ref):
+    @pytest.mark.parametrize("ref,role", [("branch 0 a->b", "branch"),
+                                          ("source 0 -> a", "source")])
+    def test_angle_is_never_offered_for_a_label_that_is_not_a_nodes(
+            self, ref, role):
         """The schema gives `angle` three meanings. On a branch it "overrides
         the direction taken from the wire", so following this advice laid a
         conduction box diagonally across its own wire — and the checker then
         passed the result."""
         from thermodraw._check import _remedy
         from thermodraw._layout import Placement
-        owner = Placement("symbol", ref=ref)
+        owner = Placement("symbol", ref=ref, role=role)
         assert "`angle`" not in _remedy(None, owner, free=())
 
     def test_angle_is_offered_for_a_node_with_nowhere_left(self):
         """Which is the one element where it means what the remedy says."""
         from thermodraw._check import _remedy
         from thermodraw._layout import Placement
-        text = _remedy(None, Placement("node", ref="node 'a'"), free=())
+        text = _remedy(None, Placement("node", ref="node 'a'", role="node"),
+                       free=())
         assert "`angle`" in text and "label frame" in text
 
     def test_only_sides_the_occupancy_says_are_free_are_named(self):
         from thermodraw._check import _remedy
         from thermodraw._layout import Placement
-        text = _remedy(None, Placement("node", ref="node 'a'"),
+        text = _remedy(None, Placement("node", ref="node 'a'", role="node"),
                        free=("up", "left"))
         assert 'set `side` to "up" or "left"' in text
         assert '"down"' not in text and '"right"' not in text

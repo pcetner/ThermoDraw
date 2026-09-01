@@ -33,7 +33,7 @@ from dataclasses import dataclass, field
 from typing import List, Optional, Tuple
 
 from . import core
-from ._layout import layout as _layout
+from ._layout import layout as _layout, network, pieces
 from ._render import PADDING, _wall_box, compose
 
 # How far past its own solved clearance a label may be pushed before it is
@@ -226,7 +226,7 @@ def _kind_of(p):
         return "?"
     if p.element == "node":
         return "node"
-    return "source" if str(p.ref or "").startswith("source") else "branch"
+    return "source" if p.role == "source" else "branch"
 
 
 def _move(p):
@@ -524,18 +524,15 @@ def _crowded_run(scene, placements, out):
     against the wrong number.
     """
     rects = {id(r.owner): r for r in scene.rects if r.owner is not None}
-    nodes = {}
-    for p in placements:
-        if p.element == "node" and (p.ref or "").startswith("node '"):
-            nodes[p.ref[6:-1]] = p
+    nodes = {p.ends[0]: p for p in placements
+             if p.element == "node" and p.role == "node"}
 
     for p in placements:
-        if p.symbol is None or not (p.ref or "").startswith("branch "):
+        if p.symbol is None or p.role != "branch":
             continue
         if p.copy not in (None, 0):     # one pass per group, not per copy
             continue
-        ends = p.ref.split(" ", 2)[-1].split("->")
-        na, nb = (nodes.get(e) for e in ends) if len(ends) == 2 else (None, None)
+        na, nb = (nodes.get(e) for e in p.ends)
         if na is None or nb is None:
             continue
         a, b = tuple(na.at), tuple(nb.at)
@@ -598,42 +595,20 @@ def _islands(placements, out):
     explicit statement that nothing flows here. Excluding it warns about every
     standoff ever drawn, which is a rule an author learns to ignore.
     """
-    adj = {p.ref[6:-1]: set() for p in placements
-           if p.element == "node" and (p.ref or "").startswith("node '")}
-    for p in placements:
-        if p.symbol is None or not (p.ref or "").startswith("branch "):
-            continue
-        ends = p.ref.split(" ", 2)[-1].split("->")
-        if len(ends) != 2:
-            continue
-        for end in ends:
-            adj.setdefault(end, set())
-        adj[ends[0]].add(ends[1])
-        adj[ends[1]].add(ends[0])
-    if len(adj) < 2:
+    # The network itself comes from `_layout.network`, which `describe` also
+    # prints, so the two cannot disagree about what is joined to what.
+    ids = [p.ends[0] for p in placements
+           if p.element == "node" and p.role == "node"]
+    if len(ids) < 2:
         return
-
-    seen, groups = set(), []
-    for start in sorted(adj):
-        if start in seen:
-            continue
-        stack, group = [start], set()
-        while stack:
-            v = stack.pop()
-            if v in group:
-                continue
-            group.add(v)
-            stack += [w for w in adj[v] if w not in group]
-        seen |= group
-        groups.append(group)
+    groups = pieces(network(placements), ids)
     if len(groups) < 2:
         return
 
-    groups.sort(key=lambda g: (-len(g), sorted(g)))
     for group in groups[1:]:
-        named = ", ".join(f"{v!r}" for v in sorted(group))
+        named = ", ".join(f"{v!r}" for v in group)
         out.append(Finding(
-            "network-in-pieces", "warning", sorted(group)[0],
+            "network-in-pieces", "warning", f"node '{group[0]}'",
             f"nothing joins {named} to the rest of the network",
             remedy="connect it with a branch. If a `flow` or `flux` source is "
                    "standing in for a path that carries heat between two "
@@ -818,10 +793,9 @@ def _parallel_pairs(placements, scene, out):
     by_rect = {id(r.owner): r for r in scene.rects}   # Placement is unhashable
     pairs = defaultdict(list)
     for p in placements:
-        if p.symbol is None or not (p.ref or "").startswith("branch "):
+        if p.symbol is None or p.role != "branch":
             continue
-        ends = p.ref.split(" ", 2)[-1]
-        pairs[frozenset(ends.split("->"))].append(p)
+        pairs[frozenset(p.ends)].append(p)
 
     for group in pairs.values():
         for i, pa in enumerate(group):
