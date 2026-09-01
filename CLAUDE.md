@@ -46,6 +46,7 @@ examples/
 docs/
   schema.md              the format, written to be pasted into a prompt
   design-record.md       why each decision below was made — read before changing one
+  notation-test/         the two thumbnails that would settle the boxes-vs-zigzags bet
   symbol-reference.html  every symbol at eight orientations, with notes (generated)
 Dictionary.html          what each symbol means, and when (generated)
 ```
@@ -127,8 +128,9 @@ sentence after it says what would overturn it.
 - A placement carries `role` and `ends` as data; `ref` is for people. Ids are
   non-empty and not `rail`, and nothing else is required of them.
 - **The numbers were never checked, and none of the six real diagrams'
-  numbers close.** `--physics` is Kirchhoff at a free node from stated values.
-  It ships off by default until the hero and the gallery balance; then on.
+  numbers closed.** `--physics` is Kirchhoff at a free node from stated
+  values. The hero's do now. It stays opt-in: a sketch with placeholder
+  numbers is a diagram too, and would fire at every node it has.
 - What survives the solver: three constraints, two objectives, four unchanged,
   three scaffolding. The table is in the record.
 
@@ -173,9 +175,9 @@ sentence after it says what would overturn it.
 1. **The network layer.** The only genuinely hard piece. The record's table of
    what survives it says which checks it must satisfy, which it minimises, and
    which it may delete.
-2. **Make the hero and the gallery balance**, then turn `--physics` on by
-   default. The hero's temperatures do not agree with its own resistances and
-   power; that is a content decision about the flagship, not a code change.
+2. **Re-run the gallery in a clean room** (`examples/gallery/RERUN.md`). The
+   five diagrams are left as their agents drew them, because they are
+   evidence, and all five fail `--physics`. The re-run produces the next set.
 3. Region enclosures that auto-size to their contents.
 4. Unit handling — `0.35` choosing between K/W and mK/W, with a deliberate
    per-element override.

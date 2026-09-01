@@ -461,14 +461,24 @@ processors" box has no `count` and implies 400 W where 3,200 arrive — the
 exact case `count` exists for. The house's roof loses 190 W and is fed by
 nothing: it is joined to neither zone, which no layout check could see. The
 dewar's cryocooler flows are capacities, not loads, and the remedy says to say
-so in the label. None of the six diagrams' numbers close.
+so in the label. None of the six diagrams' numbers closed.
+
+The hero's do now. Its temperatures were never results of its own power and
+resistances — 45 W through 0.35, 0.15 and 1.80 ∥ 6.40 K/W from 40 °C gives
+126, 110 and 103 °C, not 112, 78 and 61 — so the temperatures were
+recomputed and the inputs left alone. The gallery is left as its agents drew
+it, because it is evidence; the clean-room re-run produces the next set.
 
 This is the counterexample to the objection under sharp edges against physics
 checks — that one would fire on every instance of a symbol. This fires on
-values that disagree, and they all did. It ships behind `--physics` until the
-hero and the gallery are made to balance, because every committed diagram
-going red is the rule an author learns to ignore; and it goes on by default
-the day they do.
+values that disagree, and they all did. It is nevertheless **opt-in, and
+stays so.** Not because the committed diagrams fail it, but because a sketch
+with placeholder numbers is a legitimate diagram — the suite's own fixtures
+are full of them — and it would fire at every node such a sketch has. A rule
+that fires on every sketch is the rule an author learns to ignore. `--physics`
+is for a diagram whose numbers you believe, and the README says so. (The
+first version of this paragraph said it would go on by default the day the
+hero balanced. The hero balanced, and the reasoning above is why it did not.)
 
 ### What survives the solver
 

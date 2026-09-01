@@ -23,13 +23,18 @@ room="$(mktemp -d)/thermodraw-clean"
 mkdir -p "$room"
 git archive HEAD | tar -x -C "$room"
 cd "$room"
-pip install -e .          # before the removals: the build reads README.md
 rm -f CLAUDE.md docs/design-record.md README.md CHANGELOG.md Dictionary.html
 rm -rf .claude docs/symbol-reference.html
 rm -f examples/gallery/*/findings.md examples/gallery/*/rounds.md \
       examples/gallery/*/*.json examples/gallery/*/*.svg
 rm -f examples/gallery/FINDINGS.md examples/gallery/README.md examples/gallery/RERUN.md
+git init -q && git add -A && git commit -qm "clean room"
 ```
+
+No install: the library has no dependencies and the briefs run it as
+`PYTHONPATH=src python -m thermodraw`. The `git init` is not optional — the
+briefs find the root with `git rev-parse`, and one commit per agent is what
+makes the run auditable.
 
 What is left is the library, its tests, `docs/schema.md`, and the five
 `brief.md` files. Nothing that argues for a design, nothing that shows a
@@ -37,7 +42,8 @@ finished diagram, nothing that names a prior result. Confirm before starting
 — no `CLAUDE.md`, five briefs, and the checker runs:
 
 ```bash
-test ! -e CLAUDE.md && ls examples/gallery/*/brief.md | wc -l && thermodraw check --help >/dev/null && echo clean
+test ! -e CLAUDE.md && ls examples/gallery/*/brief.md | wc -l \
+  && PYTHONPATH=src python -m thermodraw check --help >/dev/null && echo clean
 ```
 
 Then start **one fresh session per brief, from that directory**, and give it

@@ -286,9 +286,9 @@ and sink thermal masses on the rail:
 {
   "units": {"R": "K/W", "C": "J/K", "T": "°C", "P": "W"},
   "nodes": [
-    {"id": "j",   "label": "Junction",  "sub": "j",   "value": "112", "at": [200, 150]},
-    {"id": "c",   "label": "Case",      "sub": "c",   "value": "78",  "at": [424, 150]},
-    {"id": "s",   "label": "Sink base", "sub": "s",   "value": "61",  "at": [648, 150]},
+    {"id": "j",   "label": "Junction",  "sub": "j",   "value": "126", "at": [200, 150]},
+    {"id": "c",   "label": "Case",      "sub": "c",   "value": "110", "at": [424, 150]},
+    {"id": "s",   "label": "Sink base", "sub": "s",   "value": "103", "at": [648, 150]},
     {"id": "amb", "kind": "fixed", "label": "Still air", "sub": "amb",
      "value": "40", "at": [936, 372], "angle": 90}
   ],
@@ -449,9 +449,11 @@ not asked; a `phase` node is holding latent heat this cannot see; a `flux`
 source has no area, so its node is skipped; a unit the check does not know
 skips the diagram rather than guessing.
 
-It is off by default for one reason: every diagram in this repository fires
-it, the hero included, because none of them was ever made to close. That is a
-statement about the diagrams, not the check.
+It is opt-in, and stays so: a sketch with placeholder numbers is a diagram
+too, and would fire at every node it has. Ask for it when you believe the
+numbers. When it was written every diagram in this repository fired it, the
+hero included — its temperatures were not the results of its own power and
+resistances, and now are. The gallery is left as its agents drew it.
 
 ## Seeing what got drawn
 
@@ -492,9 +494,9 @@ elements:
   branch 4 j->rail       symbol/cap      (200, 278) a90    right          72x33   Die | C_j = 0.9 J/K
   branch 5 s->rail       symbol/cap      (648, 278) a90    right          70x33   Sink | C_s = 86 J/K
   source 0 -> j          symbol/diss     (96, 150)         above          77x33   Switching loss | P_d = 45 W
-  node 'j'               node            (200, 150)        above          70x33   Junction | T_j = 112 °C
-  node 'c'               node            (424, 150)        above          64x33   Case | T_c = 78 °C
-  node 's'               node            (648, 150)        above          64x33   Sink base | T_s = 61 °C
+  node 'j'               node            (200, 150)        above          70x33   Junction | T_j = 126 °C
+  node 'c'               node            (424, 150)        above          72x33   Case | T_c = 110 °C
+  node 's'               node            (648, 150)        above          72x33   Sink base | T_s = 103 °C
   node 'amb'             node            (936, 372) a90    right          78x33   Still air | T_amb = 40 °C
 ```
 

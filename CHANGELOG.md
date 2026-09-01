@@ -25,9 +25,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   "each of 8 processors" box has no `count` and implies 400 W where 3,200
   arrive; the house's roof loses 190 W and is fed by nothing, because it is
   joined to neither zone — a modelling gap no layout check can see. None of
-  the six diagrams' numbers close. It ships off by default until the hero and
-  the gallery are made to, because the alternative — every committed diagram
-  going red — is the rule an author learns to ignore.
+  the six diagrams' numbers closed; the hero's do now (below). It is opt-in
+  and stays so: a sketch with placeholder numbers is a diagram too, and would
+  fire at every node it has. Ask for it when you believe the numbers.
 - **`examples/gallery/RERUN.md`** — the clean-room protocol for repeating the
   gallery with the `CLAUDE.md` injection actually suppressed, which
   `FINDINGS.md` said to do and nothing had. It cannot be run from inside this
@@ -43,6 +43,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **The hero's temperatures agree with its own power and resistances.**
+  112, 78 and 61 °C were not what 45 W through 0.35, 0.15 and 1.80 ∥ 6.40 K/W
+  from 40 °C gives; 126, 110 and 103 are. The inputs are untouched — the
+  temperatures were the outputs and are recomputed. The README image, the
+  schema's worked example and the `demo-hero` golden move with it; nothing
+  else does.
 - **`CLAUDE.md` is the decisions; `docs/design-record.md` is the argument.**
   The design record was 34KB of essay auto-loaded into every session, written
   so that revisiting a decision read as not having understood it, and it had
