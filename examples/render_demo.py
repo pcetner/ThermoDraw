@@ -45,19 +45,9 @@ def cap(cx, cy, a):
     return f'<g transform="{S.xf(cx, cy, a)}">{sym.g_cap(a)}</g>'
 
 
-HATCH = S.hatch(S.BW, S.BH, 45)
-FLOW = S.streamlines(S.BW, S.BH)
-WAVE = sym.rad_arrows()
-
-
-def contact_tex():
-    g, hw = 4.5, (S.BW - 4.5) / 2
-    return (S.hatch(hw, S.BH, 45, x=-S.BW / 2, y=-S.BH / 2)
-            + S.hatch(hw, S.BH, -45, x=g / 2, y=-S.BH / 2)
-            + f'<rect class="gapfill" x="{-g/2}" y="{-S.BH/2}" width="{g}" '
-              f'height="{S.BH}"/>'
-            + f'<line class="w" x1="{-g/2}" y1="{-S.BH/2}" x2="{-g/2}" y2="{S.BH/2}"/>'
-            + f'<line class="w" x1="{g/2}" y1="{-S.BH/2}" x2="{g/2}" y2="{S.BH/2}"/>')
+# The four box interiors, taken from the library rather than rebuilt here.
+HATCH, FLOW, WAVE, SEAM = (sym.tex_cond(), sym.tex_conv(),
+                           sym.tex_rad(), sym.tex_contact())
 
 
 # ------------------------------------------------------ scene 1 — the ladder
@@ -83,7 +73,7 @@ def hero():
 
     # series path
     b += [wire((XJ, Y), (B1 - hb, Y)), block(B1, Y, 0, HATCH),
-          wire((B1 + hb, Y), (B2 - hb, Y)), block(B2, Y, 0, contact_tex()),
+          wire((B1 + hb, Y), (B2 - hb, Y)), block(B2, Y, 0, SEAM),
           wire((B2 + hb, Y), (XSPLIT, Y))]
 
     # convection and radiation in parallel
@@ -130,7 +120,7 @@ def hero():
 
 
 # --------------------------------------------------- scene 2 — the rosette
-ROSETTE_TEX = [HATCH, FLOW, WAVE, None]
+ROSETTE_TEX = [HATCH, FLOW, WAVE, SEAM]
 
 
 def rosette(n=12, R=176):
@@ -146,8 +136,7 @@ def rosette(n=12, R=176):
         a = 360 * i / n
         r = math.radians(a)
         cx, cy = half + R * math.cos(r), half + R * math.sin(r)
-        tex = ROSETTE_TEX[i % 4]
-        inner = contact_tex() if tex is None else tex
+        inner = ROSETTE_TEX[i % 4]
         b += [wire((half + 7 * math.cos(r), half + 7 * math.sin(r)),
                    (half + (R - S.BW / 2) * math.cos(r),
                     half + (R - S.BW / 2) * math.sin(r))),
@@ -173,12 +162,12 @@ def vocabulary(cols=4, cw=250, ch=152):
     rows = (len(sym.SYMBOLS) + cols - 1) // cols
     b = []
     for i, s in enumerate(sym.SYMBOLS):
-        dx, dy = NUDGE.get(s["key"], (0, 0))
+        dx, dy = NUDGE.get(s.key, (0, 0))
         cx = (i % cols) * cw + cw / 2
         cy = (i // cols) * ch + ch / 2 - 12
-        b.append(f'<g transform="{S.xf(cx + dx, cy + dy, 0)}">{s["g"](0)}</g>')
+        b.append(f'<g transform="{S.xf(cx + dx, cy + dy, 0)}">{s.draw(0)}</g>')
         b.append(f'<text class="user" x="{cx}" y="{(i // cols) * ch + ch - 16}" '
-                 f'text-anchor="middle">{s["name"]}</text>')
+                 f'text-anchor="middle">{s.name}</text>')
         if i % cols:
             b.append(f'<line class="tick" x1="{(i % cols) * cw}" '
                      f'y1="{(i // cols) * ch + 18}" x2="{(i % cols) * cw}" '

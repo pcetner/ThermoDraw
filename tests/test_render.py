@@ -21,11 +21,11 @@ def test_element_ids_are_unique(name):
     assert len(ids) == len(set(ids)), "duplicate id in one document"
 
 
-@pytest.mark.parametrize("sym", symbols.SYMBOLS, ids=lambda s: s["key"])
+@pytest.mark.parametrize("sym", symbols.SYMBOLS, ids=lambda s: s.key)
 def test_save_round_trips_non_ascii(sym, tmp_path):
     """conv, rad and flux emit → and ″, which crash a default-encoding write."""
     svg = theme.bake(symbols.strip(sym), "light")
-    path = save(svg, tmp_path / f"{sym['key']}.svg")
+    path = save(svg, tmp_path / f"{sym.key}.svg")
     assert path.read_text(encoding="utf-8").endswith(svg)
 
 

@@ -16,7 +16,7 @@ def main():
     OUT.mkdir(exist_ok=True)
     for sym in symbols.SYMBOLS:
         svg = symbols.strip(sym)
-        save(theme.with_variables(svg), OUT / f"{sym['key']}.svg")
+        save(theme.with_variables(svg), OUT / f"{sym.key}.svg")
     for mode in ("light", "dark"):
         save(theme.bake(symbols.diagonal_demo(), mode),
              OUT / f"example-{mode}.svg")
