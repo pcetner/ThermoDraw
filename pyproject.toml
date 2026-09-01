@@ -1,5 +1,6 @@
 [build-system]
-requires = ["setuptools>=68"]
+# 77 is the floor for PEP 639 (`license` as an SPDX expression, `license-files`).
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -8,7 +9,11 @@ version = "0.2.0"
 description = "Thermal network diagrams for Python"
 readme = "README.md"
 requires-python = ">=3.9"
-license = { text = "MIT" }
+license = "MIT"
+# The code is MIT. The three bundled font faces are subsets of IBM Plex Sans
+# under OFL-1.1, which requires its licence to travel with them: NOTICE says
+# which files those are, and OFL.txt is the full text. See NOTICE.
+license-files = ["LICENSE", "NOTICE", "src/thermodraw/fonts/OFL.txt"]
 authors = [{ name = "Peter Cetner" }]
 keywords = ["thermal", "heat transfer", "diagram", "svg", "schematic"]
 classifiers = [
@@ -30,4 +35,6 @@ pythonpath = ["src", "examples", "tests"]
 where = ["src"]
 
 [tool.setuptools.package-data]
-thermodraw = ["fonts/*.woff2", "fonts/OFL.txt"]
+# py.typed is the PEP 561 marker: without it type checkers ignore the package
+# entirely, however fully annotated it is.
+thermodraw = ["py.typed", "fonts/*.woff2", "fonts/OFL.txt"]

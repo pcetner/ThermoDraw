@@ -9,6 +9,9 @@ from thermodraw import (Diagram, DiagramBuilder, DiagramError, layout, render,
 
 HERO = pathlib.Path(__file__).resolve().parents[1] / "examples" / "hero.json"
 
+pytestmark = pytest.mark.skipif(
+    not HERO.exists(), reason="examples/hero.json is not present")
+
 
 def hero():
     return Diagram.from_json(HERO.read_text(encoding="utf-8"))
