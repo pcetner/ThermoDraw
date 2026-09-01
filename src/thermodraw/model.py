@@ -21,6 +21,12 @@ NODE_KINDS = {"free", "fixed", "break", "corner"}
 BRANCH_KINDS = {"cond", "conv", "rad", "contact", "cap", "break"}
 SOURCE_KINDS = {"diss", "radin", "flow", "flux"}
 
+# A source written with `from` points away from its node instead of into it.
+# Only the two annotation kinds may: `diss` is dissipation appearing at a node
+# and does not go anywhere, and `radin` is radiation *arriving*, so an
+# outbound one would be a symbol whose own name contradicts it.
+OUTWARD_KINDS = {"flow", "flux"}
+
 # A subscript on an R is structural: the library sets it and it names the
 # mechanism. A subscript on a C, T, P or q is identity, and the caller sets
 # it. None here means "ask the branch", which is how that asymmetry is kept.
@@ -206,7 +212,21 @@ class Branch:
 
 @dataclass
 class Source:
-    target: str
+    """Heat crossing into or out of a node.
+
+    `to` is heat arriving and `from` is heat leaving, exactly as on a branch,
+    and one of them is required. The direction is which end of the arrow the
+    lead attaches to and nothing else: every source glyph draws its tail at
+    -half_len and its head at +half_len, so the same drawing serves both. On
+    `flux` that is what makes it work — the hatch band is a surface, so
+    attaching the tail puts the surface against the node with the arrows
+    leaving it.
+
+    `target` stays first and keeps its default-free position, so
+    `Source("j", "diss")` still means what it always did.
+    """
+
+    target: Optional[str] = None
     kind: str = "diss"
     label: Optional[str] = None
     sub: str = ""
@@ -214,6 +234,16 @@ class Source:
     at: Optional[Sequence[float]] = None
     angle: float = 0.0
     side: str = "auto"
+    source: Optional[str] = None            # `from`: heat leaving that node
+
+    @property
+    def outward(self):
+        return self.source is not None
+
+    @property
+    def node(self):
+        """The node this attaches to, whichever end it was written as."""
+        return self.source if self.outward else self.target
 
 
 @dataclass
@@ -328,11 +358,33 @@ class Diagram:
         # reached `QUANTITY[kind]` and raised a bare KeyError instead of
         # saying which kinds exist. Nodes and branches validate their kinds
         # further up, which is why only sources were exposed.
-        for s in self.sources:
+        for i, s in enumerate(self.sources):
+            # Both ends, or neither, before anything reads `s.node` — which
+            # `_valued()` does two loops down. `_build` cannot catch this:
+            # each field has a default, so a source with no endpoint at all
+            # constructs cleanly and only fails much later.
+            if s.source is not None and s.target is not None:
+                raise DiagramError(
+                    f"source {i}: give `from` or `to`, not both. `to` is heat "
+                    f"arriving at {s.target!r}; `from` is heat leaving "
+                    f"{s.source!r}")
+            if s.node is None:
+                raise DiagramError(
+                    f"source {i}: needs `to` for heat arriving at a node, or "
+                    "`from` for heat leaving one")
             if s.kind not in SOURCE_KINDS:
                 raise DiagramError(
-                    f"source at {s.target}: unknown kind {s.kind!r}; expected "
+                    f"source at {s.node}: unknown kind {s.kind!r}; expected "
                     "one of " + ", ".join(sorted(SOURCE_KINDS)))
+            if s.outward and s.kind not in OUTWARD_KINDS:
+                raise DiagramError(
+                    f"source at {s.node}: {s.kind!r} points into a node and "
+                    "cannot be written with `from`. "
+                    + ("dissipation appears at a node rather than travelling "
+                       "to it" if s.kind == "diss" else
+                       "`radin` is radiation arriving; for radiation leaving, "
+                       "draw a `rad` branch to a boundary node")
+                    + ". For heat leaving, use `flow` or `flux`")
         # Units are fixed per diagram and given once per quantity, so they
         # cannot be mixed. What can still go wrong is a value with no unit
         # at all, which renders as a bare number.
@@ -342,9 +394,9 @@ class Diagram:
                     f"{owner} has the value {value!r} but units has no entry "
                     f"for {QUANTITY[kind]!r}, so it would render bare")
         for s in self.sources:
-            if s.target not in seen:
-                raise DiagramError(f"source: no node named {s.target!r}")
-            where = f"source at {s.target}"
+            if s.node not in seen:
+                raise DiagramError(f"source: no node named {s.node!r}")
+            where = f"source at {s.node}"
             if s.at is not None:
                 _point(s.at, where, "at")
             _number(s.angle, where, "angle")
@@ -361,7 +413,7 @@ class Diagram:
         for b in self.branches:
             yield f"branch {b.source}-{b.target}", b.kind, b.value
         for s in self.sources:
-            yield f"source at {s.target}", s.kind, s.value
+            yield f"source at {s.node}", s.kind, s.value
 
     def to_dict(self):
         """JSON-shaped, using from/to rather than the Python-safe names."""
@@ -403,7 +455,8 @@ class Diagram:
         branches = [_build(Branch, b, f"branch {i}",
                            {"from": "source", "to": "target"})
                     for i, b in enumerate(data.get("branches", []))]
-        sources = [_build(Source, s, f"source {i}", {"to": "target"})
+        sources = [_build(Source, s, f"source {i}",
+                          {"to": "target", "from": "source"})
                    for i, s in enumerate(data.get("sources", []))]
         rail = _build(Rail, data["rail"], "rail") if data.get("rail") else None
         return cls(nodes=nodes, branches=branches, sources=sources, rail=rail,
@@ -442,7 +495,8 @@ def _branch_dict(b):
 
 
 def _source_dict(s):
-    out = {"to": s.target, "kind": s.kind}
+    out = {"from": s.source} if s.outward else {"to": s.target}
+    out["kind"] = s.kind
     return _keep(out, s, ("label", "sub", "value", "at", "angle"))
 
 

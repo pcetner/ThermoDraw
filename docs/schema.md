@@ -130,37 +130,48 @@ a break at a boundary rather than between two nodes.
 
 ## Sources
 
-Heat appearing at a node. An arrow, not a two-terminal element.
+Heat crossing into or out of a node. An arrow, not a two-terminal element.
 
 ```jsonc
 {"to": "j", "kind": "diss", "label": "Switching loss", "value": "45", "sub": "d"}
 ```
 
+Give it **`to`** for heat arriving at that node, or **`from`** for heat
+leaving it — one or the other, exactly as a branch takes both. The arrow
+points whichever way you said.
+
 `kind` is `diss` (electrical or internal dissipation), `radin` (radiation
 arriving), `flow` (a heat rate crossing the boundary) or `flux` (a rate per
 unit area).
 
-| kind | drawn as | symbol | unit taken from |
-|---|---|---|---|
-| `diss` | arrow into the node | `P` | `units.P` |
-| `radin` | wavy arrow into the node | `q` | `units.q` |
-| `flow` | arrow into the node | `q` | `units.q` |
-| `flux` | several arrows | `q″` | `units["q″"]` |
+| kind | drawn as | symbol | unit taken from | may use `from` |
+|---|---|---|---|---|
+| `diss` | arrow | `P` | `units.P` | no |
+| `radin` | wavy arrow | `q` | `units.q` | no |
+| `flow` | arrow | `q` | `units.q` | **yes** |
+| `flux` | several arrows leaving a hatched surface | `q″` | `units["q″"]` | **yes** |
+
+Only the two annotation kinds may point away. `diss` is dissipation
+*appearing* at a node rather than travelling to it, and `radin` is radiation
+*arriving* — for radiation leaving, draw a `rad` branch to a boundary node,
+which is the thing that actually carries it.
 
 `sub` names the source, as it does on a node; it is yours to choose. `radin`
 and `flow` share `units.q` because both are powers. `flux` has its own, so a
 diagram can carry a heat rate in `W` and a heat flux in `W/cm²` at once.
 
 `at` is the **centre of the symbol**, not its head or its tail, exactly as it
-is on a branch. `angle` turns it: `0` is the default, pointing right, so the
-arrow comes in horizontally from the left; `90` points down, which puts the
-symbol above the node. A lead is drawn from the symbol to the node whatever
-you choose, so `at` only has to be roughly right. Left out, the source is
-placed to the left of its node with enough room for its own label. `side`
-moves that label, as above.
+is on a branch. `angle` is the direction the arrow points, `0` being to the
+right. A lead is drawn from the symbol to the node whichever you choose, so
+`at` only has to be roughly right.
 
-The arrow always points **into** the node — a source is heat arriving. There
-is no kind for heat leaving; annotate the branch it leaves by instead.
+Leave `at` out and the source is placed along its own `angle` with room for
+its label — on the far side of the node for a `to`, so the arrow arrives, and
+on the near side for a `from`, so it leaves. That is usually what you want:
+`{"from": "cell", "kind": "flux", "angle": 270}` puts a hatched face on top of
+the cell with the arrows rising off it, and needs no coordinates.
+
+`side` moves the label, as above.
 
 ## Rail
 
@@ -344,17 +355,29 @@ nodes:
   j              free     at (200, 150)
   ...
 
-labels:
-  branch 0 j->c          symbol/cond     above         103x33
-  branch 2 s->amb        symbol/conv     above         102x33
-  branch 3 s->amb        symbol/rad      above          97x33
+rail: y 372, span (200, 936), reference 'amb'
+
+nodes:
+  j              free     at (200, 150)
+  ...
+
+elements:
+  branch 0 j->c    symbol/cond   (312, 150)       above   103x33  Die attach | R_cond = 0.35 K/W
+  branch 2 s->amb  symbol/conv   (816, 70)        above   102x33  Fins → air | R_conv = 1.80 K/W
+  branch 3 s->amb  symbol/rad    (816, 238)       above    97x33  Case → walls | R_rad = 6.40 K/W
+  branch 4 j->rail symbol/cap    (200, 278) a90   right    72x33  Die | C_j = 0.9 J/K
   ...
 ```
 
-Element counts against what you wrote, the canvas you will get, and which way
-each label went — including `flipped` and `pushed N` where the solver had to
-work for it. Above, `branch 2` and `branch 3` both went "above", which is the
-parallel pair `check` notes, visible directly rather than only graded.
+Element counts against what you wrote, the canvas you will get, where each
+symbol sits and which way it is turned, what each label reads, and which way
+it went — including `flipped` and `pushed N` where the solver had to work for
+it. Above, `branch 2` and `branch 3` both went "above", which is the parallel
+pair `check` notes, visible directly rather than only graded.
+
+An element carrying no text at all — a `break` branch with no `label` — still
+gets a row, marked `(no label)`. `rail.reference` is documentary and does
+nothing, so this is the only place it can be checked against what you meant.
 
 It always exits 0: it reports, it does not judge. `--json` for a machine. From
 Python it is `describe(diagram)`, returning a `.text()` and a `.to_dict()`.

@@ -57,6 +57,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   rebuilding the page. `describe(diagram)` from Python, `.describe()` on a
   builder, `thermodraw describe file.json` from a shell, `--json`.
 
+- **Heat leaving a node: `from` on a source, against `to`.** The acceptance
+  reader was asked to annotate the flux leaving a cell's top face and could
+  only draw arrows pointing into it — the one thing it was asked for and
+  could not express.
+
+  It needed no new geometry and no glyph change. Every source symbol already
+  draws its tail at `-half_len` and its head at `+half_len`, so direction is
+  only which end the lead attaches to and which side the default offset goes:
+  far side and join the head, or near side and join the tail. `flux` is the
+  one that shows why — its hatch band *is* a surface, and its note has read
+  "several arrows leaving a surface" since the symbol was designed, so
+  joining the tail stands that surface against the node with the arrows
+  rising off it. `{"from": "cell", "kind": "flux", "angle": 270}` draws it
+  and needs no coordinates.
+
+  Only `flow` and `flux` may. `diss` is dissipation appearing at a node
+  rather than travelling to it, and `radin` is radiation *arriving*; an
+  outbound one would be a symbol whose own name contradicts it, and what is
+  actually wanted is a `rad` branch to a boundary. The error says so.
+
 - **A `break` **branch** kind.** The node kind leaves a wall floating: an
   acceptance agent drawing a fibreglass standoff got a labelled boundary with
   nothing tying it to the thing it was bolted to, because every branch kind
@@ -175,6 +195,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   than straddling it.
 
 ### Changed
+
+- **A source with no `at` now follows its own `angle`.** The default placed
+  it to the left of its node whatever `angle` said, so turning a source
+  without also giving coordinates put the symbol beside the node and ran the
+  lead across the page. It is now offset along the direction the arrow
+  points. Identical for `angle: 0`, which is every source in the repo.
+
+- **`describe` keys its rows on placements rather than on labels, and gives
+  each one its position and angle.** `compose` skips a label with nothing to
+  say, so an element carrying no text had no row at all — a `break` branch
+  names no quantity by design, and one with no `label` vanished into the
+  counts. It now gets a row marked `(no label)`. For a source, which way it
+  points is the whole of its meaning, and it could previously only be
+  inferred from where the label landed. The JSON `labels` key becomes
+  `elements`, with the label's own fields nested under `label`.
 
 - **The command line softens output with `backslashreplace`, not `replace`.**
   The quantity for a heat flux is `q` followed by U+2033, and on a cp1252

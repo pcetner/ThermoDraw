@@ -88,6 +88,19 @@ change them without understanding what problem they solved.
 - **Sources are arrows, not circled elements.** Heat appears at a node; it is
   not a two-terminal element. A circled source is the circuit convention and
   is wrong here.
+- **Direction is which end of the arrow meets the node, and nothing else.**
+  `to` is heat arriving and `from` is heat leaving, as on a branch. Every
+  source glyph draws its tail at `-half_len` and its head at `+half_len`, so
+  one drawing at one rotation serves both: put the symbol on the far side and
+  join the head, or on the near side and join the tail. `flux` is what makes
+  this obvious — its hatch band *is* a surface, so joining the tail stands the
+  surface against the node with the arrows leaving it, which is what its own
+  note has said all along. No glyph changed to add this.
+- **Only `flow` and `flux` may point away.** They are the annotation kinds,
+  and the notes say so. `diss` is dissipation appearing at a node rather than
+  travelling to it, and `radin` is radiation *arriving* — an outbound one
+  would be a symbol whose own name contradicts it, and the thing being asked
+  for is a `rad` branch to a boundary. The error says that.
 - **Fixed node connects to its boundary; thermal break does not.** The visible
   gap is the whole distinction, and it is topological rather than decorative,
   so the two are never confused without reading text. `g_break` is therefore
@@ -245,6 +258,15 @@ find yourself doing that again, the occupancy list is the thing to reach for.
   to describe.
 - **It always exits 0.** The exit code is `check`'s to own. Two questions,
   two commands, two meanings for the number.
+- **Rows are keyed on placements, not on labels.** `compose` skips a label
+  with nothing to say, so a table built from `scene.rects` cannot show an
+  element that carries no text — and a `break` branch names no quantity by
+  design, so one with no `label` vanished into the counts. Keyed on
+  placements, it gets a row marked `(no label)`.
+- **It prints what each label reads.** Position alone cannot tell a 41 J/K
+  mass hung on the right node from one hung on the wrong node: the geometry
+  is identical and only the words differ, which makes the words the thing
+  worth printing. Subscripts are read back out of the `<tspan>` markup.
 
 ### Reviewing goldens rather than rubber-stamping them
 

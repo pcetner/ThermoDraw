@@ -45,11 +45,17 @@ class DiagramBuilder:
             side=side))
         return self
 
-    def source(self, target, kind="diss", label=None, value=None, sub="",
-               at=None, angle=0.0, side="auto"):
+    def source(self, node, kind="diss", label=None, value=None, sub="",
+               at=None, angle=0.0, side="auto", outward=False):
+        """Heat crossing into `node`, or out of it with `outward=True`.
+
+        `outward` is the `from` of the schema against its `to`. Only `flow`
+        and `flux` may use it; the other two name their own direction.
+        """
+        end = {"source" if outward else "target": node}
         self.diagram.sources.append(M.Source(
-            target=target, kind=kind, label=label, sub=sub, value=value,
-            at=at, angle=angle, side=side))
+            kind=kind, label=label, sub=sub, value=value,
+            at=at, angle=angle, side=side, **end))
         return self
 
     def rail(self, reference, y, span=None):
