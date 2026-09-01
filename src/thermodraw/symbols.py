@@ -508,9 +508,15 @@ def card(sym, fluid=False, user=SAMPLE, name=SAMPLE, value=SAMPLE):
                           value=value, half=sym.half,
                           half_len=sym.half_len)
 
-    _, top, _, bh = place(0.0, [])
     across = sym.ink[1]
-    y0, y1 = min(-across, top), max(across, top + bh)
+    rect = place(0.0, [])
+    if rect is None:
+        # Nothing to say: `annotate` places no block and returns no
+        # rectangle, so the frame is the ink alone. A symbol always has some.
+        y0, y1 = -across, across
+    else:
+        _, top, _, bh = rect
+        y0, y1 = min(-across, top), max(across, top + bh)
     body = []
     place(DPAD - y0, body)
     return canvas(DW, (y1 - y0) + 2 * DPAD, "".join(body), fluid)

@@ -420,6 +420,43 @@ def _slug(title):
     return re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")
 
 
+# The one rule that generates the whole vocabulary, and the two symbols that
+# show it. Drawn bare — no label, no value — because the point being made is
+# about the shape, and a worked example would be the thing a reader looked at
+# instead. `cond` and `diss` appear again below with their own examples; this
+# is the primer, not an entry.
+SHAPES = [
+    ("cond", "A box is a resistance",
+     "Heat crosses it and comes out colder. The pattern inside says what it "
+     "is crossing, which is why the outline never has to change shape."),
+    ("diss", "An arrow is a rate",
+     "It states how much heat is arriving or being carried, and says nothing "
+     "about how hard it was to get there."),
+]
+
+
+def shapes(by_key):
+    """The reading rule, as its own section rather than a footnote.
+
+    It spent one revision as a single line under the contents, which is the
+    wrong weight for the thing every other page on this site is downstream
+    of: a reader who has this cannot misread any symbol badly, and a reader
+    who does not has to learn nineteen drawings one at a time.
+    """
+    out = ['<section id="grp-shapes"><div class="section-head">'
+           "<h2>Boxes and arrows</h2>"
+           '<p class="lede">Two shapes carry the whole vocabulary. Everything '
+           "below is one or the other.</p></div>"
+           '<div class="shapes">']
+    for key, head, body in SHAPES:
+        card = symbols.card(by_key[key], fluid=True, user=None, name=None,
+                            value=None)
+        out.append(f'<div class="shape"><figure>{card}</figure>'
+                   f"<div><h3>{head}</h3><p>{body}</p></div></div>")
+    out.append("</div></section>")
+    return "".join(out)
+
+
 def index(by_key):
     """Contents, as one table per category, side by side.
 
@@ -479,6 +516,7 @@ def build():
                                 for f in ("regular", "italic", "semibold")))
     page = page.replace("<!DOCTYPE html>", "<!DOCTYPE html>\n" + BANNER, 1)
     page = page.replace("{{INDEX}}", index(by_key))
+    page = page.replace("{{SHAPES}}", shapes(by_key))
     page = page.replace("{{ENTRIES}}",
                         "\n".join(group(t, k, by_key)
                                   for t, k in symbols.GROUPS))
