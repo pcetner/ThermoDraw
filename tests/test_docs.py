@@ -189,5 +189,26 @@ class TestTheDictionary:
         own group is being read, which is what replaced the badges."""
         page = (ROOT / "Dictionary.html").read_text(encoding="utf-8")
         from thermodraw import symbols
-        assert page.count('<div class="section-head">') == len(symbols.GROUPS)
+        # One per symbol group, plus the "Boxes and arrows" primer, which is
+        # a section in its own right rather than a note under the contents.
+        assert page.count('<div class="section-head">') == \
+            len(symbols.GROUPS) + 1
         assert "position:sticky" in page
+
+    def test_the_reading_rule_gets_its_own_section(self):
+        """A box resists and an arrow carries is what the other nineteen
+        entries are downstream of. It spent a revision as one line under the
+        contents, which is not the weight it earns."""
+        page = (ROOT / "Dictionary.html").read_text(encoding="utf-8")
+        assert "<h2>Boxes and arrows</h2>" in page
+        assert page.count('<div class="shape">') == 2
+
+    def test_a_symbol_with_nothing_to_say_still_gets_a_frame(self):
+        """The primer draws both glyphs bare, so `annotate` places no block
+        and returns no rectangle. `card` used to unpack that None."""
+        from thermodraw import symbols
+        for sym in symbols.SYMBOLS:
+            svg = symbols.card(sym, user=None, name=None, value=None)
+            h = float(re.search(r'viewBox="0 0 [\d.]+ ([\d.]+)', svg).group(1))
+            assert h >= 2 * sym.ink[1], sym.key
+            assert "<text" not in svg, sym.key
