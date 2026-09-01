@@ -61,17 +61,12 @@ class Placement:
     two placements comparing equal means. It is derived from position for
     branches and sources, because neither has an id in the schema, so it is
     not stable under reordering. It is a diagnostic, not a key.
-
-    `mirror` is dead — nothing writes it and `render.place` recomputes the
-    value for itself. It stays because removing a field from a public
-    dataclass is a break for anyone constructing one positionally.
     """
     element: str                       # symbol | wire | node | ground
     at: Tuple[float, float] = (0.0, 0.0)
     angle: float = 0.0
     symbol: Optional[object] = None
     points: List[Sequence[float]] = field(default_factory=list)
-    mirror: bool = False
     label: Optional[Label] = None
     radius: float = 5.5
     ref: Optional[str] = None

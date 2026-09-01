@@ -424,7 +424,6 @@ def annotate(cx, cy, a, out, user=None, name=None, value=None, half=10,
 
 # ------------------------------------------------------------------ textures
 BW, BH = 84, 32
-LEAD = 34
 
 
 def clip_rect(w, h, x=None, y=None):
