@@ -71,7 +71,8 @@ class Placement:
     label: Optional[Label] = None
     radius: float = 5.5
     ref: Optional[str] = None
-    wall: Optional[Tuple[float, float]] = None   # (half, depth) of a ground
+    # (half, depth) for a ground; (span, length) for an elision mark
+    wall: Optional[Tuple[float, float]] = None
     # Which copy of a repeated branch this is, and which form it belongs to:
     # None is drawn either way, "full" is dropped when condensed, "condensed"
     # is the ellipsis that stands in its place.
@@ -175,32 +176,38 @@ def _endpoint(diagram, ref, other):
 # It costs the property the first design had, where both forms shared a
 # footprint and nothing ever moved. Shrinking is worth more: a group of
 # sixteen condensed to two should take the room of two.
-TRUNK = 44        # clean wire either side of a node before the fan begins
-FAN = 44          # the diagonal from the trunk out to a lane
+TRUNK = 64        # clean wire out of a node before the riser, so a
+                  # node's own label is not crossed by it
 PITCH_PAD = 14    # clear space between adjacent parallel lanes
 SERIES_PAD = 18   # clear space between symbols set end to end
 ELLIPSIS_STEP = 9
+ELIDED_LEN = 84   # a stub the width of a symbol box, so it reads as a lane
 
 
 def _lanes(a, b, offsets):
     """One route per lane, at each perpendicular offset from the line a-b.
 
-    A trunk, then the fan, then the lane, then back. Fanning straight out of
-    the node was the obvious construction and the wrong one: n wires
-    radiating from a point cross the space its own label wants, so every
-    default-placed parallel group reported `label-adrift`. Both trunks dedupe,
+    A trunk out of each node, a riser square across it, then the lane. Right
+    angles throughout: the first version fanned out diagonally, which reads as
+    janky at any lane count above about four and gets worse as the fan grows.
+    A comb is what this is drawn as by hand, and every lane's riser sits on
+    the same line, so the branch point is a single visible junction rather
+    than a spray.
+
+    The trunk is what keeps the risers off the nodes. Lanes leaving straight
+    from a node cross the space its own label wants, and every default-placed
+    group reported `label-adrift` until it was added. Both trunks dedupe,
     being one segment shared by every lane.
     """
     span = _length(a, b) or 1.0
     ux, uy = (b[0] - a[0]) / span, (b[1] - a[1]) / span
     nx, ny = -uy, ux
     trunk = min(TRUNK, span / 6)
-    diag = min(FAN, span / 6)
     jin = (a[0] + ux * trunk, a[1] + uy * trunk)
     jout = (b[0] - ux * trunk, b[1] - uy * trunk)
     for off in offsets:
-        head = (jin[0] + ux * diag + nx * off, jin[1] + uy * diag + ny * off)
-        tail = (jout[0] - ux * diag + nx * off, jout[1] - uy * diag + ny * off)
+        head = (jin[0] + nx * off, jin[1] + ny * off)
+        tail = (jout[0] + nx * off, jout[1] + ny * off)
         yield [a, jin, head, tail, jout, b], ((head[0] + tail[0]) / 2,
                                               (head[1] + tail[1]) / 2)
 
@@ -250,10 +257,12 @@ def _form(b, ref, sym, source, target, centre, angle, label, n, variant,
             out.append(Placement("symbol", at=c, angle=angle, symbol=sym,
                                  ref=ref, copy=k, **tag))
         reach = (abs(offsets[0]) + sym.half_len, sym.half)
-        mark_angle = angle
+        # Across the wire and spaced along it: the copies a series group
+        # drops sit between the two it shows, so the mark crosses the run.
+        mark = (angle + 90, 2 * abs(offsets[0]), 2 * sym.half + 10)
     else:
         pitch = 2 * sym.half + PITCH_PAD
-        offsets = [-pitch / 2, pitch / 2] if dots else _centred(n, pitch)
+        offsets = [-pitch, pitch] if dots else _centred(n, pitch)
         for k, (route, c) in enumerate(_lanes(source, target, offsets)):
             for run in _split(route, 2, c, sym.half_len):
                 out.append(Placement("wire", points=run, ref=ref, copy=k,
@@ -261,11 +270,13 @@ def _form(b, ref, sym, source, target, centre, angle, label, n, variant,
             out.append(Placement("symbol", at=c, angle=angle, symbol=sym,
                                  ref=ref, copy=k, **tag))
         reach = (sym.half_len, abs(offsets[0]) + sym.half)
-        mark_angle = angle + 90
+        # Along the lanes and stacked across them, at the lane pitch, so
+        # they read as more lanes rather than as punctuation.
+        mark = (angle, 2 * abs(offsets[0]), ELIDED_LEN)
 
     if dots:
-        out.append(Placement("ellipsis", at=centre, angle=mark_angle,
-                             ref=ref, **tag))
+        out.append(Placement("elided", at=centre, angle=mark[0], ref=ref,
+                             wall=(mark[1], mark[2]), **tag))
 
     # Each form carries its own label, solved against its own extent, so a
     # condensed group's text sits against the two copies it shows rather than
