@@ -18,10 +18,12 @@ The schema is docs/schema.md. Design notes and the reasoning behind each
 symbol are in CLAUDE.md.
 """
 from . import check as _check_mod, core, io, layout as _layout_mod
+from . import describe as _describe_mod
 from . import model, render as _render_mod
 from . import symbols, theme
 from .builder import DiagramBuilder
 from .check import Finding, Report, check
+from .describe import Description, describe
 from .io import save
 from .layout import Placement, layout
 from .model import Branch, Diagram, DiagramError, Node, Rail, Source
@@ -36,6 +38,8 @@ __all__ = [
     "layout", "render", "Placement", "DiagramBuilder",
     # is it any good?
     "check", "Report", "Finding",
+    # is it the one you meant?
+    "describe", "Description",
     # the vocabulary
     "Symbol", "SYMBOLS",
     # output

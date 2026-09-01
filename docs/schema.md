@@ -14,7 +14,7 @@ svg = render(layout(Diagram.from_json(text)))
 ```jsonc
 {
   "title":  "optional, not drawn",
-  "units":  {"R": "K/W", "C": "J/K", "T": "°C", "P": "W", "q": "W"},
+  "units":  {"R": "K/W", "C": "J/K", "T": "°C", "P": "W", "q": "W", "q″": "W/cm²"},
   "nodes":    [ ... ],
   "branches": [ ... ],
   "sources":  [ ... ],
@@ -23,12 +23,15 @@ svg = render(layout(Diagram.from_json(text)))
 ```
 
 Units are fixed per diagram and given once per quantity, so a diagram cannot
-mix `K/W` with `mK/W`. `q` is shared by all three of `radin`, `flow` and
-`flux`, so a diagram carrying both a heat flow in `W` and a heat flux in
-`W/cm²` cannot label them correctly — pick the one you need. Values are written without their unit; the unit is
+mix `K/W` with `mK/W`. Values are written without their unit; the unit is
 appended from this table. Only give the keys you use — a diagram with no
 capacitance needs no `C`, and one with no text needs no `units` at all. A
-quantity used without its unit declared simply draws the bare number.
+value whose quantity has no entry here is refused, so that a number never
+reaches the page without its unit.
+
+The quantities are `R`, `C`, `T`, `P`, `q` and `q″`. `radin` and `flow` are
+both powers and share `q`; a heat **flux** is per unit area, so it is measured
+in something else and reads `q″`.
 
 Every `value` is a **string**, not a number: you get exactly the digits you
 typed, so `"2.10"` stays `2.10` and does not become `2.1`.
@@ -62,10 +65,9 @@ and it is topological rather than decorative. `corner` draws nothing and
 exists only to route a wire.
 
 A `break` has no temperature to state, so `sub` and `value` are usually left
-off and the label alone is drawn. It also **stands alone**: every branch kind
-draws a resistance or a capacitance, and there is no plain-wire branch, so
-there is no way to run a bare wire to one. Place it near what it is bolted to
-and leave it unconnected — which is honest, since no heat flows through it.
+off and the label alone is drawn. To tie one to the thing it is bolted to,
+use a `break` **branch** — the same word for the same thing in the other
+position.
 
 The wall is always drawn flat below the node, at every orientation. `angle`
 does not turn it, and neither does anything else; it decides which way the
@@ -89,7 +91,7 @@ A path heat takes between two nodes.
 | field | meaning |
 |---|---|
 | `from`, `to` | node ids, or the literal `"rail"` |
-| `kind` | `cond`, `conv`, `rad`, `contact`, `cap` |
+| `kind` | `cond`, `conv`, `rad`, `contact`, `cap`, `break` |
 | `label` | the words above the box |
 | `sub` | **only** for `cap`, where the subscript names a place |
 | `value` | unit appended from `units.R` (or `units.C` for `cap`) |
@@ -105,6 +107,13 @@ capacitance the subscript names a place, so `sub` is yours.
 
 `"to": "rail"` drops straight down to the reference rail from wherever the
 other end is. That is how thermal mass is hung off a transient model.
+
+`break` is the odd one out: it draws an open circuit — wire, crossbar, gap,
+crossbar, wire — for a mechanical connection that carries no heat, such as a
+standoff or a mount. It names no quantity, so it takes **no `value` and no
+`sub`**, and one given a value is refused. Everything else on the table works
+on it. The same word is also a node `kind`, and it means the same thing there:
+a break at a boundary rather than between two nodes.
 
 ## Sources
 
@@ -123,11 +132,11 @@ unit area).
 | `diss` | arrow into the node | `P` | `units.P` |
 | `radin` | wavy arrow into the node | `q` | `units.q` |
 | `flow` | arrow into the node | `q` | `units.q` |
-| `flux` | several arrows | `q` | `units.q` |
+| `flux` | several arrows | `q″` | `units["q″"]` |
 
-`sub` names the source, as it does on a node; it is yours to choose. Note that
-`radin`, `flow` and `flux` all read `units.q`, so a diagram that mixes a heat
-rate with a heat flux has one `q` unit to spend between them.
+`sub` names the source, as it does on a node; it is yours to choose. `radin`
+and `flow` share `units.q` because both are powers. `flux` has its own, so a
+diagram can carry a heat rate in `W` and a heat flux in `W/cm²` at once.
 
 `at` and `angle` place the arrow; by default it comes in horizontally from the
 left and its head lands on the node. `side` moves its label, as above.
@@ -293,3 +302,38 @@ advance, because they are the ones a first draft hits:
 Two things it does not check: whether the numbers are right, and whether the
 network is the one you meant. It reports how the drawing reads, not what it
 says.
+
+## Seeing what got drawn
+
+`check` grades the drawing. It cannot tell you the drawing is the one you
+meant, and a clean report is not the same as a correct diagram:
+
+```bash
+thermodraw describe diagram.json
+```
+
+```
+diagram.json: canvas 1042 x 431, 11 labels
+
+placements: ground x1, node x4, symbol/cap x2, symbol/cond x1,
+            symbol/contact x1, symbol/conv x1, symbol/diss x1, symbol/rad x1,
+            wire x15
+
+nodes:
+  j              free     at (200, 150)
+  ...
+
+labels:
+  branch 0 j->c          symbol/cond     above         103x33
+  branch 2 s->amb        symbol/conv     above         102x33
+  branch 3 s->amb        symbol/rad      above          97x33
+  ...
+```
+
+Element counts against what you wrote, the canvas you will get, and which way
+each label went — including `flipped` and `pushed N` where the solver had to
+work for it. Above, `branch 2` and `branch 3` both went "above", which is the
+parallel pair `check` notes, visible directly rather than only graded.
+
+It always exits 0: it reports, it does not judge. `--json` for a machine. From
+Python it is `describe(diagram)`, returning a `.text()` and a `.to_dict()`.

@@ -1,9 +1,14 @@
 """ThermoDraw from the command line.
 
-    thermodraw check  diagram.json
-    thermodraw render diagram.json -o out.svg --mode light
+    thermodraw check    diagram.json
+    thermodraw describe diagram.json
+    thermodraw render   diagram.json -o out.svg --mode light
 
     python -m thermodraw check diagram.json      # from a checkout, no install
+
+`check` is the reason this exists, and `describe` is the half it could not
+cover: the checker says nothing is wrong with the drawing and cannot say it is
+the drawing you meant.
 
 `check` is the reason this exists. Finding out whether a diagram was any good
 used to mean rendering it, serving it over HTTP, opening a browser, taking a
@@ -23,6 +28,7 @@ import sys
 
 from . import theme
 from .check import ORDER, Finding, check
+from .describe import describe
 from .layout import layout
 from .model import Diagram, DiagramError
 from .render import render
@@ -87,6 +93,19 @@ def do_check(args):
     return 0 if report.ok else 1
 
 
+def do_describe(args):
+    """What got drawn. Always exit 0: this reports, it does not judge."""
+    out = _soften(sys.stdout)
+    description = describe(_load(args.diagram), size=args.size,
+                           source=args.diagram)
+    if args.json:
+        json.dump(description.to_dict(), out, indent=2, ensure_ascii=False)
+        out.write("\n")
+    else:
+        print(description.text(), file=out)
+    return 0
+
+
 def do_render(args):
     diagram = _load(args.diagram)
     svg = render(layout(diagram), size=args.size or diagram.size)
@@ -121,6 +140,12 @@ def main(argv=None):
                         "is nothing at all to report")
     size(c)
     c.set_defaults(fn=do_check)
+
+    d = subs.add_parser("describe", help="say what the drawing contains")
+    d.add_argument("diagram")
+    d.add_argument("--json", action="store_true", help="machine-readable")
+    size(d)
+    d.set_defaults(fn=do_describe)
 
     r = subs.add_parser("render", help="write the diagram as SVG")
     r.add_argument("diagram")

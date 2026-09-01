@@ -101,7 +101,12 @@ def rosette(n=12, R=176):
 # Geometry that is not symmetric about its own origin, nudged so the cell
 # reads as centred. The symbols themselves are correct; only this sheet
 # cares where the ink sits inside a box.
-NUDGE = {"fixed": (28, -9), "break": (20, 0), "flux": (-3, 0)}
+#
+# The rule is minus the ink bounding box centre, rounded. Measure it with
+# `tests/test_frame.py::drawn_ink` rather than by eye — this sheet is a
+# golden, so a wrong nudge gets blessed by `--update-goldens` in silence.
+# ("fixed" is the one hand-set entry left, 10 right of its own ink centre.)
+NUDGE = {"fixed": (28, -9), "break": (16, -16), "flux": (-3, 0)}
 
 
 def vocabulary(cols=4, cw=250, ch=152):

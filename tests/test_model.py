@@ -75,10 +75,17 @@ def test_rail_branch_without_a_rail_is_refused():
 def test_every_kind_in_the_schema_is_a_real_symbol():
     """The vocabulary and the schema have to be the same list."""
     from thermodraw import model as M
+    from thermodraw.layout import BRANCH_SYM
     keys = {s.key for s in symbols.SYMBOLS}
-    assert M.BRANCH_KINDS <= keys
+    # through the same mapping `layout` uses, not straight to the key. Node
+    # kind "break" and branch kind "break" are the same word for the same
+    # thing in two positions, and BY_KEY is one namespace: without the
+    # indirection a branch kind could satisfy this by colliding with a node's
+    # symbol, which is exactly the bug it is here to catch.
+    assert {BRANCH_SYM.get(k, k) for k in M.BRANCH_KINDS} <= keys
     assert M.SOURCE_KINDS <= keys
     assert (M.NODE_KINDS - {"corner"}) <= keys
+    assert set(BRANCH_SYM) <= M.BRANCH_KINDS, "a mapping for no such kind"
 
 
 # -------------------------------------------------------------------- units

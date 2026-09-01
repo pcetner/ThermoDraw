@@ -33,8 +33,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   file.json` from a shell — exit 0 clean, 1 with findings, 2 unreadable.
   `--json`, `--strict`, `--quiet`.
 
+- **`thermodraw describe` — is this the diagram you meant?** The half `check`
+  could not cover. Both acceptance agents, given only `docs/schema.md` and no
+  other context, asked for the same missing thing without being prompted: the
+  checker says nothing collides and cannot say the drawing is the one they
+  intended. This reports element counts by kind, the canvas, every node with
+  its kind and place, and the direction each label went — including `flipped`
+  and `pushed N` where the solver had to work for it. The hero's parallel pair
+  is directly visible in it, both labels reading "above", rather than only
+  being graded by a note.
+
+  It reports; it does not judge, and always exits 0. Keeping the judgement in
+  `check` alone is why that command's summary line can stay one trustworthy
+  sentence. Like `check`, it reads `render.compose`'s own `Scene` rather than
+  rebuilding the page. `describe(diagram)` from Python, `.describe()` on a
+  builder, `thermodraw describe file.json` from a shell, `--json`.
+
+- **A `break` **branch** kind.** The node kind leaves a wall floating: an
+  acceptance agent drawing a fibreglass standoff got a labelled boundary with
+  nothing tying it to the thing it was bolted to, because every branch kind
+  drew a resistance or a capacitance. This draws the open circuit — wire,
+  crossbar, gap, crossbar, wire. Deliberately not a plain wire, which would
+  say heat flows, and not a resistance, which would say how much. It names no
+  quantity, so it takes no `value` and no `sub`, and one given a value is
+  refused with a message that says why. Same word as the node kind, same
+  meaning, other position.
+
 - **A command line.** `[project.scripts]` was missing entirely.
-  `thermodraw check` and `thermodraw render`, argparse and stdlib only, so
+  `thermodraw check`, `thermodraw describe` and `thermodraw render`, argparse
+  and stdlib only, so
   `python -m thermodraw` works from a checkout with no install. SVG only —
   PNG needs a rasteriser, and the library has no dependencies.
 
@@ -73,8 +100,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `pytest --update-goldens` a rubber stamp. This splits both sides into
   element tokens and reports how many were added, removed and moved.
 
-- `tests/test_check.py`, `tests/test_frame.py` and `tests/test_cli.py`.
-  The suite goes 134 → 265.
+- `tests/test_check.py`, `tests/test_frame.py`, `tests/test_cli.py` and
+  `tests/test_describe.py`. The suite goes 134 → 322.
 
 - **`side` on nodes, branches and sources.** `core.annotate` has taken an
   explicit label side since the occupancy work, and `layout.Label` has carried
@@ -85,6 +112,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and the previous behaviour exactly), `up`, `down`, `left`, `right`.
 
 ### Fixed
+
+- **The symbol sheet documented a glyph the library cannot draw.**
+  `docs/symbol-reference.html` is what `CLAUDE.md` calls the visual
+  specification, and `g_break` showed a wire stopping short, a crossbar, and a
+  wall standing *across* the branch, with no node circle at all. The data
+  pipeline draws a break as circle, gap, horizontal wall below — matching a
+  fixed node minus its stub, which is what the distinction has always been.
+  Neither boundary glyph is reachable from `layout` (`render.place` runs only
+  for `element == "symbol"`), so the two arrangements drifted with nothing to
+  say so. `g_break` is redrawn to match, its `reach` re-measured against the
+  real markup, and `tests/test_check.py::TestBreakNode` now pins the glyph and
+  the pipeline to each other.
+
+- **An unknown source kind with a value raised `KeyError`.** The bare-value
+  check ran before the source-kind check, and `_valued()` yields sources, so
+  `QUANTITY[kind]` was reached with a kind that does not exist. Nodes and
+  branches validate their kinds earlier, so only sources were exposed. It is
+  now a `DiagramError` naming the kinds that do exist.
+
+- **`tests/test_frame.py` under-measured a nested transform.**
+  `transform="translate(0,24) rotate(90)"` composes as T·R, so a point is
+  rotated first and then translated; the helper applied them left to right.
+  Every `translate(...) rotate(90)` boundary wall landed in the wrong place,
+  and the fixed node's 24-deep wall measured 12 — under-measuring, which is
+  the direction that fails silently. With it corrected, every symbol's
+  `reach` matches its drawn ink exactly.
 
 - **A `break` node drew nothing.** `layout` on one returned a single `node`
   placement — byte for byte what a `free` node produces — so `g_break` was
@@ -114,6 +167,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   than straddling it.
 
 ### Changed
+
+- **Every quantity is its own symbol, `q″` included.** `radin` and `flow` are
+  both powers and share `units.q`; a heat flux is per unit area, is not
+  measured in the same thing, and now reads `units["q″"]`. They shared one
+  entry, so a diagram carrying a heat rate in `W` and a heat flux in `W/cm²`
+  could label only one of them — while `docs/symbol-reference.html` had been
+  showing `q″` and `1.4 W/cm²` all along, an arrangement the pipeline could
+  not produce. `model.SOURCE_SYMBOL["flux"]` matches. The accepted `units`
+  keys are derived from the table, so the key set and its error message
+  updated themselves, and no diagram in the repo uses `flux` at all.
+
+- **A default-placed source no longer crowds its node.** `layout` put every
+  source at `half_len + 5.5`, which considers how long the symbol is and never
+  how tall. That suits the three arrow kinds; `flux` is a 52 × 48 block, and
+  at that offset it blocked the node's label from below while the source's own
+  label blocked it from above — both candidate sides gone, so `annotate`
+  pushed rather than flipped and the checker called it adrift. The offset now
+  buys room in proportion to the symbol's height and leaves the arrows exactly
+  where they were. No constant can be universally right here, because whether
+  a label fits depends on its width and labels are not solved until `render`;
+  the docstring says so.
+
+- **A remedy names the field that fixes *this* case.** `label-collision` and
+  `label-adrift` carried one fixed string offering `side`, `angle` and `via`
+  whatever was in the way. For a source crowding its node the answer is `at`,
+  and it was not in the list — the same defect an acceptance agent hit when it
+  was told to "set `side`" at a node with all four sides already taken. The
+  remedy now depends on the culprit: a `via` waypoint for a wire, `at` for a
+  symbol or a node, `side` for two labels, and `angle` once the solver has
+  tried both sides of the branch.
+
+- `docs/schema.md` gains a **Seeing what got drawn** section for `describe`,
+  documents the `break` branch kind, and corrects two things: the sources
+  table now shows `flux` reading its own unit, and the claim that a quantity
+  used without its unit "simply draws the bare number" is gone. It never did
+  — `validate()` refuses it, which is the better behaviour and now the
+  documented one.
 
 - `docs/schema.md` gains a **Checking a diagram** section: the command, the
   eight codes as a table, and the note that the two habits above are now

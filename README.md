@@ -19,7 +19,7 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/assets/vocabulary-dark.svg">
-    <img src="docs/assets/vocabulary-light.svg" alt="The twelve symbols" width="800">
+    <img src="docs/assets/vocabulary-light.svg" alt="The thirteen symbols" width="800">
   </picture>
 </p>
 
@@ -86,13 +86,32 @@ note: [parallel-pair-same-side] branch 2 s->amb and branch 3 s->amb run
 
 Eight checks on how the drawing reads — text over text, a label shoved out
 past the thing it names, a wire through a symbol, ink off the page. Exit 0
-clean, 1 with findings. `thermodraw render` writes the SVG, and both work as
-`python -m thermodraw` from a checkout.
+clean, 1 with findings. Every finding names the schema field that fixes it.
+
+A clean report is not the same as the right diagram, so there is a second
+question:
+
+```bash
+thermodraw describe hero.json
+```
+
+```
+hero.json: canvas 1042 x 431, 11 labels
+
+placements: ground x1, node x4, symbol/cap x2, symbol/cond x1,
+            symbol/contact x1, symbol/conv x1, symbol/diss x1, symbol/rad x1,
+            wire x15
+```
+
+...then every node with its kind and place, and every label with the direction
+it went. `check` grades the drawing; this says what is in it.
+`thermodraw render` writes the SVG, and all three work as `python -m
+thermodraw` from a checkout.
 
 ```bash
 python examples/render_demo.py       # the three images above
 python examples/render_reference.py  # every symbol at every 45°
-pytest                               # 265 tests
+pytest                               # 322 tests
 ```
 
 ## More

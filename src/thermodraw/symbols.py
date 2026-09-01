@@ -145,9 +145,24 @@ def g_radin(a):
 
 
 def g_break(a):
-    return ('<line class="w" x1="-54" y1="0" x2="-12" y2="0"/>'
-            '<line class="w" x1="-12" y1="-7" x2="-12" y2="7"/>'
-            + S.hatched_wall(0, 22, depth=13))
+    # g_fixed_node minus the stub, because that is the whole distinction and
+    # the data pipeline has always drawn it that way. The gap is wider than a
+    # fixed node's stub is long, so it cannot read as a stub that failed.
+    return ('<line class="w" x1="-54" y1="0" x2="0" y2="0"/>'
+            '<circle class="node-open" cx="0" cy="0" r="5.5"/>'
+            '<g transform="translate(0,24) rotate(90)">'
+            + S.hatched_wall(0, 22, depth=13) + '</g>')
+
+
+def g_branch_break(a):
+    # The open circuit, which is what a mechanical connection carrying no
+    # heat actually is. Not a plain wire: a wire says heat flows. Crossbars
+    # far apart and short, against a capacitance's tall plates close
+    # together, so the gap is what the eye lands on rather than the bars.
+    return ('<line class="w" x1="-40" y1="0" x2="-12" y2="0"/>'
+            '<line class="w" x1="-12" y1="-8" x2="-12" y2="8"/>'
+            '<line class="w" x1="12" y1="-8" x2="12" y2="8"/>'
+            '<line class="w" x1="12" y1="0" x2="40" y2="0"/>')
 
 
 def g_flow(a):
@@ -265,9 +280,10 @@ SYMBOLS = [
                 "into the head instead of easing out of it."),
     Symbol(key="break", name="Thermal break", draw=g_break, mirror=True,
            text=S_("q"), value="0 W", user="Mounting standoff",
-           half=22, half_len=22, reach=(54, 22),
-           note="The wire stops short of the wall. A fixed node connects to its "
-                "boundary; this one does not."),
+           half=22, half_len=22, reach=(54, 37),
+           note="Circle, gap, wall — the fixed node without its stub. A fixed "
+                "node connects to its boundary; this one does not, and the "
+                "visible gap is the entire distinction."),
     Symbol(key="flow", name="Heat flow", draw=g_flow,
            text=S_("q"), value="38 W", user=None, half=7, half_len=30,
            note="An annotation, sized to the arrow alone so the block sits close."),
@@ -276,6 +292,18 @@ SYMBOLS = [
            half=25, half_len=26, reach=(28, 24),
            note="Several arrows leaving a surface. Flux is per unit area, so it "
                 "has no single line of action to borrow heat flow's symbol."),
+    # Appended rather than filed beside the other branch kinds: the
+    # vocabulary sheet is a golden, and inserting mid-list reflows every cell
+    # after it, which turns the review into a diff nobody can read. The key
+    # is "break-branch" because `layout.BY_KEY` is one namespace and the node
+    # kind already holds "break"; the kind an author writes is still "break".
+    Symbol(key="break-branch", name="Thermal break, in line",
+           draw=g_branch_break, text="", value=None, user="Nylon standoff",
+           half=10, half_len=12, reach=(40, 8),
+           note="An open circuit: a mechanical connection carrying no heat. A "
+                "plain wire would say heat flows and a resistance would say "
+                "how much, so it is neither. It names no quantity either, and "
+                "the label is the user's line alone."),
 ]
 
 

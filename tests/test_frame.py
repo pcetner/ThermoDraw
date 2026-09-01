@@ -163,9 +163,16 @@ def _nums(text):
 
 
 def _apply(transform, points):
-    """One `transform` attribute — translate, rotate or scale — applied."""
-    for kind, arg in re.findall(r"(translate|rotate|scale)\(([^)]*)\)",
-                                transform or ""):
+    """One `transform` attribute — translate, rotate and scale — applied.
+
+    `transform="translate(0,24) rotate(90)"` composes as T·R, so a point is
+    rotated *first* and then translated. Applying them left to right instead
+    put the boundary wall of every `translate(...) rotate(90)` glyph in the
+    wrong place, and read the fixed node's wall as 12 deep against the 24 it
+    draws — under-measuring, which is the direction that fails silently.
+    """
+    for kind, arg in reversed(
+            re.findall(r"(translate|rotate|scale)\(([^)]*)\)", transform or "")):
         v = _nums(arg)
         if kind == "translate":
             dx, dy = (v + [0.0])[:2]

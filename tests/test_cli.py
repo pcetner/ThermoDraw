@@ -74,6 +74,30 @@ class TestCheck:
         assert code == 1 and "off-canvas" in out
 
 
+class TestDescribe:
+    """It reports; it does not judge, so it exits 0 whatever it finds."""
+
+    def test_it_says_what_is_on_the_page(self, capsys):
+        code, out = run(capsys, "describe", str(HERO))
+        assert code == 0
+        assert "canvas 1042 x 431, 11 labels" in out
+        assert "symbol/cap x2" in out and "node 'amb'" in out
+
+    def test_a_diagram_with_findings_still_exits_zero(self, capsys):
+        """`check` is what grades. Two exit codes for two questions."""
+        assert run(capsys, "check", str(ADRIFT))[0] == 1
+        assert run(capsys, "describe", str(ADRIFT))[0] == 0
+
+    def test_json_is_machine_readable(self, capsys):
+        code, out = run(capsys, "describe", str(HERO), "--json")
+        data = json.loads(out)
+        assert code == 0 and data["canvas"] == [1041.7, 430.8]
+        assert data["counts"]["node"] == 4
+
+    def test_a_missing_file_is_still_exit_two(self, capsys):
+        assert run(capsys, "describe", "no-such-file.json")[0] == 2
+
+
 class TestRender:
     def test_it_writes_an_svg(self, capsys, tmp_path):
         out_file = tmp_path / "hero.svg"
