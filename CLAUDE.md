@@ -105,10 +105,18 @@ tight. **Do not replace this with an iterative search.**
 
 ## Known sharp edges
 
-- **Text widths are estimated** from a hand-written character table
-  (`core.CHW`), not measured from the font. It has held up, but it is why
-  output needs visual checking. Measuring against the embedded font would
-  make the solver exact. This is the highest-value fix.
+- **Text widths are measured**, not estimated. `core._metrics` is generated
+  by `tools/gen_metrics.py` from the real font, one table per face because
+  SemiBold runs about 4% wider than Regular — the same size as the error
+  being removed. It replaced a sixteen-entry hand-written table that assumed
+  0.55 for everything else, covering 16 of the 52 glyphs the library emits;
+  mean per-glyph error was 12%, and 98% for `/`.
+- **Kerning is ignored on purpose.** `text_w` sums advances and cannot see a
+  kern pair, so the vendored subset drops GPOS. The render then matches what
+  the solver modelled, rather than being a little tighter than it in places.
+- **The width table and the vendored font must be regenerated together.**
+  They are two halves of one measurement; `tests/test_fonts.py` pins them to
+  each other.
 - **HTML entities count as one glyph** in `core.text_w` via `_ENT`. Removing
   that regex silently breaks any label using one — it caused a 40 px phantom
   gap in the heat-flux label.
@@ -117,7 +125,15 @@ tight. **Do not replace this with an iterative search.**
   a plain centred `<text>` with a tspan inside.
 - **CSS custom properties do not survive outside a browser.** Word,
   PowerPoint, cairosvg and librsvg all ignore them; cairosvg throws. Use
-  `theme.bake()` for those targets.
+  `theme.bake()` for those targets. It also embeds the text faces, because a
+  target that cannot fetch a stylesheet cannot fetch a font either, and text
+  set in a substitute face does not match the widths it was cleared against.
+  `theme.faces_used` embeds only what the diagram needs — all three cost
+  about 79KB, and a diagram with no text carries none.
+- **The embedded faces are renamed.** IBM Plex is OFL-1.1 with Reserved Font
+  Name "Plex", and a subset is a Modified Version under clause 3, so they
+  ship as "ThermoDraw Sans". The CSS stack still asks for the real font
+  first, and the metrics are identical either way.
 
 ## What is left to build
 
@@ -129,16 +145,13 @@ In rough priority order:
    to a common rail covers most cases; branches and parallel paths need
    routing. This is the largest remaining piece and the only genuinely hard
    one.
-2. **Real font metrics**, replacing the estimate table.
-3. **A spreading resistance symbol** — the one gap in the vocabulary. The
+2. **A spreading resistance symbol** — the one gap in the vocabulary. The
    natural glyph under the current scheme is hatching that fans from a point
    rather than running parallel, reading as heat diverging into a larger
    cross-section.
-4. **Region enclosures that auto-size to their contents** rather than taking
+3. **Region enclosures that auto-size to their contents** rather than taking
    fixed dimensions.
-5. **Unit handling** — pass `0.35` and have it choose between K/W and mK/W.
-6. **Tests.** There are none. Golden-file SVG comparison is the obvious
-   approach; the rotation strips make good fixtures.
+4. **Unit handling** — pass `0.35` and have it choose between K/W and mK/W.
 
 ## Conventions
 

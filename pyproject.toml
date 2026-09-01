@@ -20,7 +20,7 @@ classifiers = [
 dependencies = []
 
 [project.optional-dependencies]
-dev = ["pytest", "cairosvg", "pillow"]
+dev = ["pytest", "cairosvg", "pillow", "fonttools", "brotli"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -28,3 +28,6 @@ pythonpath = ["src", "examples", "tests"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+thermodraw = ["fonts/*.woff2", "fonts/OFL.txt"]
