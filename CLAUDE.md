@@ -448,13 +448,28 @@ diff is not. Land the instrument before the change, not after.
   different ambient and the number is wrong with no visible sign. The dashed
   outline warns that the path is not linear, which is what a reader needs
   before adding resistances in series, but it does not carry the operating
-  point the value was taken at. Nor can `units` distinguish a temperature
-  from a rise above ambient: `°C` and `K` are free strings, and a diagram of
-  rises reads identically to one of temperatures. Both want a per-element
-  validity condition, which is a schema field and therefore a feature, not a
-  fix. **Do not add a check for this.** The hero is `°C` with a `rad` branch
-  and is correct, so any rule built on the unit string alone condemns the
-  flagship — which `check.py` exists not to do.
+  point the value was taken at. Stating it wants a per-element validity
+  condition, which is a schema field. **This is not a check.** It would fire
+  on every `rad` branch carrying a value — on all of them, always — and a
+  finding that fires on every instance of a symbol is a footnote wearing a
+  severity. `parallel-pair-same-side` is a note because it fires on a
+  particular arrangement of a parallel pair, not on every parallel pair.
+
+- **The temperature scale is not representable, so it cannot be checked.**
+  `units["T"]` is a free string, and `K` is byte-identical whether the author
+  means absolute kelvin or a rise above ambient. A diagram of rises reads
+  exactly like a diagram of temperatures, and no rule over the data can tell
+  them apart — this is a missing declaration, not a missing check, and no
+  severity fixes it. The reason it is nevertheless *safe* is that the library
+  never evaluates the radiation law: it draws a linearised `R` in K/W and
+  computes nothing, so it cannot itself be wrong about the scale. The hazard
+  is downstream, in whoever reads the number and applies the fourth power.
+  A sharp version was tried and discarded — a `rad` branch plus a negative
+  node temperature does prove the values are not absolute, and needs no new
+  field, but a wall at −10 °C radiating to sky is a correct diagram and it
+  fires on that. Do not reach for the flagship argument here: when the hero
+  breaks a rule and is fine, this file's answer is to demote the finding to a
+  note, not to drop it. These two are dropped for the reasons above instead.
 
 - **`phase` draws the plateau, not the budget.** A phase-change node holds
   its temperature, and that is the whole symbol. What it cannot say is that

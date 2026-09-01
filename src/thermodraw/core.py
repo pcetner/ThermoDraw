@@ -345,8 +345,12 @@ def build_block(user=None, name=None, value=None, extra=(),
             continue
         if isinstance(line, str):
             lines.append([(line, vsize, "val")])
-        else:
-            lines += _stated(line[0], line[1], size, vsize)
+            continue
+        pair = tuple(line)
+        if len(pair) != 2:
+            raise ValueError(
+                f"an extra is prose or a (symbol, value) pair; got {pair!r}")
+        lines += _stated(pair[0], pair[1], size, vsize)
     return lines
 
 

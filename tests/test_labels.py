@@ -228,3 +228,36 @@ class TestARateStatesItsQuantity:
         pair = build_block(extra=[("q", "1234567890 mW")])
         assert [len(l) for l in wide] == [len(l) for l in pair]
         assert all(_line_w(l) <= WRAP_AT for l in pair)
+
+    def test_a_flow_branch_refuses_a_second_rate(self):
+        """A `flow` already states `q` as its value. A rate beside it drew
+        `q = 5 W` twice -- the same claim, made in the same words, in two
+        lines of one label. It is the break rule from the other end: a break
+        has no rate because it carries nothing, a flow has none spare because
+        its value already is one."""
+        from thermodraw import Diagram, DiagramError
+        from thermodraw.model import Branch, Node
+        d = Diagram(
+            nodes=[Node(id="a", at=[150, 120]), Node(id="b", at=[500, 120])],
+            branches=[Branch(source="a", target="b", kind="flow",
+                             label="Duct", value="5", rate="5")],
+            units={"q": "W"})
+        with pytest.raises(DiagramError, match="already a rate"):
+            d.validate()
+
+    def test_the_refusal_is_derived_from_the_tables(self):
+        """Not a hardcoded 'flow'. Any kind whose quantity is the rate
+        quantity is covered the day it is added."""
+        from thermodraw.model import QUANTITY, RATE
+        assert {k for k, q in QUANTITY.items() if q == RATE} >= {"flow"}
+
+    def test_a_resistance_still_takes_a_rate(self):
+        """The rule must not catch the case the field exists for."""
+        assert "q = 12 W" in self.says(rate="12")
+
+    def test_a_malformed_extra_says_what_it_wanted(self):
+        from thermodraw.core import build_block
+        with pytest.raises(ValueError, match="prose or a"):
+            build_block(extra=[("q",)])
+        with pytest.raises(ValueError, match="prose or a"):
+            build_block(extra=[("q", "1 W", "and more")])
