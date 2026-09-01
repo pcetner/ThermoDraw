@@ -75,7 +75,7 @@ def test_rail_branch_without_a_rail_is_refused():
 def test_every_kind_in_the_schema_is_a_real_symbol():
     """The vocabulary and the schema have to be the same list."""
     from thermodraw import model as M
-    from thermodraw.layout import BRANCH_SYM
+    from thermodraw._layout import BRANCH_SYM
     keys = {s.key for s in symbols.SYMBOLS}
     # through the same mapping `layout` uses, not straight to the key. Node
     # kind "break" and branch kind "break" are the same word for the same
@@ -135,7 +135,7 @@ def test_canvas_sizes_itself_to_its_contents():
     """
     import re
 
-    from thermodraw.render import extent
+    from thermodraw._render import extent
 
     placements = layout(hero())
     svg = render(placements)

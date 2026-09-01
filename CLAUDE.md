@@ -20,13 +20,13 @@ and most of it has since been built.
 ```
 src/thermodraw/
   model.py     the diagram as data — what you write, what an LLM emits
-  layout.py    model -> placements. The one stage the network layer replaces
-  render.py    placements -> SVG. Pure, deterministic, sizes its own canvas
+  _layout.py   model -> placements. The one stage the network layer replaces
+  _render.py   placements -> SVG. Pure, deterministic, sizes its own canvas
   builder.py   sugar over model.py, holding no state the data cannot express
   core.py      text metrics, transforms, the label solver, occupancy, textures
-  check.py     is the drawing any good? placements -> findings, no SVG
-  describe.py  is it the drawing you meant? placements -> prose, no SVG
-  page.py      the same SVG inline in HTML, with its controls
+  _check.py    is the drawing any good? placements -> findings, no SVG
+  _describe.py is it the drawing you meant? placements -> prose, no SVG
+  _page.py     the same SVG inline in HTML, with its controls
   __main__.py  the command line: `check`, `describe`, `render`, `page`
   symbols.py   the eighteen symbols, plus sheet renderers
   theme.py     CSS variables for web, baked literals and fonts for Word/slides
@@ -257,7 +257,7 @@ find yourself doing that again, the occupancy list is the thing to reach for.
   the solver clears the group rather than one lane of it. `radius=0` keeps it
   out of the canvas measurement, which the copies already account for.
 
-### A page instead of a picture (`page.py`)
+### A page instead of a picture (`_page.py`)
 
 - **SVG stays canonical.** Word, PowerPoint, the README and every rasteriser
   need a static file, and `theme.bake` exists because they cannot even resolve
@@ -270,7 +270,7 @@ find yourself doing that again, the occupancy list is the thing to reach for.
   content-addresses them, so a page holding those ids does not break when
   something unrelated in the diagram moves.
 
-### Checking a diagram (`check.py`)
+### Checking a diagram (`_check.py`)
 
 - **The premise was tested, and the docs passed.** An agent given only
   `docs/schema.md` and no other context produced correct, valid diagrams on
@@ -378,7 +378,7 @@ find yourself doing that again, the occupancy list is the thing to reach for.
   False, so the case where the advice matters most is the one it does not
   mark.
 
-### Describing a diagram (`describe.py`)
+### Describing a diagram (`_describe.py`)
 
 - **`check` grades; `describe` reports.** Both acceptance agents, given only
   `docs/schema.md`, asked for the same missing thing, unprompted: the checker
@@ -420,11 +420,6 @@ diff is not. Land the instrument before the change, not after.
   still unpacks as four numbers and compares equal to the plain tuple it
   replaced, and CPython refuses a nonempty `__slots__` on a subtype of a
   variable-length built-in. It carries a `__dict__`; that is the price.
-- **`thermodraw.render` and `thermodraw.layout` are functions, not modules.**
-  `__init__` rebinds both, so `from . import render` inside the package gets
-  the function and `render.PADDING` is an `AttributeError`. Import the names:
-  `from .render import PADDING, compose`. `check.py` and `tests/test_frame.py`
-  both do, and both say why.
 - **There are three boundary-wall sizes and they are not unified.**
   `render.WALL_HALF/WALL_DEPTH` is (24, 13), `g_fixed_node` draws (20, 12) and
   `g_break` (22, 13). They are three different walls at three different
@@ -521,7 +516,7 @@ In rough priority order:
    solver. A ladder walking left to right with capacitances dropping to a
    common rail covers most cases; parallel paths are expressed with explicit
    `via` waypoints today and need routing. This is the largest remaining piece
-   and the only genuinely hard one. `check.py` is now the thing that tells it
+   and the only genuinely hard one. `_check.py` is now the thing that tells it
    whether its answer was any good, which is most of what a solver needs and
    was the reason to build the checker first.
 2. **A spreading resistance symbol** — the one gap in the vocabulary. The

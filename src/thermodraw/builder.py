@@ -12,12 +12,12 @@ the data is the representation, not a serialisation of some object.
          .source("j", "diss", "Switching loss", 45, sub="d"))
     open("out.svg", "w").write(d.svg())
 """
-from . import check as C
-from . import describe as D
-from . import layout as L
+from . import _check as C
+from . import _describe as D
+from . import _layout as L
 from . import model as M
-from . import page as P
-from . import render as R
+from . import _page as P
+from . import _render as R
 from . import theme as T
 
 

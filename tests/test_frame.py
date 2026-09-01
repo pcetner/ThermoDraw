@@ -18,8 +18,7 @@ import xml.etree.ElementTree as ET
 import pytest
 
 from thermodraw import Diagram, DiagramBuilder, layout, render, symbols
-# by name: the package rebinds `thermodraw.render` to the render function
-from thermodraw.render import (PADDING, WALL_DEPTH, WALL_HALF, bounds,
+from thermodraw._render import (PADDING, WALL_DEPTH, WALL_HALF, bounds,
                                compose)
 
 from test_check import HERO, parallel_pair

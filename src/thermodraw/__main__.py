@@ -29,12 +29,12 @@ import pathlib
 import sys
 
 from . import theme
-from .check import ORDER, Finding, check
-from .describe import describe
-from .layout import layout
+from ._check import ORDER, Finding, check
+from ._describe import describe
+from ._layout import layout
 from .model import Diagram, DiagramError
-from .page import page
-from .render import render
+from ._page import page
+from ._render import render
 
 
 def _die(message):

@@ -10,7 +10,7 @@ import pytest
 
 from thermodraw import DiagramBuilder, layout, render
 from thermodraw.core import Occupancy, _segment_box
-from thermodraw.render import draw
+from thermodraw._render import draw
 
 
 def rects(diagram_builder):
@@ -180,7 +180,7 @@ class TestARateStatesItsQuantity:
             units={"R": "K/W", "T": "\u00b0C", "q": "W"})
 
     def says(self, **kw):
-        from thermodraw.describe import describe, label_text
+        from thermodraw._describe import describe, label_text
         d = self.diagram(**kw)
         d.validate()
         describe(d)

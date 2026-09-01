@@ -17,18 +17,15 @@ symbol at a time for anything the model does not yet cover.
 The schema is docs/schema.md. Design notes and the reasoning behind each
 symbol are in CLAUDE.md.
 """
-from . import check as _check_mod, core, io, layout as _layout_mod
-from . import describe as _describe_mod
-from . import model, render as _render_mod
-from . import symbols, theme
+from . import core, io, model, symbols, theme
+from ._check import Finding, Report, check
+from ._describe import Description, describe
+from ._layout import Placement, layout
+from ._page import page
+from ._render import render
 from .builder import DiagramBuilder
-from .check import Finding, Report, check
-from .describe import Description, describe
-from .page import page
 from .io import save
-from .layout import Placement, layout
 from .model import Branch, Diagram, DiagramError, Node, Rail, Source
-from .render import render
 from .symbols import SYMBOLS, Symbol
 
 __version__ = "0.2.0"

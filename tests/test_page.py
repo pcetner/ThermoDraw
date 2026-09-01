@@ -12,8 +12,8 @@ import re
 import pytest
 
 from thermodraw import Diagram, DiagramBuilder, layout, page
-from thermodraw.page import groups
-from thermodraw.render import variant_id
+from thermodraw._page import groups
+from thermodraw._render import variant_id
 
 HERO = pathlib.Path(__file__).resolve().parents[1] / "examples" / "hero.json"
 

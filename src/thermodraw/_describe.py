@@ -29,10 +29,8 @@ from collections import Counter
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
 
-from .layout import layout as _layout
-# By name, not `from . import render`: the package rebinds `thermodraw.render`
-# to the render *function*, so importing the module by attribute yields that.
-from .render import PADDING, compose
+from ._layout import layout as _layout
+from ._render import PADDING, compose
 
 # A label's side is a unit vector, not one of the four `core.PAGE_SIDES`
 # names — once `angle` is in play it points wherever the branch normal does.

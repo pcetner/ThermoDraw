@@ -17,8 +17,8 @@ import pathlib
 import pytest
 
 from thermodraw import Diagram, DiagramBuilder, describe, layout
-from thermodraw.describe import side_word
-from thermodraw.render import compose
+from thermodraw._describe import side_word
+from thermodraw._render import compose
 
 HERO = pathlib.Path(__file__).resolve().parents[1] / "examples" / "hero.json"
 
@@ -94,8 +94,8 @@ class TestItSaysWhatIsThere:
         assert says["source 0 -> j"] == "Switching loss | P_d = 45 W"
 
     def test_a_subscript_is_read_back_rather_than_left_as_markup(self):
-        from thermodraw.describe import label_text
-        from thermodraw.layout import Label
+        from thermodraw._describe import label_text
+        from thermodraw._layout import Label
         assert label_text(Label(user="Die", name='C<tspan dy="4">j</tspan>',
                                 value="0.9 J/K")) == "Die | C_j = 0.9 J/K"
         assert label_text(Label(user="Fins &#8594; air")) == "Fins → air"
