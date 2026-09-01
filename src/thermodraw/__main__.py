@@ -98,7 +98,8 @@ def _strict(report):
 
 
 def do_check(args):
-    report = check(_load(args.diagram), size=args.size, source=args.diagram)
+    report = check(_load(args.diagram), size=args.size, source=args.diagram,
+                   physics=args.physics)
     if args.strict:
         report = _strict(report)
     out = _soften(sys.stdout)
@@ -171,6 +172,9 @@ def main(argv=None):
     c.add_argument("--quiet", action="store_true",
                    help="findings only, no summary line; silent when there "
                         "is nothing at all to report")
+    c.add_argument("--physics", action="store_true",
+                   help="also ask whether the stated numbers close at each "
+                        "node (prototype)")
     size(c)
     c.set_defaults(fn=do_check)
 

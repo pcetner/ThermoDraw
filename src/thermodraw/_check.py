@@ -820,15 +820,24 @@ def _placements(diagram):
     return _layout(diagram)
 
 
-def check(diagram, size=None, padding=PADDING, source="diagram"):
+def check(diagram, size=None, padding=PADDING, source="diagram",
+          physics=False):
     """Everything wrong with this diagram, as a `Report`.
 
     Takes a `Diagram`, a `DiagramBuilder`, or a list of `Placement`. `size`
     defaults to the diagram's own, so what is checked is what `.svg()` draws.
+
+    `physics` adds the prototype in `_physics`: whether the stated numbers
+    close at each node. Off by default while it is being judged on real
+    diagrams; it needs the diagram, so a list of placements cannot ask for it.
     """
     if size is None:
         size = getattr(diagram, "size", None) or \
             getattr(getattr(diagram, "diagram", None), "size", None)
+    if physics and isinstance(diagram, (list, tuple)):
+        raise ValueError("physics=True needs a Diagram, not placements: the "
+                         "numbers are on the diagram")
+    model = diagram.build() if hasattr(diagram, "build") else diagram
     placements = _placements(diagram)
     scene = compose(placements, size, padding)
 
@@ -843,6 +852,9 @@ def check(diagram, size=None, padding=PADDING, source="diagram"):
     _wire_through_symbol(placements, findings)
     _frame(scene, padding, findings)
     _parallel_pairs(placements, scene, findings)
+    if physics:
+        from ._physics import balance          # imports Finding from here
+        findings += balance(model)
 
     findings.sort(key=lambda f: (ORDER[f.severity], f.code, f.where or ""))
     return Report(findings=findings, labels=len(scene.rects), source=source)

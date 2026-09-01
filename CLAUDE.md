@@ -25,6 +25,7 @@ src/thermodraw/
   builder.py   sugar over model.py, holding no state the data cannot express
   core.py      text metrics, transforms, the label solver, occupancy, textures
   _check.py    is the drawing any good? placements -> findings, no SVG
+  _physics.py  do the numbers agree with each other? behind --physics
   _describe.py is it the drawing you meant? placements -> prose, no SVG
   _page.py     the same SVG inline in HTML, with its controls
   __main__.py  the command line: `check`, `describe`, `render`, `page`
@@ -391,6 +392,24 @@ find yourself doing that again, the occupancy list is the thing to reach for.
   too, `annotate` falls back to the first candidate and leaves `flipped`
   False, so the case where the advice matters most is the one it does not
   mark.
+
+- **The numbers were never checked, and none of the six real diagrams'
+  numbers close.** `_physics.balance` is Kirchhoff at a free node from stated
+  values only: a resistance between two stated temperatures implies `ΔT/R`,
+  sources and flows are what they say, `count` folds a group, a corner folds
+  into the path through it. Run over the hero and the five gallery diagrams
+  it fired on all six, seventeen nodes, and every finding is arithmetic a
+  reader can redo — the hero's first branch implies 97 W leaving a node that
+  receives 45; the rack's "each of 8 processors" box has no `count` and
+  implies 400 W where 3,200 arrive; the house's roof loses 190 W and is fed
+  by nothing. This is the counterexample to the objection recorded under
+  sharp edges against physics checks, that one would fire on every instance
+  of a symbol: this fires on values that disagree, and they all did. It ships
+  behind `--physics` until the flagship's own numbers are made to close. The
+  record is right that a rule which condemns the flagship is one an author
+  learns to ignore, and it was wrong about what that implies when the
+  flagship is actually wrong: the answer is to fix the hero, not to demote
+  the finding.
 
 ### Describing a diagram (`_describe.py`)
 
