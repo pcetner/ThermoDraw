@@ -24,12 +24,19 @@ mkdir -p "$room"
 git archive HEAD | tar -x -C "$room"
 cd "$room"
 rm -f CLAUDE.md docs/design-record.md README.md CHANGELOG.md Dictionary.html
-rm -rf .claude docs/symbol-reference.html
+rm -rf .claude docs/symbol-reference.html docs/assets docs/notation-test tests tools
+rm -f docs/*.template.html examples/*.py examples/hero.json
 rm -f examples/gallery/*/findings.md examples/gallery/*/rounds.md \
       examples/gallery/*/*.json examples/gallery/*/*.svg
 rm -f examples/gallery/FINDINGS.md examples/gallery/README.md examples/gallery/RERUN.md
 git init -q && git add -A && git commit -qm "clean room"
 ```
+
+The tests, the goldens, the README images, the worked example and the
+notation thumbnails all go too: every one of them is a finished diagram, and
+an agent that opens one has seen the answer. `tools/` goes because
+`gen_dictionary.py` carries every symbol's meaning in prose, which is
+documentation the protocol says the agent does not get.
 
 No install: the library has no dependencies and the briefs run it as
 `PYTHONPATH=src python -m thermodraw`. The `git init` is not optional — the
