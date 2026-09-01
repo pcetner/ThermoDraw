@@ -74,8 +74,10 @@ change them without understanding what problem they solved.
   you should be able to describe a network to a model and have it emit
   something drawable; `docs/schema.md` exists to be pasted into a prompt.
 - **`layout` is the seam.** It reads the coordinates you supply today and will
-  solve for the ones you omit in 0.3. Nothing either side of it changes, and
-  no diagram written now stops working.
+  solve for the ones you omit when the network layer lands. Nothing either
+  side of it changes, and no diagram written now stops working. That feature
+  is not named after a version number any more: it was "0.3" in three places,
+  one of them an error message users read, and 0.3.0 shipped without it.
 - **Rendering is a pure function of its input.** Element ids are derived from
   the element's own parameters, not a counter. A counter meant the same
   diagram rendered twice in one process produced different bytes, which no
@@ -279,7 +281,7 @@ find yourself doing that again, the occupancy list is the thing to reach for.
   error messages across the whole exercise, because the failure mode was
   accepted-and-inert input, not wrong input. **Validation catches diagrams
   that cannot be drawn. This catches diagrams that should not be.**
-- **Goldens pin bytes and cannot pin quality.** 134 of them passed green while
+- **Goldens pin bytes and cannot pin quality.** Every one of them passed green while
   the hero sat 17 units high in its own frame — because the frame had always
   been wrong, so the bytes had never changed. Every check here exists because
   the only instrument for it was a browser.
@@ -328,7 +330,8 @@ find yourself doing that again, the occupancy list is the thing to reach for.
 - **The report is ASCII.** It goes to a terminal, and a Windows console is
   cp1252: an arrow in a fixed string is a `UnicodeEncodeError` on the machine
   most likely to be running it. Node ids can still carry anything, which is
-  why `__main__` also reconfigures stdout with `errors="replace"`.
+  why `__main__` also reconfigures stdout with `errors="backslashreplace"` —
+  not `replace`, which printed a key the reader could not copy back.
 - **A finding that can only name the symptom is worth a second finding for
   the cause.** Every label check names what is *nearest* the crowded label,
   and on a short run that is a wire — so the author is told to move a `via`
@@ -433,12 +436,14 @@ diff is not. Land the instrument before the change, not after.
   variable-length built-in. It carries a `__dict__`; that is the price.
 - **There are three boundary-wall sizes and they are not unified.**
   `render.WALL_HALF/WALL_DEPTH` is (24, 13), `g_fixed_node` draws (20, 12) and
-  `g_break` (22, 13). They are three different walls at three different
-  scales, and `docs/symbol-reference.html` is the declared visual record for
-  two of them. `layout.BREAK_WALL` passes `g_break`'s own numbers through the
-  placement rather than taking `ground`'s defaults. Unifying them would move
-  four goldens and the generated page, in the one area this file calls
-  settled, for tidiness.
+  `g_break` (22, 13). `layout.BREAK_WALL` passes `g_break`'s own numbers
+  through the placement rather than taking `ground`'s defaults. They are
+  three glyphs tuned by eye at three scales, and unifying them is a visual
+  redesign rather than tidying — which is the reason to leave them, and the
+  only one. That it would move four goldens is not a reason: goldens are a
+  change-detector, not a change-preventer. And `docs/symbol-reference.html`
+  showing two of them is a description of the code, not a specification of
+  it — the page is generated from the code.
 - **`render.WALL_HALF` and `WALL_DEPTH` are ints.** They reach the markup
   through an f-string, so `24.0` writes `y="-24.0"` where the drawing has
   always said `y="-24"`, and the clip ids are content-addressed on exactly
@@ -535,18 +540,14 @@ In rough priority order:
    and the only genuinely hard one. `_check.py` is now the thing that tells it
    whether its answer was any good, which is most of what a solver needs and
    was the reason to build the checker first.
-2. **A spreading resistance symbol** — the one gap in the vocabulary. The
-   natural glyph under the current scheme is hatching that fans from a point
-   rather than running parallel, reading as heat diverging into a larger
-   cross-section.
-3. **Region enclosures that auto-size to their contents** rather than taking
+2. **Region enclosures that auto-size to their contents** rather than taking
    fixed dimensions.
-4. **Unit handling** — pass `0.35` and have it choose between K/W and mK/W.
+3. **Unit handling** — pass `0.35` and have it choose between K/W and mK/W.
    A per-element `unit` override belongs here too: units are one entry per
    quantity per diagram, which is the rule that keeps `K/W` from mixing with
    `mK/W`, and the escape hatch has to be deliberate rather than a side effect
    of the quantity table.
-5. **More checks, as they earn their place.** A finding is worth adding when
+4. **More checks, as they earn their place.** A finding is worth adding when
    it caught something a browser was needed for. It is not worth adding
    because it is easy to compute.
 

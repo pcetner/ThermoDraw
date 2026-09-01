@@ -4,9 +4,9 @@ This is the thing you write, an LLM emits, and a human edits. It carries no
 geometry beyond the coordinates you give it, and no SVG at all: `layout` turns
 it into placements and `render` turns those into a document.
 
-The split matters for what comes next. In 0.2 `layout` reads the `at`
-coordinates you supply. In 0.3 it computes the ones you leave out. The schema
-does not change; only that one stage gains a solver.
+The split matters for what comes next. Today `layout` reads the `at`
+coordinates you supply. The network layer, when it lands, computes the ones
+you leave out. The schema does not change; only that one stage gains a solver.
 
 Every `kind` is a key from `symbols.SYMBOLS`, so the vocabulary and the schema
 are the same list. See docs/schema.md.
@@ -39,9 +39,10 @@ CONDENSE_ABOVE = 3
 SOURCE_KINDS = {"diss", "radin", "flow", "flux"}
 
 # A source written with `from` points away from its node instead of into it.
-# Only the two annotation kinds may: `diss` is dissipation appearing at a node
-# and does not go anywhere, and `radin` is radiation *arriving*, so an
-# outbound one would be a symbol whose own name contradicts it.
+# Only `flow` and `flux` may, the two that annotate heat crossing a boundary:
+# `diss` is dissipation appearing at a node and does not go anywhere, and
+# `radin` is radiation *arriving*, so an outbound one would be a symbol whose
+# own name contradicts it.
 OUTWARD_KINDS = {"flow", "flux"}
 
 # A subscript on an R is structural: the library sets it and it names the
@@ -393,9 +394,9 @@ class Diagram:
                     + ", ".join(sorted(NODE_KINDS)))
             if n.at is None:
                 raise DiagramError(
-                    f"node {n.id!r} has no coordinates. 0.2 places what you "
-                    "supply; solving for the ones you leave out arrives with "
-                    "the network layer in 0.3.")
+                    f"node {n.id!r} has no coordinates. Every node needs `at` "
+                    "for now; solving for the ones you leave out is the "
+                    "network layer, which is not built yet.")
             where = f"node {n.id!r}"
             _point(n.at, where, "at")
             _number(n.angle, where, "angle")

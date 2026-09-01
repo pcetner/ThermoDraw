@@ -41,7 +41,9 @@ def test_builder_and_dict_agree():
 
 # ---------------------------------------------------------------- validation
 def test_missing_coordinates_say_what_to_do():
-    with pytest.raises(DiagramError, match="0.3"):
+    """Name the feature, not a version number: "0.3" was promised and 0.3.0
+    shipped without it, which would have made this message a lie."""
+    with pytest.raises(DiagramError, match="network layer"):
         Diagram.from_dict({"nodes": [{"id": "a"}]})
 
 

@@ -2,8 +2,9 @@
 
 Pure: a `Diagram` in, a list of `Placement` out, no SVG and no globals. This
 is the one stage the network layer replaces. Today it reads the coordinates
-you supplied and works out the wire runs between them; in 0.3 it will solve
-for the coordinates you left out. Nothing either side of it needs to change.
+you supplied and works out the wire runs between them; the network layer,
+when it lands, will solve for the coordinates you left out. Nothing either
+side of it needs to change.
 
 A branch is routed as `[source, *via, target]`. The symbol sits at `at`, or at
 the midpoint of the longest straight segment, and the wire is interrupted

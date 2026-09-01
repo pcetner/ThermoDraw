@@ -10,8 +10,8 @@ they notice that something moved and can say nothing about whether it should
 have.
 
 So this module reports the defects that round trip was finding. Two of the
-eight are the executable form of a paragraph `docs/schema.md` currently offers
-as advice.
+ten are the executable form of a paragraph `docs/schema.md` once offered as
+advice.
 
 Nothing here re-derives the page. `compose` hands back the occupancy the
 labels were actually solved against and what `core.annotate` did with each one,

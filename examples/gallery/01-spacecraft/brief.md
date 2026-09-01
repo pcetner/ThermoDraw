@@ -43,7 +43,7 @@ Work from the repository root, and use the **Bash** tool (Git Bash), not
 PowerShell, for these:
 
 ```
-cd "C:/Users/Peter Cetner/Documents/GitHub/ThermoDraw"
+cd "$(git rev-parse --show-toplevel)"
 PYTHONPATH=src python -m thermodraw check    examples/gallery/01-spacecraft/satellite.json
 PYTHONPATH=src python -m thermodraw describe examples/gallery/01-spacecraft/satellite.json
 PYTHONPATH=src python -m thermodraw render   examples/gallery/01-spacecraft/satellite.json -o examples/gallery/01-spacecraft/satellite.svg

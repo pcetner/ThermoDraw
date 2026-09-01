@@ -1,8 +1,9 @@
 # The gallery
 
 Five thermal networks from five engineering domains, each drawn by a separate
-agent that had never seen this library, working from `docs/schema.md` and
-nothing else.
+agent that had never seen this library, working from `docs/schema.md` — and,
+it turned out, from the project's `CLAUDE.md`, which the harness injected into
+every agent's context unasked. See the protocol below.
 
 ## Why it exists
 
@@ -40,6 +41,17 @@ Each agent was given:
 
 No agent could open a browser or look at an image.
 
+The reading restriction did not hold. The harness auto-injected `CLAUDE.md`
+— the design record, with the reasoning behind every symbol — into each
+agent's context before it received its brief, and all five disclosed it.
+None read the source, the tests, the README or an existing diagram, and none
+reported it changing a layout decision. The vocabulary findings stand:
+knowing the design rationale does not hand anyone a spreading-resistance
+symbol. The documentation-quality findings are softer than they look, because
+the agents were not working from the schema alone. *A note on method* in
+`FINDINGS.md` says the same, and the run has not yet been repeated with the
+injection suppressed.
+
 ## What is in each folder
 
 | file | what it is |
@@ -60,7 +72,10 @@ approximated to get there — is in `rounds.md` and `findings.md`. A diagram tha
 checks clean while quietly drawing a heat pipe as a conduction resistance has
 told you something about the vocabulary, not about the drawing.
 
-Two of them no longer check clean. `04-immersion` and `05-laser-diode` now
+Three of them no longer check clean. `04-immersion` and `05-laser-diode`
 report `network-in-pieces`, because the check added after this run finds the
-severed network their agents could only describe in prose. They are left as
-they were drawn: the warning is the point.
+severed network their agents could only describe in prose. `03-cryogenic`
+reports `parallel-pair-same-side` twice: its agent set `side` explicitly to
+silence that note, as the remedy said to, and the note later stopped being
+silenceable by its own remedy. All three are left as they were drawn: the
+findings are the point.

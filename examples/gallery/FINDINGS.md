@@ -158,7 +158,10 @@ answer is the one it doesn't.*
   Angles section now says outright that no `angle` sends a node's label below
   the line.
 
-§6 is untouched. Nothing there was fixed, and nothing there is cheap.
+§6 was untouched when this was written. Since then eight of its nine gaps
+have shipped, in `a47d64a` and after — `flow` as a directed branch, `rate`,
+`spread`, `phase`, `pipe`, `count` with `arrangement`, `mixed`, and the rule
+that a bare `T` is not a statement. Active, pumped heat is the one still open.
 
 ---
 

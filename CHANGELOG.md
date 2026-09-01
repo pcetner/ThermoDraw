@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.3.0] - 2026-09-01
+
+Five symbols, three schema fields, three CLI subcommands, a dictionary, and
+an outside review that found the label text unescaped. The review's own
+record is `claude.ai/code/artifact/db16bd4b-8839-4214-a29a-e87924bb7169`.
+
 ### Added
 
 - **`Dictionary.html` — the page for someone who has not drawn one of these
@@ -35,7 +43,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   traceback. They were also ugly, and every aesthetic failure traced to the
   library rather than the author. Worse, the only way to find them was to
   render, serve over HTTP, open a browser, screenshot and look — five
-  sequential steps, while 134 golden tests passed green throughout. Goldens
+  sequential steps, while the whole suite — 134 tests, 23 of them goldens —
+  passed green throughout. Goldens
   pin bytes; they notice that something moved and can say nothing about
   whether it should have.
 
@@ -336,6 +345,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   fonts and its width table to each other byte for byte. Both font tools
   now say which release of IBM Plex they read, and the next regenerated
   `_metrics.py` records it. The vendored fonts themselves are unchanged.
+- **The documentation contradicted the code in fourteen places, and itself
+  in two.** The README captioned eighteen symbols as twelve, promised "exit 1
+  with findings" directly under a report that exits 0, and described a
+  rosette of four textures as every symbol at every angle. `docs/schema.md`
+  said a `break` refuses `sub` and accepts `rate` — it is the other way
+  round — named the two source kinds that may point away and then listed the
+  two that may not, and carried a `describe` transcript assembled by hand,
+  with `nodes:` twice and `network:` missing; it is the real output now.
+  `CLAUDE.md` cited `errors="replace"` as the rationale for a line that uses
+  `backslashreplace` and argues against `replace` by name, still listed a
+  spreading-resistance symbol as "the one gap in the vocabulary" nine commits
+  after it shipped, and counted 134 goldens where there are 23 — 134 was the
+  whole suite. `FINDINGS.md` said §6 was untouched with eight of its nine
+  items fixed by a commit whose message says so. The gallery README
+  described a reading protocol its own findings file discloses did not hold,
+  and counted two unclean diagrams where there are three. `__init__`'s usage
+  example saved a file that draws nothing, because `render` emits custom
+  properties with no fallback. The README's test count was wrong and is
+  removed rather than corrected: a number that changes with every added test
+  is a contradiction waiting to happen. The five gallery briefs no longer
+  hardcode the author's home directory. And the network layer is no longer
+  named "0.3" in three places — one of them a validator error users read —
+  because this is 0.3.0 and it is not in it.
 - **The remedies were wrong more often than they were right.** Five agents
   drawing five thermal networks applied them literally, as instructed. Six of
   eighteen worked; three made the drawing worse. Every fault was in the change

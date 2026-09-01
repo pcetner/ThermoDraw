@@ -23,7 +23,7 @@
   </picture>
 </p>
 
-<p align="center"><sub>Twelve symbols. Mechanism is carried by the interior texture, not by the outline.</sub></p>
+<p align="center"><sub>Eighteen symbols. Mechanism is carried by the interior texture, not by the outline.</sub></p>
 
 <br>
 
@@ -34,7 +34,7 @@
   </picture>
 </p>
 
-<p align="center"><sub>Every symbol at every angle. Textures rotate; labels never do.</sub></p>
+<p align="center"><sub>The four box textures at twelve angles. A texture belongs to its block and turns with it.</sub></p>
 
 <br>
 
@@ -86,7 +86,9 @@ note: [parallel-pair-same-side] branch 2 s->amb and branch 3 s->amb run
 
 Ten checks on how the drawing reads — text over text, a label shoved out
 past the thing it names, a wire through a symbol, ink off the page. Exit 0
-clean, 1 with findings. Every finding names the schema field that fixes it.
+clean, 1 on a warning or an error, 2 when the file could not be read. A note
+is advice and does not fail the run — the report above exits 0 — unless you
+pass `--strict`. Every finding names the schema field that fixes it.
 
 A clean report is not the same as the right diagram, so there is a second
 question:
@@ -114,7 +116,7 @@ checkout.
 ```bash
 python examples/render_demo.py       # the three images above
 python examples/render_reference.py  # every symbol at every 45°
-pytest                               # 447 tests
+pytest
 ```
 
 ## More
