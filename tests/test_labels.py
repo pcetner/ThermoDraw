@@ -157,3 +157,74 @@ def test_a_bad_side_is_named_and_listed():
     with pytest.raises(DiagramError, match="side must be one of.*'down'"):
         Diagram.from_dict({"nodes": [{"id": "a", "at": [0, 0],
                                       "side": "downwards"}]})
+
+
+class TestARateStatesItsQuantity:
+    """`rate` shipped drawing a bare number and had no test at all.
+
+    A path carrying 12 W drew `12 W` directly under `R_cond = 0.35 K/W` --
+    same style, no symbol, nothing to say which of the two was specified and
+    which is what the path turned out to carry. Every other quantity on the
+    page is written `symbol = value`, and `model.RATE` already named this one;
+    it was only ever used to look the unit up.
+    """
+
+    def diagram(self, **kw):
+        from thermodraw import Diagram
+        from thermodraw.model import Branch, Node
+        return Diagram(
+            nodes=[Node(id="a", at=[150, 120], value="80", sub="a"),
+                   Node(id="b", at=[500, 120], value="40", sub="b")],
+            branches=[Branch(source="a", target="b", kind="cond",
+                             label="Base plate", value="0.35", **kw)],
+            units={"R": "K/W", "T": "\u00b0C", "q": "W"})
+
+    def says(self, **kw):
+        from thermodraw.describe import describe, label_text
+        d = self.diagram(**kw)
+        d.validate()
+        describe(d)
+        for placement in layout(d):
+            if placement.label is not None and placement.label.user:
+                return label_text(placement.label)
+        raise AssertionError("no labelled placement")
+
+    def test_a_rate_is_drawn_with_its_symbol(self):
+        assert self.says(rate="12").endswith("q = 12 W")
+
+    def test_the_rate_is_not_a_bare_number(self):
+        """The defect itself, pinned: `12 W` alone is not a statement."""
+        parts = self.says(rate="12").split(" | ")
+        assert "12 W" not in parts, parts
+
+    def test_the_rate_line_reaches_the_drawing(self):
+        svg = render(layout(self.diagram(rate="12")))
+        assert ">12 W<" in svg and svg.count(">q<") == 1
+
+    def test_a_path_with_no_rate_gains_no_line(self):
+        assert self.says() == "Base plate | R_cond = 0.35 K/W"
+
+    def test_prose_extras_stay_prose(self):
+        """`count` names itself, so it is not dressed as a quantity."""
+        said = self.says(count=4, arrangement="parallel")
+        assert said.endswith("4 in parallel")
+        assert "= 4 in parallel" not in said
+
+    def test_a_rate_and_a_count_are_both_kept_and_ordered(self):
+        said = self.says(rate="12", count=4, arrangement="parallel")
+        assert said.split(" | ")[-2:] == ["q = 12 W", "4 in parallel"]
+
+    def test_the_rate_uses_the_q_unit_whatever_the_path_is(self):
+        """A resistance is in K/W and what it carries is in W. That is the
+        whole point of the field, and `RATE` is why it does not read
+        `units.R`."""
+        assert "q = 12 W" in self.says(rate="12")
+
+    def test_one_wrap_rule_serves_both_lines(self):
+        """`_stated` is shared, so a long rate wraps the way a long value
+        does rather than running off the block."""
+        from thermodraw.core import WRAP_AT, _line_w, build_block
+        wide = build_block(name="q", value="1234567890 mW", extra=[])
+        pair = build_block(extra=[("q", "1234567890 mW")])
+        assert [len(l) for l in wide] == [len(l) for l in pair]
+        assert all(_line_w(l) <= WRAP_AT for l in pair)

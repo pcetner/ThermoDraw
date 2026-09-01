@@ -338,7 +338,9 @@ SYMBOLS = [
            note="Temperature held by a phase change rather than by a boundary, "
                 "so it takes the imposed-temperature marking without the wall. "
                 "Latent heat crosses it at no temperature drop at all, which is "
-                "the whole reason a two-phase system exists."),
+                "the whole reason a two-phase system exists. The hold lasts "
+                "only while the phase change does, and the symbol does not say "
+                "how long that is."),
 
     # -- paths: the interior states what the heat is crossing
     Symbol(key="cond", name="Conduction", draw=g_cond, texture=tex_cond,

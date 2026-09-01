@@ -443,6 +443,30 @@ diff is not. Land the instrument before the change, not after.
   Substituting them reserves 22 units above a 5.5 circle and counts the
   boundary wall a second time, when the wall is already its own placement.
 
+- **A `rad` value is linearised, and the diagram cannot say at what.**
+  `R_rad` in K/W holds at one pair of temperatures; reuse the network at a
+  different ambient and the number is wrong with no visible sign. The dashed
+  outline warns that the path is not linear, which is what a reader needs
+  before adding resistances in series, but it does not carry the operating
+  point the value was taken at. Nor can `units` distinguish a temperature
+  from a rise above ambient: `°C` and `K` are free strings, and a diagram of
+  rises reads identically to one of temperatures. Both want a per-element
+  validity condition, which is a schema field and therefore a feature, not a
+  fix. **Do not add a check for this.** The hero is `°C` with a `rad` branch
+  and is correct, so any rule built on the unit string alone condemns the
+  flagship — which `check.py` exists not to do.
+
+- **`phase` draws the plateau, not the budget.** A phase-change node holds
+  its temperature, and that is the whole symbol. What it cannot say is that
+  the hold is *exhaustible*: a PCM buffer pins until its latent energy is
+  spent and then knees hard, and the time to that knee is usually the reason
+  the diagram was drawn. Saying it needs an energy in joules beside a
+  temperature, which is a second quantity on a node kind that has one — a
+  schema change. Until then the limit is prose only: the symbol's `note` and
+  the dictionary entry both say the hold lasts while the phase change does,
+  and neither can say how long. The note used to stop at "no temperature drop
+  at all", which reads as a hold that never ends.
+
 - **Text widths are measured**, not estimated. `core._metrics` is generated
   by `tools/gen_metrics.py` from the real font, one table per face because
   SemiBold runs about 4% wider than Regular — the same size as the error
