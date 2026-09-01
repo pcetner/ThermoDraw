@@ -221,11 +221,11 @@ find yourself doing that again, the occupancy list is the thing to reach for.
   the group grows. A trunk, a riser square across it, then the lane: a comb,
   which is how it is drawn by hand, and which puts every riser on one line so
   the branch point is a single visible junction rather than a spray.
-- **The elision mark is stubs of the missing lanes, not an ellipsis.** Three
-  dots are punctuation and too quiet to say "there is a branch here". Short
-  segments at the lane pitch, in the same stroke as a lane, say it in the
-  drawing's own language. Across the run for a series group, since there the
-  dropped copies sit along it.
+- **The elision mark runs along the branch, not across it.** An ellipsis
+  means "and more of these" in the direction it runs, so stacked
+  perpendicular to the lanes it read as a decoration rather than as an
+  omission. Lane stubs at the lane pitch were tried instead and were worse:
+  heavy enough to compete with the copies they stand in for.
 - **The motion is a staggered fade, not a transform.** A transform on the
   group would drag the wires off the nodes they connect to. `render` gives
   each copy a delay from how far it sits off the centre line, so the fan runs

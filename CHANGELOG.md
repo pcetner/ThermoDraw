@@ -113,9 +113,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
   A parallel group is drawn as a comb — a trunk out of each node, a riser
   square across it, then one lane per copy — rather than a diagonal fan, which
-  read as janky above about four lanes. The condensed form stands short stubs
-  of the missing lanes between the two it shows, because three dots are
-  punctuation and too quiet to say there is a branch here.
+  read as janky above about four lanes. The condensed form puts an ellipsis
+  between the two copies it shows, running along the branch: an ellipsis means
+  "and more of these" in the direction it runs, and stacked across the lanes
+  it read as a decoration rather than as an omission.
 
   Each form carries its own label and fades with it. The visible one used to
   sit in the shared label list, which left it stranded in the middle of the

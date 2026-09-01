@@ -182,9 +182,8 @@ parsing them as numbers.
 A parallel group is drawn as a comb: a trunk out of each node, a riser square
 across it, then one lane per copy. Right angles throughout.
 
-More than three and the drawing **condenses**: two copies are drawn with short
-stubs of the missing lanes between them, taking the room of two rather than of
-sixteen. Both forms are in the file, and `thermodraw page` gives you a control
+More than three and the drawing **condenses**: two copies are drawn with an
+ellipsis between them, taking the room of two rather than of sixteen. Both forms are in the file, and `thermodraw page` gives you a control
 to swap between them, with the copies fading in from the middle outwards. Each
 form carries its own label, so the text moves with the drawing it belongs to.
 
