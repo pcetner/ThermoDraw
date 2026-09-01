@@ -82,6 +82,13 @@ class Placement:
     # False for the form that is not the default. It is still drawn, into a
     # hidden group, so a viewer can swap without the diagram being rebuilt.
     shown: bool = True
+    # What in the diagram this came from, as data rather than as a string to
+    # parse back out of `ref`: "branch", "source", "node" or "rail", and the
+    # ids at its ends — (source, target) for a branch, (node_id,) for a source
+    # or a node, () for the rail. `check` and `describe` read these. `ref` is
+    # for people, and a node called `a->b` used to break both of them.
+    role: Optional[str] = None
+    ends: Tuple[str, ...] = ()
 
 
 def _angle(a, b):
@@ -125,44 +132,6 @@ def _split(route, index, centre, half_len):
     after = [(centre[0] + ux * half_len, centre[1] + uy * half_len)] + \
         list(route[index + 1:])
     return [p for p in (before, after) if len(p) > 1]
-
-
-def _source_offset(sym):
-    """How far from its node a source sits when the author gave no `at`.
-
-    The default was `half_len + 5.5`, which considers only how long the
-    symbol is and never how tall. That suits the three arrow kinds, which are
-    long and thin. `flux` is a 52 x 48 block, and at that offset it blocked
-    the node's label from below while the source's own label blocked it from
-    above — both candidate sides gone, so `annotate` pushed the node's label
-    out instead of flipping it, and the checker called it adrift.
-
-    No constant can be universally right here. Whether a label fits depends
-    on how wide it is, and labels are not solved until `render`. This buys
-    room in proportion to how much of the node's neighbourhood the symbol
-    occupies, and leaves the arrows exactly where they were.
-    """
-    return sym.half_len + 5.5 + max(0.0, 2 * (sym.half - 7))
-
-
-def _rail_point(diagram, node_id, other):
-    """Where a branch meets the rail: straight below wherever it came from.
-
-    `other` is the last waypoint if the branch has any, and the node itself
-    otherwise. It used to be the node either way, which made
-    `docs/schema.md`'s promise — that waypoints on a capacitance are "how you
-    free up the space directly under a node that already has too much
-    attached to it" — false: the route detoured and came back to the same
-    place. Buying a 480-unit diagonal for nothing cost one reader a full
-    re-layout.
-    """
-    return (other[0], diagram.rail.y)
-
-
-def _endpoint(diagram, ref, other):
-    if ref == M.RAIL:
-        return _rail_point(diagram, ref, other)
-    return tuple(diagram.node(ref).at)
 
 
 # ------------------------------------------------------- repeated branches
@@ -243,7 +212,8 @@ def _form(b, ref, sym, source, target, centre, angle, label, n, variant,
           shown):
     """One complete drawing of a repeated group: copies, wire, label, dots."""
     out = []
-    tag = {"variant": variant, "shown": shown}
+    tag = {"variant": variant, "shown": shown,
+           "role": "branch", "ends": (b.source, b.target)}
     dots = variant == "condensed"
 
     if b.arrangement == "series":
@@ -386,16 +356,17 @@ def layout(diagram):
         if b.repeated:
             out += _repeat(b, ref, sym, source, target, centre, angle, label)
             continue
+        who = {"role": "branch", "ends": (b.source, b.target)}
         for run in _split(route, index, centre, sym.half_len):
-            out.append(Placement("wire", points=run, ref=ref))
+            out.append(Placement("wire", points=run, ref=ref, **who))
         out.append(Placement(
             "symbol", at=centre, angle=angle, symbol=sym, ref=ref,
-            label=label))
+            label=label, **who))
 
     if diagram.rail:
         xs = [n.at[0] for n in diagram.nodes if n.at]
         span = diagram.rail.span or (min(xs), max(xs))
-        out.append(Placement("wire", ref="rail",
+        out.append(Placement("wire", ref="rail", role="rail",
                              points=[(span[0], diagram.rail.y),
                                      (span[1], diagram.rail.y)]))
 
@@ -417,6 +388,7 @@ def layout(diagram):
         step = _source_offset(sym) * (1 if s.outward else -1)
         centre = tuple(s.at) if s.at else (tip[0] + along[0] * step,
                                            tip[1] + along[1] * step)
+        who = {"role": "source", "ends": (s.node,)}
         out.append(Placement(
             "symbol", at=centre, angle=s.angle, symbol=sym, ref=ref,
             label=Label(user=s.label,
@@ -425,13 +397,13 @@ def layout(diagram):
                         extra=[x for x in
                                (diagram.count_text(s.count, "parallel"),) if x],
                         half=sym.half, half_len=sym.half_len,
-                        side=s.side)))
+                        side=s.side), **who))
         reach = -sym.half_len if s.outward else sym.half_len
         end = (centre[0] + along[0] * reach, centre[1] + along[1] * reach)
         edge = (tip[0] + along[0] * (5.5 if s.outward else -5.5),
                 tip[1] + along[1] * (5.5 if s.outward else -5.5))
         if _length(end, edge) > 0.5:
-            out.append(Placement("wire", points=[end, edge], ref=ref))
+            out.append(Placement("wire", points=[end, edge], ref=ref, **who))
 
     for n in diagram.nodes:
         if n.kind == "corner":
@@ -452,13 +424,14 @@ def layout(diagram):
         # meaningful — a diagram may be symbolic throughout — but a bare T
         # is not.
         names = n.value is not None or bool(n.sub)
+        who = {"role": "node", "ends": (n.id,)}
         out.append(Placement(
             "node", at=at, angle=n.angle, ref=ref,
             label=Label(user=n.label,
                         name=S.S_("T", n.sub) if names else None,
                         value=diagram.value_text(n.kind, n.value),
                         half=half, half_len=half_len,
-                        side=n.side)))
+                        side=n.side), **who))
         # Both boundary kinds draw a wall; only one draws the stub reaching
         # it. That gap is the entire distinction between them, and it is
         # topological rather than decorative — which is why `break` having
@@ -466,15 +439,61 @@ def layout(diagram):
         # missing flourish. `g_break` was unreachable from the data pipeline.
         if n.kind == "fixed":
             out.append(Placement("wire", points=[at, (at[0], at[1] + STUB)],
-                                 ref=ref))
+                                 ref=ref, **who))
             out.append(Placement("ground", at=(at[0], at[1] + STUB), angle=90,
-                                 ref=ref))
+                                 ref=ref, **who))
         elif n.kind == "phase":
-            out.append(Placement("phase", at=at, ref=ref))
+            out.append(Placement("phase", at=at, ref=ref, **who))
         elif n.kind == "break":
             # Set further out than a fixed node's wall, so the clear space
             # reads as longer than a stub. At the stub's own distance the
             # reader is left wondering whether the stub failed to draw.
             out.append(Placement("ground", at=(at[0], at[1] + BREAK_GAP),
-                                 angle=90, ref=ref, wall=BREAK_WALL))
+                                 angle=90, ref=ref, wall=BREAK_WALL, **who))
     return out
+
+
+# ---------------------------------------------------------------- topology
+# The network as nodes joined by branches, read off the placements. `check`
+# asks it whether the drawing is one piece and `describe` prints it; they
+# used to build it separately, one parsing `ref` strings, and `describe`'s
+# docstring promised the two could not disagree. Now they cannot.
+def network(placements):
+    """`(source, target, kind)` per branch, in diagram order, as written.
+
+    One entry per branch, not per placement: a branch emits several — wire
+    runs, its symbol, a repeated group's copies — and they share a `ref`.
+    """
+    seen, edges = set(), []
+    for p in placements:
+        if p.role != "branch" or p.symbol is None or p.ref in seen:
+            continue
+        seen.add(p.ref)
+        edges.append((p.ends[0], p.ends[1], p.symbol.key))
+    return edges
+
+
+def pieces(edges, ids):
+    """`ids` grouped into connected components, largest first, each sorted.
+
+    An endpoint that is not in `ids` — the rail — still joins what it
+    touches, so two capacitances dropping to one rail are one piece.
+    """
+    adj = {i: set() for i in ids}
+    for a, b, _ in edges:
+        adj.setdefault(a, set()).add(b)
+        adj.setdefault(b, set()).add(a)
+    seen, groups = set(), []
+    for start in sorted(adj):
+        if start in seen:
+            continue
+        stack, group = [start], set()
+        while stack:
+            v = stack.pop()
+            if v in group:
+                continue
+            group.add(v)
+            stack += [w for w in adj[v] if w not in group]
+        seen |= group
+        groups.append(sorted(group))
+    return sorted(groups, key=lambda g: (-len(g), g))

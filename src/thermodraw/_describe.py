@@ -28,7 +28,7 @@ from collections import Counter
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
 
-from ._layout import layout as _layout
+from ._layout import layout as _layout, network, pieces as _pieces
 from ._render import PADDING, compose
 
 # A label's side is a unit vector, not one of the four `core.PAGE_SIDES`
@@ -219,48 +219,12 @@ def _wrap(head, items, width=78):
     return lines + [current.rstrip()]
 
 
-def network(placements):
-    """Which nodes are joined to which, by what.
-
-    Three of five acceptance readers named this as the biggest thing missing
-    here — "the one question describe exists to answer is the one it
-    doesn't". Positions and counts say what is on the page; only this says
-    what the page means. Built the same way `check.network-in-pieces` builds
-    it, over nodes joined by branches, so the two cannot disagree.
-    """
-    seen, edges = set(), []
-    for p in placements:
-        if p.symbol is None or not (p.ref or "").startswith("branch "):
-            continue
-        if p.ref in seen:
-            continue
-        seen.add(p.ref)
-        ends = p.ref.split(" ", 2)[-1].split("->")
-        if len(ends) == 2:
-            edges.append((ends[0], ends[1], p.symbol.key))
-    return edges
-
-
-def _pieces(edges, ids):
-    """The node ids grouped into connected components, largest first."""
-    adj = {i: set() for i in ids}
-    for a, b, _ in edges:
-        adj.setdefault(a, set()).add(b)
-        adj.setdefault(b, set()).add(a)
-    seen, groups = set(), []
-    for start in sorted(adj):
-        if start in seen:
-            continue
-        stack, group = [start], set()
-        while stack:
-            v = stack.pop()
-            if v in group:
-                continue
-            group.add(v)
-            stack += [w for w in adj[v] if w not in group]
-        seen |= group
-        groups.append(sorted(group))
-    return sorted(groups, key=lambda g: (-len(g), g))
+# `network` and `_pieces` are `_layout.network` and `_layout.pieces`. Three of
+# five acceptance readers named the network as the biggest thing missing
+# here — "the one question describe exists to answer is the one it doesn't" —
+# and `check.network-in-pieces` asks the same question. They used to build it
+# separately, each parsing `ref` strings, and a node called `a->b` broke both.
+# One builder, read by both, is what makes "they cannot disagree" true.
 
 
 def _kind(p):
@@ -319,14 +283,15 @@ def describe(diagram, size=None, padding=PADDING, source="diagram"):
             line.flipped, line.clear = rect.flipped, rect.clear
         lines.append(line)
 
+    edges = network(placements)
     return Description(
         source=source,
         canvas=(round(bx1 - bx0, 1), round(by1 - by0, 1)),
         counts=dict(Counter(_kind(p) for p in placements)),
         lines=lines,
         nodes=[(n.id, n.kind, tuple(n.at)) for n in diagram.nodes if n.at],
-        edges=network(placements),
-        pieces=_pieces(network(placements),
+        edges=edges,
+        pieces=_pieces(edges,
                        [n.id for n in diagram.nodes if n.kind != "corner"]),
         rail=None if not diagram.rail else (
             diagram.rail.reference, diagram.rail.y,

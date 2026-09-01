@@ -282,6 +282,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   No golden moved: nothing in the corpus had ever put `&`, `<` or `"` in a
   label, which is the kind of input this library was built to receive and had
   never been given.
+- **A node called `a->b` severed its own branches.** `Placement.ref` is a
+  string for people — `branch 0 a->b`, `node 'j'` — and its own docstring
+  said so: "a diagnostic, not a key". `check` and `describe` both used it as
+  a key anyway, recovering endpoints by splitting on `->`, so an id
+  containing that dropped its branches on the floor: `check` reported a
+  connected diagram as two pieces, with a remedy, and `describe` printed no
+  edges at all. `hot side` and `o'clock` survived only by luck.
+
+  `Placement` now carries `role` ("branch", "source", "node", "rail") and
+  `ends` — the ids at its ends — as data, set by `layout` and read by both.
+  The network itself is built once, in `_layout.network`/`pieces`, so the
+  checker's `network-in-pieces` and the description's `network:` block cannot
+  disagree; they used to be the same algorithm written twice, and
+  `describe`'s docstring promised they could not diverge. The ref string is
+  unchanged in format, since `render.variant_id` hashes it into the DOM ids
+  a page holds. `network-in-pieces` now reports `node 'x'` as its `where`,
+  like every other finding, rather than a bare id.
+
+  Validation, in the same change: a coordinate or angle must be *finite*
+  (`nan` rendered `width="nan"`, a blank document, and passed); an id must
+  be non-empty and may not be `rail`, which is the reference rail's name and
+  was silently taken for it; and a source's `count` goes through the same
+  check a branch's does (`count: 0` drew one; `count: "many"` died in
+  `layout` with a `TypeError` naming no source). Deliberately nothing else
+  about an id: no code parses one out of a string any more, so there is
+  nothing to defend.
 - **The remedies were wrong more often than they were right.** Five agents
   drawing five thermal networks applied them literally, as instructed. Six of
   eighteen worked; three made the drawing worse. Every fault was in the change

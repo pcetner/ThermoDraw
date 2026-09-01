@@ -367,6 +367,17 @@ find yourself doing that again, the occupancy list is the thing to reach for.
   are separate ink — so `network-in-pieces` works over nodes joined by
   branches. A `break` branch counts: the finding is for a path someone meant
   to draw, and a break is an explicit statement that nothing flows.
+- **A placement says what it came from as data, and the ref string is for
+  people.** `Placement.role` and `.ends` carry the element category and the
+  ids at its ends; `ref` is `branch 0 a->b`, and its docstring has always
+  said it is a diagnostic, not a key. Both `check` and `describe` used it as
+  a key anyway — recovering endpoints by splitting on `->` — until a node
+  called `a->b` made the checker report a connected diagram as severed. The
+  network is now built once, in `_layout.network`, and both read it. The
+  corollary is a decision about ids: they must be non-empty and not `rail`,
+  and **nothing else**. Forbidding `->` or a quote would defend a parse that
+  no longer exists, and would refuse `hot side` and `o'clock`, which are
+  fine ids.
 - **A remedy names the field that fixes *this* case.** Both label findings
   carried one fixed string offering `side`, `angle` and `via` whatever was in
   the way, which leaves the author to work out which applies — and sometimes
