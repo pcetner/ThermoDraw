@@ -461,6 +461,84 @@ def _adrift(scene, placements, out):
             at=centre))
 
 
+def _crowded_run(scene, placements, out):
+    """Two nodes closer together than the labels along the run between them.
+
+    Every other finding names whatever is *nearest* the crowded label, and on
+    a short run that is a wire — so the author is told to move a `via` when
+    what is actually wrong is the spacing, and can spend an afternoon routing
+    around a problem that routing cannot fix. An acceptance reader did
+    exactly that. `docs/schema.md` has always said the right thing in prose —
+    "it is the label that decides how far apart two nodes have to be" — and
+    this is that sentence with the numbers filled in.
+
+    Two conditions, and both are load-bearing:
+
+    The arithmetic alone over-reports. Labels stack at different heights, so
+    their spans along the run can overlap without the blocks ever touching: a
+    four-stage ladder at 180 has labels summing to 187 and is completely
+    clean. So the trigger is a label having actually been pushed, which is a
+    fact the scene reports, and the widths are only the explanation.
+
+    The push alone under-explains. A label pushed by a waypoint rising out of
+    its node is not a spacing problem, and saying so would be worse advice
+    than the wire it replaces. So the sum has to exceed the span as well.
+
+    Straight runs only. A branch with waypoints has more room along its route
+    than the straight line between its nodes, and the sum would be measured
+    against the wrong number.
+    """
+    rects = {id(r.owner): r for r in scene.rects if r.owner is not None}
+    nodes = {}
+    for p in placements:
+        if p.element == "node" and (p.ref or "").startswith("node '"):
+            nodes[p.ref[6:-1]] = p
+
+    for p in placements:
+        if p.symbol is None or not (p.ref or "").startswith("branch "):
+            continue
+        ends = p.ref.split(" ", 2)[-1].split("->")
+        na, nb = (nodes.get(e) for e in ends) if len(ends) == 2 else (None, None)
+        if na is None or nb is None:
+            continue
+        a, b = tuple(na.at), tuple(nb.at)
+        span = math.dist(a, b)
+        if span < 1:
+            continue
+
+        # straight run: the symbol and every wire point sit on the segment
+        route = [tuple(q) for w in placements
+                 if w.ref == p.ref and w.element == "wire" for q in w.points]
+        if any(_point_segment(q, a, b) > 1.0 for q in route + [tuple(p.at)]):
+            continue
+
+        ux = abs(b[0] - a[0]) / span
+        uy = abs(b[1] - a[1]) / span
+        owners = (na, nb, p)
+        if not any((r := rects.get(id(o))) is not None
+                   and r.used - r.solved > ADRIFT for o in owners):
+            continue
+        needed = 0.0
+        for owner in owners:
+            r = rects.get(id(owner))
+            if r is None:
+                continue
+            # the two node labels sit at the ends and only half of each is in
+            # the way; the branch label is between them and all of it is
+            needed += (ux * r[2] + uy * r[3]) * (1.0 if owner is p else 0.5)
+        if needed <= span:
+            continue
+
+        out.append(Finding(
+            "nodes-too-close", "warning", p.ref,
+            f"{na.ref} and {nb.ref} are {span:.0f} apart, and the labels "
+            f"along that run come to {needed:.0f}",
+            remedy="move them apart with `at`. It is the labels that set the "
+                   f"spacing, not the symbol, which is only "
+                   f"{2 * p.symbol.half_len:.0f} wide",
+            at=tuple(p.at)))
+
+
 def _corridor(scene, edges, rings, out):
     """A label sitting in the gap between two wires that go the same way.
 
@@ -541,10 +619,10 @@ def _wire_through_symbol(placements, out):
         for i in range(len(pts) - 1):
             segs[(pts[i], pts[i + 1])].add(p.ref)
 
-    # One finding per (offender, victim), not per segment: a route crossing a
+    # One finding per (victim, offender), not per segment: a route crossing a
     # box usually does it with two of its segments, and saying so twice reads
     # as two problems.
-    seen = set()
+    hits = {}
     for p in placements:
         if p.symbol is None:
             continue
@@ -556,15 +634,35 @@ def _wire_through_symbol(placements, out):
             if not core.segment_box(a, b, p.at, half, p.angle):
                 continue
             for other in sorted(str(r) for r in refs):
-                if (p.ref, other) in seen:
-                    continue
-                seen.add((p.ref, other))
-                out.append(Finding(
-                    "wire-through-symbol", "warning", p.ref or "a symbol",
-                    f"{other} runs straight through {_name(p)}",
-                    remedy="route it around with `via`, or move the symbol "
-                           "along its branch with `at`",
-                    at=tuple(p.at)))
+                hits.setdefault((str(p.ref), other), p)
+
+    # Two branches laid across each other satisfy this twice, once each way,
+    # and both are true: each one's wire really does cross the other's box.
+    # They are one place on the page and one thing to fix, though, and moving
+    # either branch clears both — so say it once, as a crossing rather than
+    # as two trespasses.
+    seen = set()
+    for (victim, offender), p in sorted(hits.items()):
+        if (offender, victim) in hits:
+            pair = frozenset((victim, offender))
+            if pair in seen:
+                continue
+            seen.add(pair)
+            first, second = sorted(pair)
+            out.append(Finding(
+                "wire-through-symbol", "warning", first,
+                f"{first} and {second} cross each other, each one's wire "
+                "running through the other's symbol",
+                remedy="route either of them around with `via`, which clears "
+                       "both, or move one symbol along its branch with `at`",
+                at=tuple(p.at)))
+            continue
+        out.append(Finding(
+            "wire-through-symbol", "warning", victim or "a symbol",
+            f"{offender} runs straight through {_name(p)}",
+            remedy="route it around with `via`, or move the symbol "
+                   "along its branch with `at`",
+            at=tuple(p.at)))
 
 
 def _frame(scene, padding, out):
@@ -655,6 +753,7 @@ def check(diagram, size=None, padding=PADDING, source="diagram"):
     findings = []
     _collisions(scene, findings)
     _adrift(scene, placements, findings)
+    _crowded_run(scene, placements, findings)
     edges = wire_graph(placements)
     _corridor(scene, edges, cycles(edges), findings)
     _symbols_overlap(placements, findings)

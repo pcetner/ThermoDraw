@@ -57,6 +57,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   rebuilding the page. `describe(diagram)` from Python, `.describe()` on a
   builder, `thermodraw describe file.json` from a shell, `--json`.
 
+- **`nodes-too-close`, the ninth check.** Every label finding names what is
+  *nearest* the crowded label, and on a short run that is a wire — so the
+  author is told to move a `via` when the spacing is what is wrong, and no
+  amount of routing fixes spacing. An acceptance reader followed that advice
+  into a dead end. This names the cause: the two nodes, how far apart they
+  are, and what the labels along the run add up to.
+
+  It needs both halves. The arithmetic alone over-reports, because labels
+  stack at different heights and their spans along a run can overlap without
+  the blocks touching — a four-stage ladder at 180 sums to 187 and is
+  completely clean. The push alone under-explains, because a waypoint rising
+  out of a node crowds a label just as hard and moving the nodes apart would
+  not help. So it fires only when a label was actually pushed *and* the
+  labels do not fit, and only on straight runs, since a routed branch has
+  more room along its path than the line between its endpoints.
+
 - **Heat leaving a node: `from` on a source, against `to`.** The acceptance
   reader was asked to annotate the flux leaving a cell's top face and could
   only draw arrows pointing into it — the one thing it was asked for and
@@ -195,6 +211,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   than straddling it.
 
 ### Changed
+
+- **Two branches laid across each other are one `wire-through-symbol`, not
+  two.** Both directions were reported, and both were true: each one's wire
+  really is inside the other's box. They are one place on the page and one
+  thing to fix, and moving either clears both, so it now reads as a crossing
+  rather than as two separate trespasses.
 
 - **A source with no `at` now follows its own `angle`.** The default placed
   it to the left of its node whatever `angle` said, so turning a source

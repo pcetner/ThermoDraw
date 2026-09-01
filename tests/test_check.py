@@ -89,6 +89,74 @@ class TestLabelAdrift:
             assert not codes(check(cramped(spacing))), f"noisy at {spacing}"
 
 
+class TestNodesTooClose:
+    """The cause, where every other finding could only name the symptom.
+
+    On a short run the thing nearest a crowded label is a wire, so
+    `label-adrift` correctly named a wire and told the author to move a
+    `via` — which cannot fix it. An acceptance reader followed that advice
+    into a dead end. `docs/schema.md` had always said the right thing in
+    prose; this is that sentence with the numbers in it.
+    """
+
+    @staticmethod
+    def ladder(spacing):
+        b = DiagramBuilder(R="K/W", T="°C")
+        for i in range(4):
+            b.node(f"n{i}", f"Stage number {i}", f"{120 - 9 * i}",
+                   at=(i * spacing, 0), sub=f"{i}")
+        for i in range(3):
+            b.branch(f"n{i}", f"n{i+1}", "cond", f"Interface {i}", "0.35")
+        return b
+
+    @staticmethod
+    def crowded(spacing):
+        return [f for f in check(TestNodesTooClose.ladder(spacing).build())
+                .findings if f.code == "nodes-too-close"]
+
+    def test_a_squeezed_ladder_is_told_what_is_actually_wrong(self):
+        found = self.crowded(130)
+        assert len(found) == 3, "one per run, and all three are too short"
+        assert found[0].severity == "warning"
+        assert "node 'n0' and node 'n1' are 130 apart" in found[0].message
+        assert "come to 187" in found[0].message
+
+    def test_the_remedy_names_at_and_says_the_symbol_is_not_the_problem(self):
+        remedy = self.crowded(130)[0].remedy
+        assert "`at`" in remedy and "`via`" not in remedy
+        assert "only 84 wide" in remedy, "the box, against 187 of label"
+
+    def test_moving_them_apart_is_the_fix_it_recommends(self):
+        assert not codes(check(self.ladder(200)))
+
+    def test_the_arithmetic_alone_would_over_report(self):
+        """Which is why the trigger is a push, not the sum.
+
+        Labels stack at different heights, so their spans along the run can
+        overlap without the blocks ever touching. At 180 the labels sum to
+        187 against a span of 180 and the drawing is completely clean; a
+        check that fired on the sum would condemn it.
+        """
+        assert "nodes-too-close" not in codes(check(self.ladder(180)))
+
+    def test_a_push_from_something_else_is_not_called_a_spacing_problem(self):
+        """A waypoint rising out of a node crowds the label just as badly,
+        and moving the nodes apart would not help. The sum has to exceed the
+        span as well, and here it does not."""
+        report = check(TestLabelAdrift.boxed_in())
+        assert "label-adrift" in codes(report)
+        assert "nodes-too-close" not in codes(report)
+
+    def test_a_routed_branch_is_measured_against_its_route_not_the_line(self):
+        """With waypoints there is more room along the path than the straight
+        line between the nodes, so the sum would be checked against the wrong
+        number. Straight runs only."""
+        b = self.ladder(130)
+        b.diagram.branches[0].via = [(40, -120), (90, -120)]
+        assert "nodes-too-close" not in [
+            f.code for f in check(b).findings if f.where == "branch 0 n0->n1"]
+
+
 class TestLabelCollision:
     """The push loop can give up, and always could, without saying so.
 
@@ -195,14 +263,32 @@ class TestGeometryCollisions:
         assert "overlap by 32" in found.message
 
     def test_a_wire_crossing_a_symbol_it_does_not_own(self):
+        """One branch trespassing on another, which is one thing to fix."""
         b = (DiagramBuilder(R="K/W", T="°C")
              .node("a", "A", "100", at=(0, 0)).node("b", "B", "50", at=(400, 0))
              .node("d", "D", "70", at=(200, -160))
              .branch("a", "b", "cond", "Across", "0.3", at=(200, 0))
-             .branch("d", "b", "conv", "Down through it", "0.4",
+             .branch("d", "b", "conv", "Down past it", "0.4",
+                     via=[(200, 0)], at=(200, -80)))
+        found = one(check(b), "wire-through-symbol")
+        assert found.where == "branch 0 a->b"
+        assert "branch 1 d->b runs straight through" in found.message
+
+    def test_two_branches_laid_across_each_other_are_one_finding(self):
+        """Both directions are true — each one's wire really is inside the
+        other's box — and they are one place on the page, cleared by moving
+        either. It used to be reported twice, once from each end.
+        """
+        b = (DiagramBuilder(R="K/W", T="°C")
+             .node("a", "A", "100", at=(0, 0)).node("b", "B", "50", at=(400, 0))
+             .node("d", "D", "70", at=(200, -160))
+             .branch("a", "b", "cond", "Across", "0.3", at=(200, 0))
+             .branch("d", "b", "conv", "Down", "0.4",
                      via=[(200, 0)], at=(300, 0)))
-        hits = [f for f in check(b).findings if f.code == "wire-through-symbol"]
-        assert {f.where for f in hits} == {"branch 0 a->b", "branch 1 d->b"}
+        found = one(check(b), "wire-through-symbol")
+        assert found.where == "branch 0 a->b"
+        assert "cross each other" in found.message
+        assert "clears both" in found.remedy
 
     def test_a_route_crossing_with_two_segments_is_one_finding(self):
         """Reported per offender, not per segment: one problem, one line."""

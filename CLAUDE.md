@@ -228,10 +228,23 @@ find yourself doing that again, the occupancy list is the thing to reach for.
 - **The report opens with a positive line.** An agent needs a signal that says
   *good*, not merely an absence of output — silence is also what a crashed
   checker produces.
+- **Two branches laid across each other are one finding, not two.** Both
+  directions are true — each one's wire really is inside the other's box —
+  but they are one place on the page and moving either clears both.
 - **The report is ASCII.** It goes to a terminal, and a Windows console is
   cp1252: an arrow in a fixed string is a `UnicodeEncodeError` on the machine
   most likely to be running it. Node ids can still carry anything, which is
   why `__main__` also reconfigures stdout with `errors="replace"`.
+- **A finding that can only name the symptom is worth a second finding for
+  the cause.** Every label check names what is *nearest* the crowded label,
+  and on a short run that is a wire — so the author is told to move a `via`
+  when the spacing is what is wrong, and `via` cannot fix spacing. An
+  acceptance reader followed that into a dead end. `nodes-too-close` says the
+  cause with both numbers in it. It fires on a push that actually happened
+  *and* labels that arithmetically do not fit: the sum alone over-reports,
+  because labels stack at different heights and a ladder at 180 sums to 187
+  and is fine; the push alone under-explains, because a waypoint crowds a
+  label just as hard and moving the nodes would not help.
 - **A remedy names the field that fixes *this* case.** Both label findings
   carried one fixed string offering `side`, `angle` and `via` whatever was in
   the way, which leaves the author to work out which applies — and sometimes

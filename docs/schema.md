@@ -288,7 +288,7 @@ to be.
 
 ## Checking a diagram
 
-The two habits above are no longer advice. They are checks, and so are six
+The two habits above are no longer advice. They are checks, and so are seven
 other things that used to need a browser:
 
 ```bash
@@ -316,6 +316,7 @@ beside `.svg()`.
 | `label-collision` | error | text printed over something else |
 | `symbols-overlap` | error | two symbols in the same place |
 | `off-canvas` | error | the drawing runs past a `size` you fixed |
+| `nodes-too-close` | warning | two nodes closer than the labels on the run between them need, with both numbers |
 | `label-adrift` | warning | a label shoved out past its own clearance to get around something, and now reads as belonging to that instead |
 | `label-in-a-corridor` | warning | a label inside a loop of the network, close enough to both paths to belong to either |
 | `wire-through-symbol` | warning | a route crossing a symbol on another branch |
@@ -328,6 +329,10 @@ advance, because they are the ones a first draft hits:
 - `label-adrift` almost always means a `via` rising straight out of a node.
   Move the turn sideways first — that is the habit above, and it is what the
   finding will tell you.
+- `nodes-too-close` is the other half of that. Every finding names what is
+  *nearest* the crowded label, and on a short run that is a wire — so if you
+  are being told to move a `via` and it is not helping, look for this one: it
+  names the two nodes, how far apart they are, and what their labels need.
 - `parallel-pair-same-side` is a note rather than a warning because the hero
   diagram breaks it and is fine. Take it as a prompt to look, not an error.
 
