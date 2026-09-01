@@ -108,3 +108,52 @@ def test_segment_box_hits_and_misses():
     assert _segment_box((-20, -20), (20, 20), box, half)   # diagonal
     assert not _segment_box((-20, 20), (20, 20), box, half)   # passes below
     assert not _segment_box((-40, 0), (-20, 0), box, half)    # stops short
+
+
+# ------------------------------------------------------- the side override
+# `core.annotate` has taken an explicit side since the occupancy work, and
+# `layout.Label` has carried the field, but the model had nowhere to write it:
+# the override existed in Python and was unreachable from a diagram written as
+# data. A parallel pair is where it is missed — both branches are horizontal,
+# so both labels choose "up", which puts the lower one inside the loop.
+def parallel_pair(side_low):
+    b = DiagramBuilder(R="K/W", T="°C")
+    b.node("h", "Hot", "150", at=(200, 150))
+    b.node("c", "Cold", "25", kind="fixed", at=(560, 150))
+    b.branch("h", "c", "conv", "Convection", "0.013", side="up",
+             via=[(290, 150), (290, 70), (470, 70), (470, 150)], at=(380, 70))
+    b.branch("h", "c", "rad", "Radiation", "0.015", side=side_low,
+             via=[(290, 150), (290, 230), (470, 230), (470, 150)],
+             at=(380, 230))
+    return b
+
+
+def _label_top(builder, needle):
+    for placement in layout(builder.build()):
+        lab = placement.label
+        if lab is not None and lab.user == needle:
+            return placement
+    raise AssertionError(needle)
+
+
+def test_side_reaches_the_renderer_from_the_model():
+    assert _label_top(parallel_pair("down"), "Radiation").label.side == "down"
+
+
+def test_side_down_puts_the_label_below_its_box():
+    """auto sends both labels up; the override sends the lower one out."""
+    box_y = 230
+    auto = [r for r in rects(parallel_pair("auto"))]
+    forced = [r for r in rects(parallel_pair("down"))]
+    # exactly one rectangle moves, and it moves from above the box to below it
+    moved = [(a, f) for a, f in zip(auto, forced) if a != f]
+    assert len(moved) == 1
+    before, after = moved[0]
+    assert before[1] + before[3] < box_y < after[1]
+
+
+def test_a_bad_side_is_named_and_listed():
+    from thermodraw import Diagram, DiagramError
+    with pytest.raises(DiagramError, match="side must be one of.*'down'"):
+        Diagram.from_dict({"nodes": [{"id": "a", "at": [0, 0],
+                                      "side": "downwards"}]})

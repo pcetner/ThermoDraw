@@ -96,6 +96,21 @@ def _value(value, where):
     return value
 
 
+# core.annotate has taken an explicit side since the occupancy work, and
+# CLAUDE.md documents it as the override for the automatic choice. It was
+# reachable from Python and from nowhere else: the model carried no field for
+# it, so a diagram written as data could not say where its own label goes.
+SIDES = ("auto", "up", "down", "left", "right")
+
+
+def _side(value, where):
+    if value not in SIDES:
+        raise DiagramError(
+            f"{where}: side must be one of " + ", ".join(map(repr, SIDES))
+            + f", got {value!r}")
+    return value
+
+
 # Near-misses that difflib cannot see, because they are wrong by meaning
 # rather than by spelling. These are the ones a model actually writes.
 HINTS = {"name": "label", "text": "label", "title": "label",
@@ -166,6 +181,7 @@ class Node:
     value: Union[str, float, None] = None
     at: Optional[Sequence[float]] = None
     angle: float = 0.0
+    side: str = "auto"
 
 
 @dataclass
@@ -179,6 +195,7 @@ class Branch:
     via: List[Sequence[float]] = field(default_factory=list)
     at: Optional[Sequence[float]] = None
     angle: Optional[float] = None
+    side: str = "auto"
 
 
 @dataclass
@@ -190,6 +207,7 @@ class Source:
     value: Union[str, float, None] = None
     at: Optional[Sequence[float]] = None
     angle: float = 0.0
+    side: str = "auto"
 
 
 @dataclass
@@ -247,6 +265,7 @@ class Diagram:
             _text(n.label, where, "label")
             _text(n.sub, where, "sub")
             _value(n.value, where)
+            _side(n.side, where)
         if self.rail:
             if self.rail.reference not in seen:
                 raise DiagramError(
@@ -282,6 +301,7 @@ class Diagram:
             _text(b.label, where, "label")
             _text(b.sub, where, "sub")
             _value(b.value, where)
+            _side(b.side, where)
         known = set(QUANTITY.values())
         for quantity in self.units:
             if quantity not in known:
@@ -310,6 +330,7 @@ class Diagram:
             _text(s.label, where, "label")
             _text(s.sub, where, "sub")
             _value(s.value, where)
+            _side(s.side, where)
         return self
 
     def _valued(self):
