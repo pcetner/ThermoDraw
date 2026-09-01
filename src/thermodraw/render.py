@@ -75,13 +75,28 @@ def draw(placements):
         elif p.element == "node":
             nodes.append(node(p.at[0], p.at[1], p.radius))
 
+    # What is already on the page, so each label can avoid it. A label's own
+    # symbol is registered against it as owner and skipped: clear_offset
+    # solves that clearance, and solves it tighter than a bounding box can.
+    occupied = S.Occupancy()
+    for p in placements:
+        if p.element == "wire":
+            for a, b in _segments([tuple(q) for q in p.points]):
+                occupied.add_segment(a, b)
+        elif p.symbol is not None:
+            occupied.add_box(p.at, (p.symbol.half_len, p.symbol.half),
+                             p.angle, owner=p)
+        elif p.element == "node":
+            occupied.add_box(p.at, (p.radius, p.radius), 0.0, owner=p)
+
     for p in placements:
         lab = p.label
         if lab is None or not (lab.user or lab.value or lab.name):
             continue
         rect = S.annotate(p.at[0], p.at[1], p.angle, labels, user=lab.user,
                           name=lab.name, value=lab.value,
-                          half=lab.half, half_len=lab.half_len)
+                          half=lab.half, half_len=lab.half_len,
+                          side=lab.side, occupied=occupied, owner=p)
         if rect:
             rects.append(rect)
 
