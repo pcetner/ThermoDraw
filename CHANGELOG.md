@@ -234,6 +234,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `angle` on a `fixed` node is documented as not turning the boundary wall,
   which it never did.
 
+### Removed
+
+- **`core.LEAD`** — referenced nowhere. `symbols.LEAD = 20` is the one in use,
+  and `core.LEAD = 34` shadowing it under the same name was the hazard rather
+  than the waste.
+- **`Placement.mirror`** — written by nobody and read by nobody;
+  `render.place` recomputes it from `sym.mirror`. A field leaving a public
+  dataclass breaks anyone constructing one positionally, which is why it goes
+  in a release note rather than quietly.
+
 ## [0.2.0] - 2026-08-31
 
 0.1.0 was a symbol library: it drew one symbol at a time, at coordinates you

@@ -259,10 +259,6 @@ diff is not. Land the instrument before the change, not after.
 
 ## Known sharp edges
 
-- **`Placement.mirror` is dead.** Nothing writes it and nothing reads it —
-  `render.place` recomputes the value for itself. It stays because removing a
-  field from a public dataclass breaks anyone constructing one positionally.
-  So is `core.LEAD`, which `symbols.LEAD` shadowed.
 - **`LabelRect` has no `__slots__`.** It is a `tuple` subclass so that it
   still unpacks as four numbers and compares equal to the plain tuple it
   replaced, and CPython refuses a nonempty `__slots__` on a subtype of a
