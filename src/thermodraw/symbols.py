@@ -6,7 +6,7 @@ reaches perpendicular to the branch (``half``) and along it (``half_len``).
 """
 import math
 from dataclasses import dataclass
-from typing import Callable, Optional
+from typing import Callable, Optional, Tuple
 
 from . import core as S
 
@@ -179,6 +179,17 @@ class Symbol:
 
     `texture` is set only on the four box symbols, where the interior is a
     thing in its own right and can be placed without the outline.
+
+    `reach` is the other measurement, and it is not the same one. `half` and
+    `half_len` say how much room to leave a label; `reach` says how far the
+    ink goes, which for six of the twelve is further. A box symbol runs LEAD
+    past each end of the box, and a capacitance draws ±40 against a
+    `half_len` of 15. Mid-route those leads lie over wire the canvas already
+    counts, so nothing shows; at the end of a run the canvas is sized to the
+    clearance box and the leads are clipped off with no warning at all.
+
+    Set it only where the geometry exceeds the clearance. `ink` falls back,
+    so the two numbers stay one measurement wherever they agree.
     """
 
     key: str
@@ -192,43 +203,54 @@ class Symbol:
     user: Optional[str] = None
     texture: Optional[Callable[[], str]] = None
     note: str = ""
+    reach: Optional[Tuple[float, float]] = None
+
+    @property
+    def ink(self):
+        """(along the branch, across it) — how far the geometry draws."""
+        return self.reach if self.reach is not None else (self.half_len,
+                                                          self.half)
 
 
 SYMBOLS = [
     Symbol(key="free", name="Free node", draw=g_free_node,
            text=S_("T", "j"), value="112 °C", user="Junction",
-           half=5.5, half_len=5.5,
+           half=5.5, half_len=5.5, reach=(54, 5.5),
            note="Subscript is identity here — you set it, and it defaults to a "
                 "bare T. The label names the same thing in words."),
     Symbol(key="fixed", name="Fixed node", draw=g_fixed_node, mirror=True,
            text=S_("T", "amb"), value="40 °C", user="Still air",
-           half=22, half_len=19,
+           half=22, half_len=19, reach=(56, 24),
            note="Temperature is imposed and the wire connects to the boundary. "
                 "Past vertical the symbol mirrors, so the hatch never arrives "
                 "upside down."),
     Symbol(key="cond", name="Conduction", draw=g_cond, texture=tex_cond,
            text=S_("R", "cond"), value="0.35 K/W", user="Die attach",
            half=S.BH / 2, half_len=S.BW / 2,
+           reach=(S.BW / 2 + LEAD, S.BH / 2),
            note="Subscript is structural and fixed. Which conduction path this "
                 "is lives in your label, so nothing is named twice."),
     Symbol(key="conv", name="Convection", draw=g_conv, texture=tex_conv,
            text=S_("R", "conv"), value="1.80 K/W", user="Sink → Ambient",
            half=S.BH / 2, half_len=S.BW / 2,
+           reach=(S.BW / 2 + LEAD, S.BH / 2),
            note="Streamlines rotate with the block, since flow along the path is "
                 "what they mean."),
     Symbol(key="rad", name="Radiation", draw=g_rad, texture=tex_rad,
            text=S_("R", "rad"), value="6.40 K/W", user="Case → Ambient",
            half=S.BH / 2, half_len=S.BW / 2,
+           reach=(S.BW / 2 + LEAD, S.BH / 2),
            note="Arrows now span the box symmetrically. Dashed outline marks the "
                 "one path that is not linear in temperature."),
     Symbol(key="contact", name="Contact", draw=g_contact, texture=tex_contact,
            text=S_("R", "contact"), value="0.15 K/W", user="Grease",
            half=S.BH / 2, half_len=S.BW / 2,
+           reach=(S.BW / 2 + LEAD, S.BH / 2),
            note="Contact rather than TIM: the other three subscripts name "
                 "mechanisms, and a TIM is a material."),
     Symbol(key="cap", name="Capacitance", draw=g_cap,
            text=S_("C", "j"), value="0.9 mJ/K", user="Die",
-           half=15, half_len=15,
+           half=15, half_len=15, reach=(40, 15),
            note="On a near-vertical branch the block moves to whichever side has "
                 "room, and stays whole."),
     Symbol(key="diss", name="Dissipation", draw=g_diss,
@@ -243,7 +265,7 @@ SYMBOLS = [
                 "into the head instead of easing out of it."),
     Symbol(key="break", name="Thermal break", draw=g_break, mirror=True,
            text=S_("q"), value="0 W", user="Mounting standoff",
-           half=22, half_len=22,
+           half=22, half_len=22, reach=(54, 22),
            note="The wire stops short of the wall. A fixed node connects to its "
                 "boundary; this one does not."),
     Symbol(key="flow", name="Heat flow", draw=g_flow,
@@ -251,7 +273,7 @@ SYMBOLS = [
            note="An annotation, sized to the arrow alone so the block sits close."),
     Symbol(key="flux", name="Heat flux", draw=g_flux,
            text="q″", value="1.4 W/cm²", user="Die surface",
-           half=25, half_len=26,
+           half=25, half_len=26, reach=(28, 24),
            note="Several arrows leaving a surface. Flux is per unit area, so it "
                 "has no single line of action to borrow heat flow's symbol."),
 ]

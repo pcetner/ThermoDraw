@@ -24,6 +24,12 @@ classifiers = [
 ]
 dependencies = []
 
+[project.scripts]
+# `thermodraw check` is the point of having a script at all: it turns
+# "render it, serve it, open a browser, screenshot it, look" into one command
+# whose output is text and whose exit status is the answer.
+thermodraw = "thermodraw.__main__:main"
+
 [project.optional-dependencies]
 dev = ["pytest", "cairosvg", "pillow", "fonttools", "brotli"]
 

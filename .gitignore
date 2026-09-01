@@ -10,3 +10,7 @@ dist/
 
 # local tooling scratch, not project content
 .claude/
+
+# working plans are scaffolding: they get deleted when the work lands,
+# and the durable record goes to CHANGELOG.md, CLAUDE.md and docs/
+PLAN.md
