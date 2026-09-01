@@ -11,8 +11,10 @@ does not change; only that one stage gains a solver.
 Every `kind` is a key from `symbols.SYMBOLS`, so the vocabulary and the schema
 are the same list. See docs/schema.md.
 """
+import difflib
 import json
-from dataclasses import dataclass, field
+from dataclasses import MISSING as _MISSING
+from dataclasses import dataclass, field, fields
 from typing import Any, Dict, List, Optional, Sequence, Union
 
 NODE_KINDS = {"free", "fixed", "break", "corner"}
@@ -47,6 +49,112 @@ def _fmt(value):
     if isinstance(value, float) and value == int(value):
         return str(int(value))
     return f"{value:g}"
+
+
+# ------------------------------------------------------------------ typing
+# The point of validate() is that a diagram which cannot be drawn says so
+# before anything tries to draw it. Checking ids and kinds but not the shape
+# of a coordinate left seven ways to write a bad `at`: six died deep in the
+# renderer with messages like "Unknown format code 'f' for object of type
+# 'str'", naming no node and no field, and one drew the wrong picture in
+# silence. These are cheap and they run first.
+def _number(value, where, name):
+    # bool is an int in Python, and an angle of True is not an angle
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise DiagramError(
+            f"{where}: {name} must be a number, got {value!r}")
+    return value
+
+
+def _point(value, where, name):
+    if not isinstance(value, (list, tuple)):
+        raise DiagramError(
+            f"{where}: {name} must be a pair of numbers like [200, 150], "
+            f"got {value!r}")
+    if len(value) != 2:
+        raise DiagramError(
+            f"{where}: {name} needs exactly two numbers, got {len(value)} "
+            f"in {value!r}")
+    for item in value:
+        if isinstance(item, bool) or not isinstance(item, (int, float)):
+            raise DiagramError(
+                f"{where}: {name} must be numbers, got {item!r} in {value!r}")
+    return value
+
+
+def _text(value, where, name):
+    if value is not None and not isinstance(value, str):
+        raise DiagramError(
+            f"{where}: {name} must be text, got {value!r}")
+    return value
+
+
+def _value(value, where):
+    if value is not None and not isinstance(value, (str, int, float)):
+        raise DiagramError(
+            f"{where}: value must be a number or text, got {value!r}")
+    return value
+
+
+# Near-misses that difflib cannot see, because they are wrong by meaning
+# rather than by spelling. These are the ones a model actually writes.
+HINTS = {"name": "label", "text": "label", "title": "label",
+         "type": "kind", "symbol": "kind",
+         "position": "at", "pos": "at", "xy": "at", "coords": "at",
+         "coordinates": "at", "point": "at", "location": "at",
+         "subscript": "sub", "suffix": "sub",
+         "magnitude": "value", "amount": "value", "quantity": "value",
+         "source": "from", "target": "to", "start": "from", "end": "to",
+         "waypoints": "via", "route": "via", "path": "via",
+         "node": "nodes", "branch": "branches", "unit": "units"}
+
+
+def _suggest(key, offered):
+    hint = HINTS.get(key)
+    if hint and hint in offered:
+        return hint
+    near = difflib.get_close_matches(key, offered, n=1, cutoff=0.6)
+    return near[0] if near else None
+
+
+def _build(cls, data, where, mapping=None):
+    """Construct a dataclass from a dict, saying what is wrong with the dict.
+
+    An unknown key used to surface as `Node.__init__() got an unexpected
+    keyword argument 'name'` — a Python-internal message, the wrong exception
+    type, and no hint. Near-miss keys are the likeliest thing to arrive from
+    a model writing JSON, so they get the best error in the library.
+    """
+    if not isinstance(data, dict):
+        raise DiagramError(f"{where}: expected an object, got {data!r}")
+    mapping = mapping or {}
+    back = {v: k for k, v in mapping.items()}
+    renamed = {mapping.get(k, k): v for k, v in data.items()}
+    known = {f.name for f in fields(cls)}
+    offered = sorted(back.get(name, name) for name in known)
+
+    unknown = [key for key in renamed if key not in known]
+    if unknown:
+        said = []
+        for key in unknown:
+            shown = back.get(key, key)
+            near = _suggest(shown, offered)
+            said.append(f"{shown!r}" +
+                        (f" (did you mean {near!r}?)" if near else ""))
+        raise DiagramError(f"{where}: unknown field {', '.join(said)}. "
+                           f"Expected: {', '.join(offered)}")
+    try:
+        return cls(**renamed)
+    except TypeError as exc:
+        missing = sorted(
+            back.get(f.name, f.name) for f in fields(cls)
+            if f.default is _MISSING and f.default_factory is _MISSING
+            and f.name not in renamed)
+        if missing:
+            raise DiagramError(
+                f"{where}: missing required field "
+                f"{', '.join(repr(m) for m in missing)}") from None
+        raise DiagramError(f"{where}: {exc}") from None
 
 
 @dataclass
@@ -133,9 +241,19 @@ class Diagram:
                     f"node {n.id!r} has no coordinates. 0.2 places what you "
                     "supply; solving for the ones you leave out arrives with "
                     "the network layer in 0.3.")
-        if self.rail and self.rail.reference not in seen:
-            raise DiagramError(
-                f"rail references unknown node {self.rail.reference!r}")
+            where = f"node {n.id!r}"
+            _point(n.at, where, "at")
+            _number(n.angle, where, "angle")
+            _text(n.label, where, "label")
+            _text(n.sub, where, "sub")
+            _value(n.value, where)
+        if self.rail:
+            if self.rail.reference not in seen:
+                raise DiagramError(
+                    f"rail references unknown node {self.rail.reference!r}")
+            _number(self.rail.y, "rail", "y")
+            if self.rail.span is not None:
+                _point(self.rail.span, "rail", "span")
         for b in self.branches:
             if b.kind not in BRANCH_KINDS:
                 raise DiagramError(
@@ -150,6 +268,20 @@ class Diagram:
                 elif end not in seen:
                     raise DiagramError(
                         f"branch {b.source}-{b.target}: no node named {end!r}")
+            where = f"branch {b.source}-{b.target}"
+            if not isinstance(b.via, (list, tuple)):
+                raise DiagramError(
+                    f"{where}: via must be a list of points like "
+                    f"[[696, 150], [696, 70]], got {b.via!r}")
+            for i, point in enumerate(b.via):
+                _point(point, where, f"via[{i}]")
+            if b.at is not None:
+                _point(b.at, where, "at")
+            if b.angle is not None:
+                _number(b.angle, where, "angle")
+            _text(b.label, where, "label")
+            _text(b.sub, where, "sub")
+            _value(b.value, where)
         known = set(QUANTITY.values())
         for quantity in self.units:
             if quantity not in known:
@@ -171,6 +303,13 @@ class Diagram:
                     "one of " + ", ".join(sorted(SOURCE_KINDS)))
             if s.target not in seen:
                 raise DiagramError(f"source: no node named {s.target!r}")
+            where = f"source at {s.target}"
+            if s.at is not None:
+                _point(s.at, where, "at")
+            _number(s.angle, where, "angle")
+            _text(s.label, where, "label")
+            _text(s.sub, where, "sub")
+            _value(s.value, where)
         return self
 
     def _valued(self):
@@ -202,12 +341,29 @@ class Diagram:
 
     @classmethod
     def from_dict(cls, data):
-        nodes = [Node(**_rename(n)) for n in data.get("nodes", [])]
-        branches = [Branch(**_rename(b, {"from": "source", "to": "target"}))
-                    for b in data.get("branches", [])]
-        sources = [Source(**_rename(s, {"to": "target"}))
-                   for s in data.get("sources", [])]
-        rail = Rail(**_rename(data["rail"])) if data.get("rail") else None
+        if not isinstance(data, dict):
+            raise DiagramError(f"a diagram is an object, got {data!r}")
+        extra = sorted(set(data) - {"title", "units", "size", "nodes",
+                                    "branches", "sources", "rail"})
+        if extra:
+            top = ["title", "units", "size", "nodes", "branches",
+                   "sources", "rail"]
+            said = []
+            for key in extra:
+                near = _suggest(key, top)
+                said.append(f"{key!r}" +
+                            (f" (did you mean {near!r}?)" if near else ""))
+            raise DiagramError(
+                f"unknown top-level field {', '.join(said)}. Expected: "
+                "title, units, size, nodes, branches, sources, rail")
+        nodes = [_build(Node, n, f"node {i}")
+                 for i, n in enumerate(data.get("nodes", []))]
+        branches = [_build(Branch, b, f"branch {i}",
+                           {"from": "source", "to": "target"})
+                    for i, b in enumerate(data.get("branches", []))]
+        sources = [_build(Source, s, f"source {i}", {"to": "target"})
+                   for i, s in enumerate(data.get("sources", []))]
+        rail = _build(Rail, data["rail"], "rail") if data.get("rail") else None
         return cls(nodes=nodes, branches=branches, sources=sources, rail=rail,
                    units=dict(data.get("units", {})),
                    size=data.get("size"), title=data.get("title")).validate()

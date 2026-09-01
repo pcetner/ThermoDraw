@@ -1,0 +1,44 @@
+ThermoDraw
+Copyright (c) 2026 Peter Cetner
+
+ThermoDraw's source code, documentation and generated diagrams are licensed
+under the MIT License. The full text is in LICENSE, beside this file.
+
+ThermoDraw has no runtime dependencies. It does, however, bundle three font
+files, and those files are not MIT. This notice says what they are and under
+what terms they travel.
+
+
+--------------------------------------------------------------------------
+Bundled fonts — SIL Open Font License 1.1
+--------------------------------------------------------------------------
+
+  src/thermodraw/fonts/thermodraw-sans-400.woff2
+  src/thermodraw/fonts/thermodraw-sans-600.woff2
+  src/thermodraw/fonts/thermodraw-sans-italic.woff2
+
+These are subsets of IBM Plex Sans:
+
+  Copyright (c) 2017 IBM Corp. with Reserved Font Name "Plex"
+
+licensed under the SIL Open Font License, Version 1.1. The full licence text
+ships with the fonts, at src/thermodraw/fonts/OFL.txt, and is also included in
+the distribution metadata of every wheel and sdist.
+
+Each face carries only the glyphs the library can emit, and kerning is
+dropped, so a subset is a Modified Version under OFL clause 3. That clause
+forbids a Modified Version from using the Reserved Font Name, so the faces are
+renamed: they are "ThermoDraw Sans", not IBM Plex Sans, and must not be
+represented as IBM Plex Sans. tools/subset_font.py performs the rename, and
+tests/test_fonts.py asserts it.
+
+The OFL applies to these three font files alone. It does not apply to
+ThermoDraw's code, which is MIT, and — by the OFL's own terms — it does not
+apply to documents produced with the fonts.
+
+ThermoDraw can embed a face directly into the SVG it emits, for targets such
+as Word, PowerPoint and standalone rasterisers that fetch nothing. Such an SVG
+contains a copy of the OFL font. The OFL permits this: the fonts "can be
+bundled, embedded, redistributed and/or sold with any software" provided the
+Reserved Font Name is not used and the licence travels with them. If you
+redistribute an SVG with an embedded face, carry this notice with it.

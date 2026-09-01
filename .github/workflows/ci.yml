@@ -1,0 +1,105 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: py${{ matrix.python-version }} on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        # 3.9 is the declared floor in pyproject.toml, and the only thing that
+        # actually verifies it. Windows is here because the library emits "→"
+        # and "″", and a default-encoding write on Windows is cp1252.
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install
+        # Not the full dev extra: cairosvg needs system cairo and pillow needs
+        # wheels for every row of this matrix, and neither is imported by the
+        # suite. The `dev-extra` job below checks that the extra still resolves.
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e .
+          python -m pip install pytest fonttools brotli
+
+      - name: Tests
+        # No PYTHONUTF8 here on purpose. Windows' cp1252 default is one of the
+        # things this matrix is meant to catch, so let it be the default.
+        run: python -m pytest -q
+
+      - name: Docs are a fresh render
+        # tests/test_docs.py runs this too; keeping it as its own step means a
+        # stale docs/symbol-reference.html is named in the job list, not buried
+        # in a test summary.
+        run: python tools/gen_docs.py --check
+
+      - name: Nothing was regenerated in place
+        # The freshness guards read; if one ever writes, the checkout is dirty
+        # and the run should say so rather than pass quietly.
+        run: git diff --exit-code
+
+  dev-extra:
+    name: dev extra resolves
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install the full dev extra
+        # cairosvg, pillow, fonttools, brotli. The test matrix deliberately
+        # installs less; this job is what notices when the extra itself rots.
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+
+  build:
+    name: wheel and sdist
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build
+        run: |
+          python -m pip install --upgrade pip build twine
+          python -m build
+
+      - name: Check metadata
+        # Catches a missing licence or a README that PyPI will not render,
+        # before the upload rather than after it.
+        run: python -m twine check dist/*
+
+      - name: The wheel carries py.typed and the licences
+        run: |
+          python - <<'PY'
+          import glob, zipfile
+          names = zipfile.ZipFile(glob.glob("dist/*.whl")[0]).namelist()
+          for want in ("thermodraw/py.typed",
+                       "thermodraw/fonts/OFL.txt"):
+              assert want in names, f"{want} missing from the wheel"
+          for want in ("LICENSE", "NOTICE", "OFL.txt"):
+              assert any(n.endswith(want) and ".dist-info/" in n
+                         for n in names), f"{want} missing from dist-info"
+          print("\n".join(sorted(names)))
+          PY
