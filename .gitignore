@@ -15,3 +15,8 @@ out/
 # working plans are scaffolding: they get deleted when the work lands,
 # and the durable record goes to CHANGELOG.md, CLAUDE.md and docs/
 PLAN.md
+
+# a clean room lives outside the checkout — RERUN.md says why an inner one
+# cannot be clean. This is here so an accidental copy cannot be committed.
+ThermoDraw-cleanroom*/
+.coverage
