@@ -362,6 +362,18 @@ class Diagram:
         return (f"{count} in series" if arrangement == "series"
                 else f"{count} in parallel")
 
+    def source_count_text(self, count):
+        """How many of a source there are. They add; there is no arrangement.
+
+        It borrowed the branch wording and said "8 in parallel" of eight
+        processors, which is a statement about circuits, not about eight
+        things that each dissipate 400 W. The value is per item, as it is on
+        a branch, and this says so.
+        """
+        if not count or count <= 1:
+            return None
+        return f"each of {count}"
+
     def value_text(self, kind, value):
         text = _fmt(value)
         if text is None:

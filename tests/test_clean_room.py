@@ -231,3 +231,147 @@ def assert_via_is_possible(remedy, state):
                 f"`via` on a repeated branch: {remedy}"
             if option.startswith("move a `via` waypoint"):
                 assert b.get("via"), f"no waypoint to move: {remedy}"
+
+
+# ------------------------------------- `--physics` says what it did not check
+class TestPhysicsSaysWhatItDidNotCheck:
+    """02: the worst-balanced node in the house, 1.47 kW in against 693 W
+    out, was absent from the report because the wall's interior junctions
+    have no temperature — the idiom the schema recommends. 05: three of
+    eight nodes never examined, and a reader would conclude they passed.
+    Both asked for one line saying how many were checked."""
+
+    @staticmethod
+    def stack(middle=None, source="diss"):
+        b = DiagramBuilder(R="K/W", T="°C", P="W", **{"q″": "W/cm²"})
+        b.node("a", "Junction", "65", at=(0, 0), sub="j")
+        b.node("m", "Submount base", middle, at=(260, 0))
+        b.node("z", "Water", "18", kind="fixed", at=(520, 0), sub="w")
+        b.branch("a", "m", "cond", "Solder", "0.0875")
+        b.branch("m", "z", "cond", "Contact", "0.045")
+        if source == "diss":
+            b.source("a", "diss", "Waste heat", "80", sub="d")
+        else:
+            b.source("a", "flux", "Emitting face", "800", sub="e",
+                     outward=True)
+        return b
+
+    def test_a_neighbour_with_no_temperature_is_reported_once(self):
+        found = one(check(self.stack(), physics=True), "physics-not-checked")
+        assert found.severity == "note"
+        assert found.message.startswith("checked 0 of 2 free nodes")
+        assert "a (neighbour 'm' has no temperature)" in found.message
+        assert "m (it has no temperature)" in found.message
+
+    def test_a_flux_source_is_named_as_the_reason(self):
+        found = one(check(self.stack("58", "flux"), physics=True),
+                    "physics-not-checked")
+        assert "a (source 0 is a flux, which has no area)" in found.message
+        assert "checked 1 of 2" in found.message
+
+    def test_a_diagram_whose_nodes_were_all_checked_says_nothing(self):
+        report = check(self.stack("58"), physics=True)
+        assert "physics-not-checked" not in codes(report)
+
+    def test_an_unknown_unit_is_a_note_not_silence(self):
+        b = DiagramBuilder(R="furlongs", T="°C", P="W")
+        b.node("a", "Hot", "50", at=(0, 0), sub="a")
+        b.node("b", "Cold", "40", kind="fixed", at=(300, 0), sub="b")
+        b.branch("a", "b", "cond", "Slab", "1.0")
+        b.source("a", "diss", "Load", "10", sub="d")
+        found = one(check(b, physics=True), "physics-not-checked")
+        assert "'furlongs'" in found.message
+        assert "K/W" in found.message and "mK/W" in found.message
+
+    def test_the_balance_message_is_ascii(self):
+        """Its separator was an em dash, and on a cp1252 console it printed
+        as a replacement character; two agents re-captured their output
+        under PYTHONIOENCODING to get a clean record."""
+        report = check(self.stack("40"), physics=True)
+        found = [f for f in report.findings if f.code == "node-does-not-balance"]
+        assert found and all(f.line().isascii() for f in found)
+
+    @needs_gallery
+    def test_the_house_and_the_diode_say_what_their_agents_found_by_hand(self):
+        house = one(check(diagram(gallery("02-building", "house.json")),
+                          physics=True), "physics-not-checked")
+        assert "gf (neighbour 'w1' has no temperature)" in house.message
+        diode = one(check(diagram(gallery("05-laser-diode", "diode.json")),
+                          physics=True), "physics-not-checked")
+        assert "sm, cb (neighbour 'smb' has no temperature)" in diode.message
+        assert "j (source 1 is a flux, which has no area)" in diode.message
+
+
+# -------------------------------------------- a counted source says "each of"
+class TestACountedSourceSaysEachOf:
+    """04: `describe` printed "8 in parallel" for eight processors, borrowing
+    the branch wording for a quantity the schema says has no arrangement."""
+
+    def test_the_label_reads_each_of_eight(self):
+        from thermodraw import describe
+        b = DiagramBuilder(R="K/W", T="°C", P="W")
+        b.node("j", "Junction", "72", at=(0, 0), sub="j")
+        b.node("s", "Sink", "40", kind="fixed", at=(300, 0), sub="s")
+        b.branch("j", "s", "cond", "Path", "0.5")
+        b.source("j", "diss", "Processor dissipation", "400", sub="p", count=8)
+        says = [l.says for l in describe(b).lines if l.ref.startswith("source")]
+        assert says == ["Processor dissipation | P_p = 400 W | each of 8"]
+        assert not any("in parallel" in s for s in says)
+
+
+# ------------------------------------- the network block shows what matters
+class TestTheNetworkBlockShowsSourcesAndDirection:
+    """All four agents that used `flow` said `coil --flow-branch-- tw` was
+    the one thing they most wanted confirmed and could not be; three said a
+    source on the wrong node would leave the block byte-identical; one
+    could not see eight paths in `j --cond-- ihs`."""
+
+    @staticmethod
+    def tec(reverse=False):
+        b = DiagramBuilder(R="K/W", T="°C", P="W", q="W")
+        b.node("cb", "Cooler body", "41", at=(0, 0), sub="cb")
+        b.node("th", "TEC hot face", "48", at=(260, 0), sub="h")
+        b.node("amb", "Air", "25", kind="fixed", at=(520, 0), sub="amb")
+        b.node("w", "Water", "18", kind="fixed", at=(0, 200), sub="w")
+        if reverse:
+            b.branch("th", "cb", "flow", "TEC pumps heat", "60", sub="pump")
+        else:
+            b.branch("cb", "th", "flow", "TEC pumps heat", "60", sub="pump")
+        b.branch("th", "amb", "conv", "Baseplate", "0.23")
+        b.branch("cb", "w", "cond", "Channels", "0.045", count=4,
+                 arrangement="parallel")
+        b.source("cb", "diss", "Waste heat", "80", sub="d")
+        b.source("th", "flow", "Rejected", "100", sub="r", outward=True)
+        return b
+
+    @staticmethod
+    def block(b):
+        from thermodraw import describe
+        text = describe(b).text()
+        return text.split("network:\n")[1].split("\n\n")[0].splitlines()
+
+    def test_a_flow_branch_carries_an_arrow(self):
+        assert "  cb --flow-> th" in self.block(self.tec())
+
+    def test_written_backwards_it_reads_differently(self):
+        assert "  th --flow-> cb" in self.block(self.tec(reverse=True))
+        assert self.block(self.tec()) != self.block(self.tec(reverse=True))
+
+    def test_sources_are_listed_with_their_direction(self):
+        lines = self.block(self.tec())
+        assert "  source 0 --diss-> cb" in lines
+        assert "  th --flow-> source 1" in lines
+
+    def test_a_counted_branch_says_how_many(self):
+        assert "  cb --cond x4 parallel-- w" in self.block(self.tec())
+
+    def test_the_json_carries_the_same(self):
+        from thermodraw import describe
+        d = describe(self.tec()).to_dict()
+        flow = next(e for e in d["edges"] if e["kind"] == "flow")
+        assert flow["directed"] and flow["from"] == "cb"
+        cond = next(e for e in d["edges"] if e["kind"] == "cond")
+        assert (cond["count"], cond["arrangement"]) == (4, "parallel")
+        assert d["sources"] == [
+            {"index": 0, "node": "cb", "kind": "diss", "outward": False},
+            {"index": 1, "node": "th", "kind": "flow", "outward": True}]

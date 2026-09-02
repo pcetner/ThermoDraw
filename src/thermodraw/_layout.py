@@ -410,7 +410,7 @@ def layout(diagram):
                         name=S.S_(M.SOURCE_SYMBOL[s.kind], s.sub),
                         value=diagram.value_text(s.kind, s.value),
                         extra=[x for x in
-                               (diagram.count_text(s.count, "parallel"),) if x],
+                               (diagram.source_count_text(s.count),) if x],
                         half=sym.half, half_len=sym.half_len,
                         side=s.side), **who))
         reach = -sym.half_len if s.outward else sym.half_len
@@ -479,12 +479,16 @@ def network(placements):
     One entry per branch, not per placement: a branch emits several — wire
     runs, its symbol, a repeated group's copies — and they share a `ref`.
     """
+    kinds = {sym: kind for kind, sym in BRANCH_SYM.items()}
     seen, edges = set(), []
     for p in placements:
         if p.role != "branch" or p.symbol is None or p.ref in seen:
             continue
         seen.add(p.ref)
-        edges.append((p.ends[0], p.ends[1], p.symbol.key))
+        # The kind as the author wrote it, not the symbol that draws it:
+        # `flow`, not `flow-branch`.
+        edges.append((p.ends[0], p.ends[1],
+                      kinds.get(p.symbol.key, p.symbol.key)))
     return edges
 
 
