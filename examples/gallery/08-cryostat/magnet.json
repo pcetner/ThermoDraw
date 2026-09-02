@@ -1,0 +1,33 @@
+{
+  "title": "Superconducting magnet in a cryostat, persistent mode",
+  "units": {"R": "K/W", "T": "K", "P": "W", "q": "W"},
+  "nodes": [
+    {"id": "vessel", "kind": "fixed", "label": "Outer vessel (room)", "sub": "room",
+     "value": "300", "at": [200, 200]},
+    {"id": "shield", "label": "Radiation shield", "sub": "sh",
+     "value": "40", "at": [560, 200], "side": "down"},
+    {"id": "he", "kind": "phase", "label": "Liquid helium bath", "sub": "He",
+     "value": "4.2", "at": [920, 200]},
+    {"id": "mag", "label": "Magnet winding", "sub": "w",
+     "value": "4.5", "at": [1280, 200], "side": "down"},
+    {"id": "mount", "kind": "fixed", "label": "Room-temperature mount", "sub": "mnt",
+     "value": "300", "at": [1640, 200]}
+  ],
+  "branches": [
+    {"from": "vessel", "to": "shield", "kind": "cond", "label": "G-10 support straps",
+     "value": "50", "rate": "5.2"},
+    {"from": "shield", "to": "he", "kind": "cond", "label": "Instrumentation leads",
+     "value": "179"},
+    {"from": "mag", "to": "he", "kind": "cond", "label": "Winding-to-bath coupling",
+     "value": "6"},
+    {"from": "mag", "to": "mount", "kind": "break", "label": "Suspension strut (no heat path)"}
+  ],
+  "sources": [
+    {"to": "shield", "kind": "radin", "label": "Multi-layer insulation", "value": "30",
+     "sub": "mli", "at": [430, 80], "angle": 45},
+    {"from": "shield", "kind": "flow", "label": "Cryocooler first stage", "value": "35",
+     "sub": "cc", "at": [690, 80], "angle": 315},
+    {"to": "mag", "kind": "diss", "label": "Persistent-joint dissipation", "value": "0.05",
+     "sub": "j", "at": [1280, 80], "angle": 90}
+  ]
+}
