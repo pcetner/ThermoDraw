@@ -323,7 +323,11 @@ def verify(target, briefs):
         problems.append("schema.md still names the hero")
     # Naming it is one leak; showing it is the other. A bad fence swap
     # replaced the wrong span once and left the whole worked example behind.
-    for shown in ("j --cond-- c", "Switching loss", "Die attach"):
+    # Markers that appear *only* inside the two replaced blocks. "Die attach"
+    # and "Switching loss" are not on the list: they are also the one-line
+    # snippets that introduce Branches and Sources, which every schema needs
+    # and which show one element rather than a diagram to copy.
+    for shown in ("j --cond-- c", "canvas 1042 x 431", "Sink base"):
         if shown in schema:
             problems.append("schema.md still shows the hero: " + shown)
     if "Â" in schema:
