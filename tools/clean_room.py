@@ -37,7 +37,8 @@ REMOVE = [
     "CLAUDE.md", "README.md", "CHANGELOG.md", "Dictionary.html",
     "docs/design-record.md", "docs/symbol-reference.html",
     "docs/dictionary.template.html", "docs/symbol-reference.template.html",
-    ".claude", "docs/assets", "docs/notation-test", "tests", "tools",
+    ".claude", ".github", "docs/assets", "docs/notation-test", "tests",
+    "tools",
     "examples/hero.json", "examples/build_ladder.py",
     "examples/render_demo.py", "examples/render_reference.py",
     "examples/gallery/README.md", "examples/gallery/RERUN.md",
@@ -137,11 +138,24 @@ def git(args, cwd, capture=True):
 
 
 def room_env():
-    """Enough environment to run the archived library, and no more."""
-    keep = ("PATH", "SYSTEMROOT", "WINDIR", "TEMP", "TMP", "COMSPEC")
+    """Enough environment to run the archived library, and no more.
+
+    `SYSTEMDRIVE` and the profile variables are on the list because leaving
+    them off does not fail loudly: Windows falls back to expanding
+    `%SystemDrive%` as a literal directory name, and the first run of this
+    script grew a `%SystemDrive%/ProgramData/...` tree inside the room.
+
+    `PYTHONDONTWRITEBYTECODE` keeps `__pycache__` out of it. The room's
+    `.gitignore` would stop those being committed, but the room is also read
+    by eye, and a directory nobody put there invites the question.
+    """
+    keep = ("PATH", "SYSTEMROOT", "SYSTEMDRIVE", "WINDIR", "COMSPEC",
+            "TEMP", "TMP", "USERPROFILE", "LOCALAPPDATA", "APPDATA",
+            "PROGRAMDATA", "HOME")
     env = {k: os.environ[k] for k in keep if k in os.environ}
     env["PYTHONPATH"] = "src"
     env["PYTHONIOENCODING"] = "utf-8"
+    env["PYTHONDONTWRITEBYTECODE"] = "1"
     return env
 
 
@@ -266,6 +280,13 @@ def verify(target, briefs):
         problems.append("finished diagrams left: " + ", ".join(leftover))
     if "hero" in (target / "docs" / "schema.md").read_text(encoding="utf-8"):
         problems.append("schema.md still names the hero")
+    # Anything else at the top level was put there by accident, and the
+    # accident worth catching is a subprocess writing into the room.
+    expected = {".git", ".gitattributes", ".gitignore", "LICENSE", "NOTICE",
+                "START-HERE.txt", "docs", "examples", "pyproject.toml", "src"}
+    strays = sorted(p.name for p in target.iterdir() if p.name not in expected)
+    if strays:
+        problems.append("unexpected at the top level: " + ", ".join(strays))
     got = subprocess.run([sys.executable, "-m", "thermodraw", "check", "--help"],
                          cwd=str(target), env=room_env(), capture_output=True)
     if got.returncode != 0:
