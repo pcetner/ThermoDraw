@@ -70,6 +70,27 @@ STUB = {
     ],
 }
 
+# The same file, set the way the schema sets its examples: one element to a
+# line, aligned. `json.dumps` explodes every list onto its own lines, which
+# reads nothing like the rest of the page. Checked against STUB at build time,
+# so the two cannot drift.
+STUB_JSON = """{
+  "units": {"R": "K/W", "T": "°C", "P": "W"},
+  "nodes": [
+    {"id": "a",   "label": "Body",      "sub": "a",   "value": "90", "at": [200, 150]},
+    {"id": "amb", "kind": "fixed", "label": "Still air", "sub": "amb",
+     "value": "25", "at": [520, 150]}
+  ],
+  "branches": [
+    {"from": "a", "to": "amb", "kind": "cond", "label": "Mounting foot",
+     "value": "0.5"}
+  ],
+  "sources": [
+    {"to": "a", "kind": "diss", "label": "Dissipation", "value": "130",
+     "sub": "d", "at": [60, 150]}
+  ]
+}"""
+
 # (what to find, what to put there). Each must match exactly once, or the
 # schema has moved and this script is out of date -- which is the failure
 # worth having, rather than a room that quietly still names the hero.
@@ -114,6 +135,11 @@ EDITS = [
      "drew it.",
      "When it was written every diagram in this repository fired it: their\n"
      "temperatures were not the results of their own power and resistances."),
+
+    ("A power device losing heat to still air by two parallel paths, with "
+     "the die\nand sink thermal masses on the rail:",
+     "A body losing heat to still air by one path, with the dissipation "
+     "that\nputs it there:"),
 
     ("That file is `examples/hero.json`, and it renders the diagram at the "
      "top of\nthe README.",
@@ -218,17 +244,18 @@ def strip_hero(target):
     schema = target / "docs" / "schema.md"
     text = schema.read_text(encoding="utf-8")
 
+    if json.loads(STUB_JSON) != STUB:
+        sys.exit("error: STUB_JSON and STUB have drifted apart")
     stub = target / "_stub.json"
-    stub.write_text(json.dumps(STUB, indent=2, ensure_ascii=False),
-                    encoding="utf-8")
+    stub.write_text(STUB_JSON, encoding="utf-8")
     described = subprocess.run(
         [sys.executable, "-m", "thermodraw", "describe", "_stub.json"],
         cwd=str(target), env=room_env(), text=True, capture_output=True,
         check=True).stdout.replace("_stub.json:", "diagram.json:")
     stub.unlink()
 
-    body = json.dumps(STUB, indent=2, ensure_ascii=False)
-    text = swap_block(text, "## A whole diagram", "```jsonc\n" + body + "\n```")
+    text = swap_block(text, "## A whole diagram",
+                      "```jsonc\n" + STUB_JSON + "\n```")
     text = swap_block(text, "thermodraw describe diagram.json",
                       "```\n" + described.rstrip() + "\n```")
 
