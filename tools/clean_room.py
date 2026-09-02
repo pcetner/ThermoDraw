@@ -122,10 +122,12 @@ EDITS = [
     ("That is the real output for `examples/hero.json`, not an abridgement.",
      "That is the real output for the file above, not an abridgement."),
 
-    ("Above, `branch 2` and `branch 3` both went \"above\", which is the "
-     "parallel pair `check` notes, visible directly rather than only graded.",
-     "Two branches between one pair of nodes both going \"above\" is the "
-     "parallel pair `check` notes, visible directly rather than only graded."),
+    ("`label-collision`. Above, `branch 2` and `branch 3` both went "
+     "\"above\", which\nis the parallel pair `check` notes, visible directly "
+     "rather than only graded.",
+     "`label-collision`. Two branches between one pair of nodes both going\n"
+     "\"above\" is the parallel pair `check` notes, visible directly rather "
+     "than\nonly graded."),
 ]
 
 
