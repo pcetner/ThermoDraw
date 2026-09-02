@@ -160,13 +160,17 @@ sentence after it says what would overturn it.
   outcomes `RERUN.md` wrote down first. All four pre-registered claims
   failed. The first run's nine vocabulary gaps did not recur; the second
   run's gaps are what the format can state, not what it can draw.
-- A third run is prepared and not yet run: five new domains, briefs whose
-  numbers were solved before they were written, and reference solutions
-  committed beforehand so the pre-registration can be checked. Its five
-  briefs use every symbol between them — run 2 and the hero never used
-  `break` in either position, `corner`, or `series`. `tools/clean_room.py`
-  builds the room and verifies it, and strips the worked example the schema
-  quotes, which is a recorded deviation.
+- The third, 2026-09-02, was five agents in a room built by
+  `tools/clean_room.py`, from briefs whose numbers were solved first
+  (`FINDINGS-run-3.md`). **The physics claim held** — no diagram reports a
+  balance or rate finding, the first pre-registered claim in three runs to
+  survive. Rounds fell to 2, 3, 1, 1, 1 from run 2's 9, 4, 3, 5, 2, and none
+  of run 2's six documentation defects recurred. The vocabulary, remedy and
+  documentation claims failed on new ground: `symbols-overlap` names a remedy
+  that cannot clear it, the schema's parallel-pair advice is a recipe for the
+  error it prevents, and a boundary cannot sit above what it holds. Sixteen of
+  eighteen symbols were drawn; `break` as a node kind and `corner` were not,
+  in the two briefs written to force them.
 
 ## Sharp edges
 

@@ -1,0 +1,30 @@
+{
+  "title": "Roof-mounted photovoltaic module at solar noon",
+  "units": {"R": "K/W", "T": "°C", "P": "W", "q": "W"},
+  "nodes": [
+    {"id": "cell", "label": "Cell layer", "sub": "cell", "value": "65",
+     "at": [320, 380], "angle": 45},
+    {"id": "sky", "kind": "fixed", "label": "Effective sky", "sub": "sky",
+     "value": "10", "at": [900, 140]},
+    {"id": "amb", "kind": "fixed", "label": "Ambient air", "sub": "amb",
+     "value": "35", "at": [900, 380]},
+    {"id": "back", "label": "Backsheet", "sub": "back", "value": "55",
+     "at": [320, 700], "angle": 135},
+    {"id": "roof", "kind": "fixed", "label": "Roof deck", "sub": "roof",
+     "value": "45", "at": [880, 700], "angle": 90}
+  ],
+  "branches": [
+    {"from": "cell", "to": "sky", "kind": "rad", "label": "Glass to sky",
+     "value": "0.2", "rate": "275", "via": [[320, 140]]},
+    {"from": "cell", "to": "amb", "kind": "conv", "label": "Wind over glass",
+     "value": "0.05", "rate": "600"},
+    {"from": "cell", "to": "back", "kind": "cond",
+     "label": "Encapsulant and backsheet", "value": "0.4"},
+    {"from": "back", "to": "roof", "kind": "cond", "label": "Mounting clips",
+     "value": "1.6", "count": 4, "arrangement": "parallel"}
+  ],
+  "sources": [
+    {"to": "cell", "kind": "diss", "label": "Absorbed solar heat",
+     "value": "900", "sub": "sun", "at": [140, 380], "angle": 0}
+  ]
+}

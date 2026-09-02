@@ -1,0 +1,21 @@
+{
+  "title": "Subsea electronics bottle on the seabed",
+  "units": {"R": "K/W", "T": "°C", "P": "W", "q": "W"},
+  "nodes": [
+    {"id": "board", "label": "Power board", "sub": "b", "value": "37", "at": [200, 320]},
+    {"id": "flange", "label": "Spreader flange", "sub": "f", "value": "19", "at": [480, 320]},
+    {"id": "vct", "label": "Vapour chamber top", "at": [760, 160]},
+    {"id": "bore", "label": "Housing bore", "sub": "h", "value": "13", "at": [1000, 160]},
+    {"id": "sea", "kind": "fixed", "label": "Seawater", "sub": "sea", "value": "4", "at": [1280, 160]}
+  ],
+  "branches": [
+    {"from": "board", "to": "flange", "kind": "spread", "label": "Board to flange", "value": "0.30", "rate": "60"},
+    {"from": "flange", "to": "vct", "kind": "pipe", "label": "Vapour chamber", "value": "0.02",
+     "via": [[560, 320], [560, 160]]},
+    {"from": "vct", "to": "bore", "kind": "conv", "label": "Oil-filled gap", "value": "0.08"},
+    {"from": "bore", "to": "sea", "kind": "mixed", "label": "Housing wall to sea", "sub": "cond+conv", "value": "0.15"}
+  ],
+  "sources": [
+    {"to": "board", "kind": "diss", "label": "Converter stage", "value": "60", "sub": "d", "at": [60, 320]}
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "title": "Industrial furnace wall, steady state",
+  "units": {"R": "K/W", "T": "°C", "q": "W", "q″": "W/cm²"},
+  "nodes": [
+    {"id": "furn", "kind": "fixed", "label": "Furnace interior", "sub": "furn",
+     "value": "1200", "at": [220, 200]},
+    {"id": "bb", "label": "Brick to board", "sub": "bb",
+     "value": "660", "at": [840, 200]},
+    {"id": "shell", "label": "Steel shell", "sub": "shell",
+     "value": "120", "at": [1180, 200]},
+    {"id": "shop", "kind": "fixed", "label": "Shop air", "sub": "shop",
+     "value": "30", "at": [1540, 200]}
+  ],
+  "branches": [
+    {"from": "furn", "to": "bb", "kind": "cond", "label": "Firebrick course",
+     "value": "0.06", "count": 3, "arrangement": "series", "rate": "3000"},
+    {"from": "bb", "to": "shell", "kind": "cond", "label": "Ceramic fibre board",
+     "value": "0.18"},
+    {"from": "shell", "to": "shop", "kind": "conv", "label": "Natural convection",
+     "value": "0.05", "side": "up"},
+    {"from": "shell", "to": "shop", "kind": "rad", "label": "Radiation to shop",
+     "value": "0.075", "side": "down",
+     "via": [[1260, 200], [1260, 300], [1460, 300], [1460, 200]],
+     "at": [1360, 300]}
+  ],
+  "sources": [
+    {"to": "furn", "kind": "flux", "label": "Flame and hot gas", "value": "18",
+     "sub": "r", "at": [60, 200], "angle": 0}
+  ]
+}
