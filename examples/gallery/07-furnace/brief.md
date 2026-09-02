@@ -57,9 +57,10 @@ remedy each finding names, literally, before trying anything else** - whether
 those remedies actually work is one of the things being measured. Do not open
 a browser, and do not render an image in order to look at it.
 
-The numbers in this brief were solved before it was written, and they close:
-run `check --physics` and it should report nothing. If it reports something,
-that is a finding worth more than a clean drawing - record it exactly.
+Run `check --physics` on the finished diagram and paste its output into
+`rounds.md` exactly as it came, whatever it says. Do not adjust a number from
+this brief to make that output quieter: the values are the brief's, and
+whether they agree with each other is one of the things being measured.
 
 Render the SVG once it is clean.
 
