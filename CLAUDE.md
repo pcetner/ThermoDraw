@@ -122,15 +122,24 @@ sentence after it says what would overturn it.
   condemns the flagship is one an author learns to ignore — and when the
   flagship is actually wrong, the fix is the flagship.
 - Every remedy is tested by applying it. A remedy names the field that fixes
-  *this* case, and never a direction the occupancy says is blocked.
+  *this* case, never a direction the occupancy says is blocked, and never
+  a field the element cannot take: a source and a repeated branch are not
+  told to use `via`, and the pair note names the branch and the side from
+  where the labels landed. Seven of the clean room's thirty-one remedies
+  could not be applied as written; `tests/test_clean_room.py` replays the
+  five diagrams and would fail on each.
 - Connectivity is over nodes joined by branches, not over ink. A `break`
   counts as joined.
-- A placement carries `role` and `ends` as data; `ref` is for people. Ids are
-  non-empty and not `rail`, and nothing else is required of them.
+- A placement carries `role`, `ends`, `via`, `count`, `arrangement` and
+  `outward` as data; `ref` is for people. Ids are non-empty and not `rail`,
+  and nothing else is required of them.
 - **The numbers were never checked, and none of the six real diagrams'
   numbers closed.** `--physics` is Kirchhoff at a free node from stated
   values. The hero's do now. It stays opt-in: a sketch with placeholder
-  numbers is a diagram too, and would fire at every node it has.
+  numbers is a diagram too, and would fire at every node it has. It says
+  which free nodes it did not check, in one note: a silent skip on the
+  neighbour of a node with no temperature hid the worst-balanced node in
+  a diagram from the only tool that looks for that.
 - What survives the solver: three constraints, two objectives, four unchanged,
   three scaffolding. The table is in the record.
 
@@ -179,11 +188,13 @@ sentence after it says what would overturn it.
 1. **The network layer.** The only genuinely hard piece. The record's table of
    what survives it says which checks it must satisfy, which it minimises, and
    which it may delete.
-2. **Act on the clean-room run** (`examples/gallery/FINDINGS.md`). Five
-   checker and describer defects with file and line, each verified; two
-   schema sentences that every agent tripped on; and a ranked list of what
-   the format cannot state — relations between elements first. The next
-   set of briefs should be written so their numbers close.
+2. **What the format cannot state** (`examples/gallery/FINDINGS.md`, the
+   second set, and its deferred table). The clean-room run's checker and
+   schema defects are fixed; what is left is design: a way to relate two
+   elements first, then a stream with an inlet and an outlet, quantities
+   beyond the six, a capacity-versus-load marker. Each needs its argument
+   in the record before it is built. The next set of briefs should be
+   written so their numbers close.
 3. Region enclosures that auto-size to their contents.
 4. Unit handling — `0.35` choosing between K/W and mK/W, with a deliberate
    per-element override.

@@ -21,7 +21,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   skips a node silently when a neighbour has no temperature, two remedies
   name a `via` the element cannot take, the parallel-pair remedy is a fixed
   string, a counted source prints "8 in parallel", and the schema's second
-  paragraph tripped every agent. Nothing in the library changed.
+  paragraph tripped every agent. Nothing in the library changed in that
+  commit; the entries below are what changed because of it.
+- **A remedy names only a field the element can take.** `Placement` carries
+  `via`, `count`, `arrangement` and `outward` as data beside `role` and
+  `ends`, and `_check._move` reads them: a source's lead and the rail move
+  with `at` and `rail.y`, a straight branch is told to gain a `via`
+  waypoint rather than move one, and a repeated branch's comb — which
+  stands a fixed distance out from its nodes — moves nothing, so the remedy
+  falls through to the label's `side` or `angle`. `wire-through-symbol`
+  asks the same function about the offending wire.
+- **`parallel-pair-same-side` names the branch and the side**, derived
+  from where the two labels landed, so it cannot name a change already in
+  the file. Three or more branches between one pair of nodes get one note
+  for the group and no `side`, because none clears it.
+- **`label-adrift` says when a node label is too wide for its room**,
+  with both numbers and the two nodes to move apart, instead of blaming
+  the symbol on one side and then the other.
+- **`--physics` reports what it did not check**: one `note`,
+  `physics-not-checked`, listing every free node it skipped and why — no
+  temperature, a neighbour with none, a `flux` source, a value that is
+  not a number — and an unknown unit says which units it knows instead of
+  returning nothing. The balance message is ASCII; its em dash printed as
+  a replacement character on every agent's console.
+- **A counted source reads `each of 8`**, not "8 in parallel".
+  `examples/gallery/04-immersion/rack.svg` moves by that label.
+- **`describe`'s network block shows sources, direction and counts**:
+  `cb --flow-> th`, `j --cond x8 parallel-- ihs`, `source 0 --diss-> j`,
+  `th --flow-> source 1`. `to_dict` gains `count`, `arrangement` and
+  `directed` per edge and a `sources` list. `_layout.network` returns the
+  kind as written, `flow`, not the symbol key.
+- **`docs/schema.md`** says what the five agents had to find out: the
+  render/theme paragraph is about the Python function and the command
+  themes for you; `flow` is a branch; a source's lead is a wire and
+  automatic placement assumes one source; the units `--physics` reads;
+  `rail` and `label` optional; `rate` under `count`; `left`/`right` on a
+  horizontal branch; the arrival end of the sideways habit; the solver is
+  not local; `flipped`, `pushed` and `OVERLAPS` defined; both transcripts
+  regenerated.
+- **`tests/test_clean_room.py`** rebuilds each defect as the smallest
+  diagram that produces it and applies the remedy, and replays every
+  remedy on the five committed diagrams — and on the same five with their
+  authors' `at`, `side` and `angle` removed — asserting `via` is never
+  named on something that cannot take it.
 
 - **`check --physics`: do the numbers on the page agree with each other?** A
   prototype, and the first check that reads a value. Ten checks say how the
