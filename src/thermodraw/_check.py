@@ -33,6 +33,7 @@ from dataclasses import dataclass, field
 from typing import List, Optional, Tuple
 
 from . import core
+from . import model as M
 from ._layout import layout as _layout, network, pieces
 from ._render import PADDING, _wall_box, compose
 
@@ -226,19 +227,40 @@ def _kind_of(p):
         return "?"
     if p.element == "node":
         return "node"
-    return "source" if p.role == "source" else "branch"
+    if p.role in ("source", "rail"):
+        return p.role
+    return "branch"
 
 
-def _move(p):
-    """How you move this particular thing, in the field that moves it."""
+def _move(p, past="this label"):
+    """How you move this particular thing, in the field that moves it.
+
+    None when nothing about it moves usefully, so the remedy falls through
+    to the label's own `side` or `angle`. A wire goes where its branch's
+    waypoints and nodes put it, and the field that moves it depends on what
+    the branch has. A source's lead has no `via` at all; the validator
+    refuses `via` on a repeated branch, and its comb stands where it stands;
+    a straight run between two nodes has no waypoint to move, but can be
+    given one. All three were once told "move a `via` waypoint", and a
+    clean-room reader hit the second three times on one branch and the
+    third twice on another, each time a round lost to applying the remedy
+    as written.
+    """
     ref, kind = p.ref or "it", _kind_of(p)
     if p.element == "wire":
-        # A source's lead is a wire carrying the source's ref, and a source
-        # has no `via` at all — the validator refuses the field outright. The
-        # old string offered one anyway.
-        return (f"move {ref} with `at`" if kind == "source"
-                else f"move a `via` waypoint on {ref} so it does not run "
-                     "past this label")
+        if kind == "source":
+            return f"move {ref} with `at`"
+        if kind == "rail":
+            return "move the rail with `rail.y`"
+        if p.via:
+            return (f"move a `via` waypoint on {ref} so it does not run "
+                    f"past {past}")
+        if p.count and p.count > 1:
+            # A comb's risers stand a fixed distance out from each node, so
+            # neither `via` nor moving the nodes apart takes them past a
+            # label wider than that. Only the label can move.
+            return None
+        return f"give {ref} a `via` waypoint so it does not run past {past}"
     if p.element == "symbol":
         where = "further from its node" if kind == "source" else \
             "along its branch"
@@ -264,12 +286,20 @@ def _remedy(culprit, owner=None, free=(), pair=False):
     conduction box to lie diagonally across its own wire — and the checker
     then passed the result, which makes it the worst kind of bad advice: the
     kind that appears to work.
+
+    `via` is only ever offered for a wire that has one. The clean-room run
+    was told to move a waypoint on a branch with none and on a `count: 8`
+    branch that cannot have one, five times between two readers, and each
+    time the brief's instruction to apply the remedy literally cost a round.
+    `_move` says None for those, and the option is simply not there.
     """
     options = []
     if pair:
         options.append("set `side` on one of the two")
     elif culprit is not None:
-        options.append(_move(culprit))
+        move = _move(culprit)
+        if move:
+            options.append(move)
 
     if free:
         options.append("set `side` to "
@@ -281,7 +311,9 @@ def _remedy(culprit, owner=None, free=(), pair=False):
             options.append("`angle`, which turns a node's label frame and is "
                            "the only thing that reaches a diagonal")
         else:
-            options.append(_move(owner) + " to take its label with it")
+            move = _move(owner)
+            if move:
+                options.append(move + " to take its label with it")
     return ", or ".join(options) or "move the two apart with `at`"
 
 
@@ -718,6 +750,25 @@ def _wire_through_symbol(placements, out):
     # They are one place on the page and one thing to fix, though, and moving
     # either branch clears both — so say it once, as a crossing rather than
     # as two trespasses.
+    # The remedy names what the offending wire can actually do. A source's
+    # lead and a repeated branch have no `via`; a straight run between two
+    # nodes has none to move. "Route it around with `via`" was offered for
+    # a source's lead, and the reader had to notice the source table has no
+    # such field.
+    wires = {}
+    for p in placements:
+        if p.element == "wire" and p.ref not in wires:
+            wires[str(p.ref)] = p
+
+    def reroute(ref):
+        w = wires.get(ref)
+        return _move(w, past="it") if w is not None else None
+
+    def routable(ref):
+        w = wires.get(ref)
+        return (w is not None and _kind_of(w) == "branch"
+                and not (w.count and w.count > 1))
+
     seen = set()
     for (victim, offender), p in sorted(hits.items()):
         if (offender, victim) in hits:
@@ -726,19 +777,25 @@ def _wire_through_symbol(placements, out):
                 continue
             seen.add(pair)
             first, second = sorted(pair)
+            if routable(first) and routable(second):
+                moves = ["route either of them around with `via`, which "
+                         "clears both"]
+            else:
+                moves = [m for m in (reroute(first), reroute(second)) if m]
             out.append(Finding(
                 "wire-through-symbol", "warning", first,
                 f"{first} and {second} cross each other, each one's wire "
                 "running through the other's symbol",
-                remedy="route either of them around with `via`, which clears "
-                       "both, or move one symbol along its branch with `at`",
+                remedy=", or ".join(
+                    moves + ["move one symbol along its branch with `at`"]),
                 at=tuple(p.at)))
             continue
+        symbol = (f"move {p.ref} with `at`" if _kind_of(p) == "source"
+                  else "move the symbol along its branch with `at`")
         out.append(Finding(
             "wire-through-symbol", "warning", victim or "a symbol",
             f"{offender} runs straight through {_name(p)}",
-            remedy="route it around with `via`, or move the symbol "
-                   "along its branch with `at`",
+            remedy=", or ".join(m for m in (reroute(offender), symbol) if m),
             at=tuple(p.at)))
 
 
@@ -789,6 +846,16 @@ def _parallel_pairs(placements, scene, out):
     documented remedy bought a clean report either way. A false clean is worse
     than a missing check, and a note is already something you are free to
     ignore. What matters is where the labels actually landed, not how.
+
+    The remedy is derived from where the two labels landed and which branch
+    is lower on the page, so it names the branch and the side. It used to be
+    the fixed sentence "set `side` to down on the lower of the two", which a
+    clean-room reader applied to a pair that already had `"side": "down"` on
+    both and watched the note survive. Three or more branches between one
+    pair of nodes get one note for the group, and no `side` at all: a run
+    has two label sides, so two of three must share one, and the old remedy
+    only rotated which pair was reported — two readers each proved the
+    two-state cycle before leaving the note standing.
     """
     by_rect = {id(r.owner): r for r in scene.rects}   # Placement is unhashable
     pairs = defaultdict(list)
@@ -798,17 +865,38 @@ def _parallel_pairs(placements, scene, out):
         pairs[frozenset(p.ends)].append(p)
 
     for group in pairs.values():
-        for i, pa in enumerate(group):
-            for pb in group[i + 1:]:
-                ra, rb = by_rect.get(id(pa)), by_rect.get(id(pb))
-                if ra is None or rb is None or ra.side != rb.side:
-                    continue
-                out.append(Finding(
-                    "parallel-pair-same-side", "note", pa.ref,
-                    f"{pa.ref} and {pb.ref} run between the same two nodes "
-                    "and both labels went to the same side",
-                    remedy='set `side` to "down" on the lower of the two',
-                    at=tuple(pa.at)))
+        labelled = [(p, by_rect.get(id(p))) for p in group]
+        labelled = [(p, r) for p, r in labelled if r is not None]
+        sides = [r.side for _, r in labelled]
+        if len(labelled) < 2 or len(set(sides)) == len(sides):
+            continue
+        if len(labelled) > 2:
+            refs = ", ".join(p.ref for p, _ in labelled)
+            out.append(Finding(
+                "parallel-pair-same-side", "note", labelled[0][0].ref,
+                f"{refs} run between the same two nodes, and a run has two "
+                "label sides, so two of them share one",
+                remedy="put the branch with the narrowest label on the "
+                       "shared side; no `side` clears this, and the note is "
+                       "safe to leave",
+                at=tuple(labelled[0][0].at)))
+            continue
+        (pa, ra), (pb, rb) = labelled
+        sx, sy = ra.side
+        if abs(sy) >= abs(sx):
+            lower = max((pa, pb), key=lambda p: p.at[1])
+            upper = min((pa, pb), key=lambda p: p.at[1])
+            who, new = (lower, "down") if sy < 0 else (upper, "up")
+        else:
+            right = max((pa, pb), key=lambda p: p.at[0])
+            left = min((pa, pb), key=lambda p: p.at[0])
+            who, new = (right, "right") if sx < 0 else (left, "left")
+        out.append(Finding(
+            "parallel-pair-same-side", "note", pa.ref,
+            f"{pa.ref} and {pb.ref} run between the same two nodes "
+            "and both labels went to the same side",
+            remedy=f'set `side` to "{new}" on {who.ref}',
+            at=tuple(pa.at)))
 
 
 # -------------------------------------------------------------------- the API
