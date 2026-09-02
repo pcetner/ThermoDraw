@@ -9,10 +9,13 @@ from thermodraw import Diagram, layout, render, theme
 svg = theme.with_variables(render(layout(Diagram.from_json(text))))
 ```
 
-`render` alone emits CSS custom properties with no fallback, so pass its
-output through `theme` before saving it: `with_variables` for the web,
-`bake` for Word, slides and rasterisers. Without one of them the file draws
-nothing.
+From Python, `render` alone emits CSS custom properties with no fallback, so
+pass its output through `theme` before saving it: `with_variables` for the
+web, `bake` for Word, slides and rasterisers. Without one of them the file
+draws nothing. The `thermodraw render` **command** does this for you — its
+file draws as written — and so do `page` and a builder's `.svg()`. This
+paragraph is about the function, and every reader who met it before the
+command grepped their own SVG to find out.
 
 ## Shape
 
@@ -27,6 +30,10 @@ nothing.
   "rail":     { ... }
 }
 ```
+
+`nodes` is the only key that has to be there. `rail` is optional — a
+steady-state diagram with no capacitance has nothing to hang on it — and so
+are `sources`, `branches`, `size` and `title`.
 
 Units are fixed per diagram and given once per quantity, so a diagram cannot
 mix `K/W` with `mK/W`. Values are written without their unit; the unit is
@@ -70,7 +77,7 @@ A place with a temperature.
 |---|---|
 | `id` | referred to by branches and sources |
 | `kind` | `free` (default), `fixed`, `break`, `phase`, `corner` |
-| `label` | the words above the symbol — the top line, always |
+| `label` | the words above the symbol — the top line, always. Optional: a node with none draws its `T` line alone, or nothing, and still counts as a label placed |
 | `sub` | subscript on `T`. Identity: you choose it, it names a place |
 | `value` | temperature, unit appended from `units.T` |
 | `at` | `[x, y]`. **Required** until the network layer lands |
@@ -132,13 +139,13 @@ A path heat takes between two nodes.
 | `label` | the words above the box |
 | `sub` | yours on the kinds whose subscript the library does not set: `cap`, where it names a place; `mixed`, where it names the mechanism; `flow`. Ignored on `break`, and overridden on every resistance kind |
 | `value` | unit appended from `units.R` (`units.C` for `cap`, `units.q` for `flow`). Optional: a path with no number draws its label alone. Refused on `break` |
-| `rate` | what this path actually carries. Drawn as `q = 12 W` on its own line, in `units.q`, under the resistance it presents. Needs `units.q`. Refused on `flow`, whose value already is a rate, and on `break` |
+| `rate` | what this path actually carries. Drawn as `q = 12 W` on its own line, in `units.q`, under the resistance it presents. Needs `units.q`. Refused on `flow`, whose value already is a rate, and on `break`. On a `count`ed branch it is the whole group's, not per item. Stating it opts the branch into `rate-does-not-match` under `--physics` |
 | `count` | how many identical ones there are |
 | `arrangement` | `parallel` or `series`. Required with `count` |
 | `via` | `[[x, y], ...]` waypoints, for a path that is not a straight line |
 | `at` | where the box sits. Defaults to the middle of the longest run |
 | `angle` | overrides the direction taken from the wire |
-| `side` | `auto` (default), `up`, `down`, `left`, `right` — where the label goes |
+| `side` | `auto` (default), `up`, `down`, `left`, `right` — where the label goes. On a horizontal run only `up` and `down` are useful: `left` and `right` put the label along the wire, into the next thing on it |
 
 `spread` is a path whose cross-section grows as the heat goes — hatching
 that fans from a point rather than running parallel. `pipe` is a near
@@ -232,7 +239,9 @@ unit area).
 | `flow` | arrow | `q` | `units.q` | **yes** |
 | `flux` | several arrows leaving a hatched surface | `q″` | `units["q″"]` | **yes** |
 
-A source also takes `count`, for several identical ones. They simply add, so there is no `arrangement` to state.
+A source also takes `count`, for several identical ones. They simply add, so
+there is no `arrangement` to state; the label reads `each of 8` under a
+value that is, as on a branch, per item.
 
 Only `flow` and `flux` may point away — they annotate heat crossing a
 boundary, in either direction. `diss` is dissipation
@@ -246,14 +255,20 @@ diagram can carry a heat rate in `W` and a heat flux in `W/cm²` at once.
 
 `at` is the **centre of the symbol**, not its head or its tail, exactly as it
 is on a branch. `angle` is the direction the arrow points, `0` being to the
-right. A lead is drawn from the symbol to the node whichever you choose, so
-`at` only has to be roughly right.
+right. A lead is drawn from the symbol to the node whichever you choose — and
+the lead is a wire like any other: labels are pushed around it and symbols
+can be reported as crossed by it, so a source moved further out has a longer
+lead, and `at` decides what that lead runs past. Three of one reader's
+findings were leads.
 
-Leave `at` out and the source is placed along its own `angle` with room for
-its label — on the far side of the node for a `to`, so the arrow arrives, and
-on the near side for a `from`, so it leaves. That is usually what you want:
+Leave `at` out and the source is placed along its own `angle`, about 40
+units from the node — on the far side of the node for a `to`, so the arrow
+arrives, and on the near side for a `from`, so it leaves. That is right for
+one source on a node with a short label:
 `{"from": "cell", "kind": "flux", "angle": 270}` puts a hatched face on top of
-the cell with the arrows rising off it, and needs no coordinates.
+the cell with the arrows rising off it, and needs no coordinates. Two sources
+on one node, or a wide label, want an explicit `at` on at least one of them;
+left to themselves, two auto-placed sources on adjacent diagonals overlap.
 
 `side` moves the label, as above.
 
@@ -362,18 +377,34 @@ five attachments for four slots. Only `angle` reaches the diagonals.
 
 Two more details are worth copying rather than rediscovering:
 
-- **Leave a node sideways before turning.** A `via` that goes straight up from
-  a node puts a wire exactly where that node's label wants to sit, and the
-  label steps out past it — ending up nearer the branch than the node it
-  names. The hero turns at `x = 696` for a node at `x = 648`. Give the turn
-  40–90 units of clearance.
+- **Leave a node sideways before turning — at both ends.** A `via` that goes
+  straight up from a node puts a wire exactly where that node's label wants
+  to sit, and the label steps out past it — ending up nearer the branch than
+  the node it names. The hero turns at `x = 696` for a node at `x = 648`.
+  Give the turn 40–90 units of clearance. The same is true of the end a
+  branch *arrives* at: the hero's parallel pair drops straight down onto its
+  ambient node and gets away with it only because that node has `angle: 90`
+  and no other traffic. A node with three branches and a source on it does
+  not, and one reader traced four findings to copying the hero's arrival.
 - **A parallel pair needs `side`.** Both branches are horizontal, so both
   labels choose "up" and the lower one lands inside the loop. Set
   `"side": "up"` on the upper branch and `"side": "down"` on the lower one.
+  Three branches between one pair of nodes cannot all be satisfied: a run
+  has two useful sides, so two of three share one. Put the narrowest label
+  on the shared side and leave the note.
 
 Space labels, not symbols. A box is 84 wide, but `R_cond = 0.000877 K/W` is
 over twice that, and it is the label that decides how far apart two nodes have
-to be.
+to be. A node's label counts too: centred on its node, it needs room between
+the symbols on the runs either side, and `check` says so with both numbers
+when it does not fit.
+
+The label solver is not local. It places labels in order, each one avoiding
+what is already there, and a label that cannot fit is pushed until it can. So
+freeing one label can let the next travel a long way — one reader watched a
+label cross a 1200-wide canvas onto a different branch after an unrelated
+source moved. Expect a change at one node to move a label at another, and
+read the whole report each round rather than the finding you were fixing.
 
 ## Checking a diagram
 
@@ -388,7 +419,7 @@ thermodraw check diagram.json
 diagram.json: 11 labels placed, 0 errors, 0 warnings, 1 note
 note: [parallel-pair-same-side] branch 2 s->amb and branch 3 s->amb run
       between the same two nodes and both labels went to the same side
-      -> set `side` to "down" on the lower of the two
+      -> set `side` to "down" on branch 3 s->amb
 ```
 
 "11 labels placed" is every node except `corner` ones, plus every branch and
@@ -419,18 +450,26 @@ advance, because they are the ones a first draft hits:
 
 - `label-adrift` almost always means a `via` rising straight out of a node.
   Move the turn sideways first — that is the habit above, and it is what the
-  finding will tell you.
+  finding will tell you. When a node's own label is wider than the room
+  between the symbols either side of it, the finding says so with both
+  numbers and names the nodes to move apart, because moving either symbol
+  cannot help. A remedy names only a field the element can take: a source
+  and a repeated branch are never told to use `via`, and a straight branch
+  is told to gain a waypoint rather than move one.
 - `network-in-pieces` is the one to read carefully, because a severed network
-  looks fine. A source has **one end**, so a `flow` or `flux` annotation
-  cannot join two nodes however suggestively you place two of them: heat
-  carried from one node to another by a moving fluid has no branch kind yet,
-  and this finding is what tells you the drawing did not say what you meant.
+  looks fine. A source has **one end**, so two `flow` or `flux` sources
+  cannot join two nodes however suggestively you place them; heat carried
+  from one node to another by a moving fluid is a `flow` **branch**, and this
+  finding is what tells you the drawing did not say what you meant.
 - `nodes-too-close` is the other half of that. Every finding names what is
   *nearest* the crowded label, and on a short run that is a wire — so if you
   are being told to move a `via` and it is not helping, look for this one: it
   names the two nodes, how far apart they are, and what their labels need.
 - `parallel-pair-same-side` is a note rather than a warning because the hero
   diagram breaks it and is fine. Take it as a prompt to look, not an error.
+  Its remedy names the branch and the side, derived from where the two
+  labels landed; three or more branches between one pair get one note and
+  no `side`, because none clears it.
 
 Two things it does not check by default: whether the numbers are right, and
 whether the network is the one you meant. It reports how the drawing reads,
@@ -445,9 +484,19 @@ this page says a count folds, and a `corner` folded into the path through it.
 Two codes, both warnings: `node-does-not-balance`, which lists every term so
 you can see which one is off, and `rate-does-not-match`, for a branch whose
 `rate` disagrees with what its ends imply. A fixed node is a reservoir and is
-not asked; a `phase` node is holding latent heat this cannot see; a `flux`
-source has no area, so its node is skipped; a unit the check does not know
-skips the diagram rather than guessing.
+not asked; a `phase` node is holding latent heat this cannot see. A `free`
+node is skipped when it has no temperature, when a **neighbour** has none —
+which is what an interior junction drawn the way this page recommends does
+to the nodes either side of it — when it carries a `flux` source, which has
+no area, or when a value is not a number. Every skip is reported, as one
+note per diagram: `physics-not-checked`, `checked 2 of 6 free nodes; not
+checked: j (source 1 is a flux, which has no area); sm, cb (neighbour 'smb'
+has no temperature); smb (it has no temperature)`. A diagram whose free
+nodes were all checked gets no note. The units it reads are `R` in `K/W`,
+`°C/W`, `C/W`, `mK/W` or `K/kW`, and `P` and `q` in `W`, `kW` or `mW`; any
+other is the same note with nothing checked, not silence. `C` is never read
+(steady state) and `T` is used only as differences, so `K` and `°C` both
+work and `kJ/K` costs nothing.
 
 It is opt-in, and stays so: a sketch with placeholder numbers is a diagram
 too, and would fire at every node it has. Ask for it when you believe the
@@ -479,6 +528,7 @@ network:
   s --conv/rad-- amb
   j --cap-- rail
   s --cap-- rail
+  source 0 --diss-> j
 
 nodes:
   j              free     at (200, 150)
@@ -503,15 +553,24 @@ elements:
 That is the real output for `examples/hero.json`, not an abridgement. Element
 counts against what you wrote, the canvas you will get, where each symbol
 sits and which way it is turned, what each label reads, and which way it
-went — including `flipped` and `pushed N` where the solver had to work for
-it. Above, `branch 2` and `branch 3` both went "above", which is the parallel
-pair `check` notes, visible directly rather than only graded.
+went. Three marks say where the solver had to work: `flipped` means the label
+tried its automatic side, found it blocked, and took the opposite one;
+`pushed N` means it was moved `N` units out along its side to get clear of
+something, and `check` reports it as adrift past 8; `OVERLAPS` means the push
+loop gave up and the label is printed over something — always a
+`label-collision`. Above, `branch 2` and `branch 3` both went "above", which
+is the parallel pair `check` notes, visible directly rather than only graded.
 
-The **network** block is which nodes are joined to which, and by what.
+The **network** block is which nodes are joined to which, and by what, and
+where the heat comes in and goes out.
 
 Two mechanisms on one line, as with `s --conv/rad-- amb`, are two branches
-between the same pair. If the drawing is in more than one piece it says so
-here as well as in `network-in-pieces`.
+between the same pair. A `flow` branch is written with its direction, `cb
+--flow-> th`, so one written backwards reads differently. A repeated group
+says how many, `j --cond x8 parallel-- ihs`. Sources have their own lines,
+heat reading left to right: `source 0 --diss-> j` arrives, `th --flow->
+source 1` leaves. If the drawing is in more than one piece it says so here
+as well as in `network-in-pieces`.
 
 An element carrying no text at all — a `break` branch with no `label` — still
 gets a row, marked `(no label)`. `rail.reference` is documentary and does
