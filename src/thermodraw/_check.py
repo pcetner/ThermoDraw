@@ -519,6 +519,10 @@ def _adrift(scene, placements, out):
                    if p.ref == rect.ref] or [float("inf")])
         closer = (" and now sits nearer that than the thing it names"
                   if near < own else "")
+        wide = _too_wide(rect, half, culprit, placements)
+        if wide is not None:
+            out.append(wide)
+            continue
         out.append(Finding(
             "label-adrift", "warning", rect.ref or "a label",
             f"{rect.ref}: its label was pushed {rect.used - rect.solved:.0f} "
@@ -526,6 +530,55 @@ def _adrift(scene, placements, out):
             remedy=_remedy(culprit, rect.owner,
                            _free_sides(scene, rect)),
             at=centre))
+
+
+def _too_wide(rect, half, culprit, placements):
+    """A node label that does not fit between the symbols either side of it.
+
+    `label-adrift` names whatever is nearest, and on a node between two
+    short runs that is the symbol on one of them. Move that symbol away and
+    the label is pushed by the one on the other side, by exactly the same
+    amount, and the finding blames that one instead. A clean-room reader
+    spent two rounds proving the named remedy had no effect: the label was
+    192 wide and the room between the two symbols was 176, and no `at` on
+    either neighbour changes what a label centred on the node needs.
+    `nodes-too-close` speaks in those terms and did not fire, because it
+    sums the labels *along* a run and a node label sits across its node,
+    half in each. This is that arithmetic for the node.
+    """
+    owner = rect.owner
+    if (owner is None or owner.element != "node" or not owner.ends
+            or culprit.symbol is None or culprit.role != "branch"
+            or owner.ends[0] not in culprit.ends):
+        return None
+    node = owner.ends[0]
+    axis = 0 if half[0] >= half[1] else 1          # the label's long axis
+    beside = [p for p in placements
+              if p.symbol is not None and p.role == "branch"
+              and node in p.ends and p.copy in (None, 0)
+              and abs(math.sin(math.radians(p.angle - 90 * axis))) < 0.01]
+    x = owner.at[axis]
+    before = [(p.at[axis] + p.symbol.half_len, p)
+              for p in beside if p.at[axis] < x]
+    after = [(p.at[axis] - p.symbol.half_len, p)
+             for p in beside if p.at[axis] > x]
+    if not before or not after:
+        return None
+    (lo, pa), (hi, pb) = max(before), min(after)
+    room, width = hi - lo, 2 * half[axis]
+    if width <= room:
+        return None
+    others = [f"node '{e}'" for p in (pa, pb) for e in p.ends
+              if e != node and e != M.RAIL]
+    centre = (rect[0] + rect[2] / 2, rect[1] + rect[3] / 2)
+    return Finding(
+        "label-adrift", "warning", rect.ref or "a label",
+        f"{rect.ref}: its label is {width:.0f} wide and the room between "
+        f"{pa.ref} and {pb.ref} is {room:.0f}, so moving either of them "
+        "along its branch cannot clear it",
+        remedy=f"move {' and '.join(others)} further from {owner.ref} with "
+               "`at`; it is the labels that set the spacing",
+        at=centre)
 
 
 def _crowded_run(scene, placements, out):

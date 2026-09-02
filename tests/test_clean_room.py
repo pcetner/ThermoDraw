@@ -375,3 +375,55 @@ class TestTheNetworkBlockShowsSourcesAndDirection:
         assert d["sources"] == [
             {"index": 0, "node": "cb", "kind": "diss", "outward": False},
             {"index": 1, "node": "th", "kind": "flow", "outward": True}]
+
+
+# ---------------------------------------- a label that is simply too wide
+class TestALabelWiderThanItsRoom:
+    """04, rounds 2–4: `sat`'s label was pushed 48 to get around the box on
+    one side; move that box and it was pushed 48 to get around the box on
+    the other side; `angle` made it 84. The label was 192 wide between two
+    runs of 260, and no finding said so."""
+
+    @staticmethod
+    def rack(gap=260):
+        """The rack's middle: a phase node with a wide label, a capacitance
+        hanging below it so the label cannot flip, two short runs."""
+        b = DiagramBuilder(R="K/W", T="°C", C="J/K")
+        b.node("ihs", "Heat spreader", "61", at=(200, 160), sub="ihs")
+        b.node("sat", "Saturated fluid, boiling and condensing", "49",
+               kind="phase", at=(200 + gap, 160), sub="sat")
+        b.node("coil", "Condenser coil", "40", kind="fixed",
+               at=(200 + 2 * gap, 160), sub="coil")
+        b.branch("ihs", "sat", "conv", "Boiling", "0.00375")
+        b.branch("sat", "coil", "conv", "Condensing", "0.0028")
+        b.branch("sat", "rail", "cap", "Fluid inventory", "240000", sub="f")
+        b.rail("coil", y=320)
+        return b
+
+    def test_it_says_the_width_and_the_room_and_names_both_nodes(self):
+        found = one(check(self.rack()), "label-adrift")
+        assert found.where == "node 'sat'"
+        assert "wide and the room between branch 0 ihs->sat and " \
+               "branch 1 sat->coil is" in found.message
+        assert "cannot clear it" in found.message
+        assert found.remedy.startswith(
+            "move node 'ihs' and node 'coil' further from node 'sat' with `at`")
+
+    def test_moving_the_nodes_apart_clears_it(self):
+        assert "label-adrift" not in codes(check(self.rack(gap=360)))
+
+    @needs_gallery
+    def test_the_rack_at_its_first_spacing_says_192_against_176(self):
+        d = gallery("04-immersion", "rack.json")
+        back = {"sat": -100, "coil": -200, "tw": -200, "fw": -200, "amb": -200}
+        for n in d["nodes"]:
+            n["at"][0] += back.get(n["id"], 0)
+        for b in d["branches"]:
+            if b.get("from") == "tw" and "at" in b:
+                b["at"][0] -= 200
+            if b.get("from") == "sat" and b.get("to") == "rail" and "at" in b:
+                b["at"][0] -= 100
+        d["rail"]["span"] = [180, 1840]
+        found = one(check(diagram(d)), "label-adrift")
+        assert "its label is 192 wide and the room between branch 1 " \
+               "ihs->sat and branch 2 sat->coil is 176" in found.message
