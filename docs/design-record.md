@@ -506,6 +506,49 @@ four alone. That partition is the useful thing the checker-first order
 produced, and it is more useful for having been written before the solver
 than it would have been after.
 
+### What the clean room taught the checker
+
+The second gallery run (`examples/gallery/FINDINGS.md`) applied every
+remedy literally, which is the one way to find out whether a remedy is
+advice or decoration. Seven of thirty-one could not be applied as written,
+and they were two defects, both of the same shape: the checker named a
+field without knowing whether the element had it. "Move a `via`
+waypoint" went to a branch with no waypoint and to a `count: 8` branch
+the validator refuses `via` on; "route it around with `via`" went to a
+source's lead. The fix is not cleverer wording. It is that a placement
+carries `via`, `count` and `arrangement` as data, the way it already
+carried `role` and `ends`, so `_move` can read what the element is
+before it says how to move it — and say nothing when nothing moves
+usefully, which is the case for a comb's riser: it stands a fixed
+distance out from its node whatever the spacing, so only the label can
+move, and the remedy falls through to `side` or `angle`.
+
+The parallel-pair note was a fixed sentence — set `side` to down on the
+lower of the two — and one reader applied it to a pair that already had
+both. A remedy derived from where the labels landed cannot name a change
+that is already in the file. Three or more branches between one pair of
+nodes get one note and no `side`, because a run has two useful sides and
+no `side` clears three; the old remedy rotated which pair was reported,
+and two readers each proved the cycle before leaving the note standing.
+
+`label-adrift` names whatever is nearest, and on a node between two short
+runs that is a symbol. Move it and the label is pushed by the symbol on
+the other side by exactly the same amount. The finding now measures the
+room between the two symbols against the label and says both numbers —
+192 against 176, in the transcript — because `nodes-too-close`, which
+speaks in those terms, sums labels *along* a run and a node label sits
+across its node.
+
+And the physics check reports what it did not check. It skipped a free
+node silently whenever a neighbour had no temperature, and a node with no
+temperature is the idiom the schema recommends for an interior junction;
+so following the page's advice about layered walls switched the check
+off for the zone inside them, and the worst-balanced node in one diagram
+was absent from the only report that could have found it. A skip that is
+not visible from the file has to be visible in the output. One note per
+diagram, `checked 2 of 6 free nodes; not checked: ...`, with the reason
+for each, and nothing on a diagram whose nodes were all asked.
+
 ## Describing a diagram (`_describe.py`)
 
 **`check` grades; `describe` reports.** Both acceptance agents asked for the
@@ -517,6 +560,18 @@ sentence. **It reads the same `Scene`**, for the same reason the checker does.
 element carrying no text still gets a row. **It prints what each label
 reads**, because position alone cannot tell a 41 J/K mass hung on the right
 node from one hung on the wrong node.
+
+The network block prints sources, direction and counts since the clean
+room. It was introduced as "which nodes are joined to which, and by what"
+and printed branches only, with the same symmetric dashes for a `flow` as
+for a resistance: three readers observed that a source attached to the
+wrong node would leave the block byte-identical, and all four that used
+`flow` that one written backwards would too. `cb --flow-> th`,
+`j --cond x8 parallel-- ihs`, `source 0 --diss-> j`, `th --flow-> source
+1`: heat reads left to right, and the block can now confirm the things
+each of them most needed confirmed. `network()` returns the kind as the
+author wrote it, `flow` rather than the symbol key `flow-branch`, which
+its docstring had claimed all along.
 
 ## Reviewing goldens rather than rubber-stamping them
 
