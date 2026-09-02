@@ -90,6 +90,17 @@ class Placement:
     # for people, and a node called `a->b` used to break both of them.
     role: Optional[str] = None
     ends: Tuple[str, ...] = ()
+    # The rest of what a remedy has to know before it can name a field, and
+    # what `describe` prints beside an edge. A remedy once said "move a `via`
+    # waypoint" on a branch that had none, and on a repeated branch, which
+    # the validator refuses `via` on — the checker could not tell, because
+    # the placement did not carry it. `via` is the branch's waypoints;
+    # `count` and `arrangement` are the group a branch or source stands for;
+    # `outward` is whether a source's heat leaves its node.
+    via: Tuple[Tuple[float, float], ...] = ()
+    count: Optional[int] = None
+    arrangement: Optional[str] = None
+    outward: Optional[bool] = None
 
 
 def _angle(a, b):
@@ -214,7 +225,8 @@ def _form(b, ref, sym, source, target, centre, angle, label, n, variant,
     """One complete drawing of a repeated group: copies, wire, label, dots."""
     out = []
     tag = {"variant": variant, "shown": shown,
-           "role": "branch", "ends": (b.source, b.target)}
+           "role": "branch", "ends": (b.source, b.target),
+           "count": b.count, "arrangement": b.arrangement}
     dots = variant == "condensed"
 
     if b.arrangement == "series":
@@ -357,7 +369,8 @@ def layout(diagram):
         if b.repeated:
             out += _repeat(b, ref, sym, source, target, centre, angle, label)
             continue
-        who = {"role": "branch", "ends": (b.source, b.target)}
+        who = {"role": "branch", "ends": (b.source, b.target),
+               "via": tuple(tuple(p) for p in b.via)}
         for run in _split(route, index, centre, sym.half_len):
             out.append(Placement("wire", points=run, ref=ref, **who))
         out.append(Placement(
@@ -389,7 +402,8 @@ def layout(diagram):
         step = _source_offset(sym) * (1 if s.outward else -1)
         centre = tuple(s.at) if s.at else (tip[0] + along[0] * step,
                                            tip[1] + along[1] * step)
-        who = {"role": "source", "ends": (s.node,)}
+        who = {"role": "source", "ends": (s.node,), "outward": s.outward,
+               "count": s.count}
         out.append(Placement(
             "symbol", at=centre, angle=s.angle, symbol=sym, ref=ref,
             label=Label(user=s.label,
