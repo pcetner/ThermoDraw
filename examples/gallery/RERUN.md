@@ -43,8 +43,8 @@ No install: the library has no dependencies and the briefs run it as
 briefs find the root with `git rev-parse`, and one commit per agent is what
 makes the run auditable.
 
-What is left is the library, its tests, `docs/schema.md`, and the five
-`brief.md` files. Nothing that argues for a design, nothing that shows a
+What is left is the library, `docs/schema.md`, and the five `brief.md`
+files. Nothing that argues for a design, nothing that shows a
 finished diagram, nothing that names a prior result. Confirm before starting
 — no `CLAUDE.md`, five briefs, and the checker runs:
 
@@ -98,3 +98,22 @@ does not contain.
 
 Any of these failing is a finding, not a failure of the exercise. What would
 make the exercise worthless is running it and then deciding what it showed.
+
+## The run
+
+Done on 2026-09-01, from a sibling directory of the checkout — a `git
+archive` of `c95b816` with the files above removed, committed as `df3a92f`
+in its own repository. Five `claude-opus-5` subagents under Claude Code, in
+parallel, one line of prompt each, one commit each, transcripts committed.
+Graded in `FINDINGS.md`: the vocabulary claim failed in all five domains,
+the documentation claim failed (01 took nine rounds; four agents asked a
+question the schema should have answered), the remedy claim failed (7 of 31
+made the next report worse, 7 could not be applied as written), and the run
+was clean.
+
+Two things the recipe did not anticipate, for the next one. `docs/schema.md`
+quotes the hero diagram and its `describe` output in full, so every agent
+had one worked example after all, and one found it misleading. And the
+directory must be a *sibling* of the checkout, not inside it: the harness
+reads `CLAUDE.md` from every ancestor directory, so a clean room under this
+one is not clean.

@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The gallery, re-run in a clean room.** `examples/gallery/RERUN.md` was
+  run on 2026-09-01: five `claude-opus-5` agents in a copy of the repository
+  outside this checkout, with `CLAUDE.md`, the design record, the tests, the
+  goldens and every finished diagram removed, from `docs/schema.md` and a
+  brief alone, one commit each with full transcripts. The five folders now
+  hold that set; the leaked first run is `FINDINGS-first-run.md` and its
+  diagrams are at `c95b816`. `FINDINGS.md` grades the run against the
+  outcomes written down in advance — all four claims failed, which is the
+  finding — and lists what was confirmed against the source: `--physics`
+  skips a node silently when a neighbour has no temperature, two remedies
+  name a `via` the element cannot take, the parallel-pair remedy is a fixed
+  string, a counted source prints "8 in parallel", and the schema's second
+  paragraph tripped every agent. Nothing in the library changed.
+
 - **`check --physics`: do the numbers on the page agree with each other?** A
   prototype, and the first check that reads a value. Ten checks say how the
   drawing reads; none said what it says, while `model` held every number a

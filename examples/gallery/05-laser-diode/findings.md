@@ -1,241 +1,358 @@
 # Findings — 05-laser-diode
 
-Three rounds. Clean at 0 errors, 0 warnings, 0 notes, exit 0.
+Model: claude-opus-5 — Harness: Claude Code (general-purpose subagent).
+Documentation available: `docs/schema.md` and `brief.md`, nothing else.
+Result: `check` exits 0, 0 errors / 0 warnings / 0 notes, in two rounds.
 
-## 0. A disclosure about the reading restriction
+The diagram is clean. Here is what it does not say.
 
-I obeyed the brief: I read `docs/schema.md` and the brief and nothing else. I
-did not open `src/`, `tests/`, `README.md`, `CHANGELOG.md`, or any existing
-`.json` diagram.
+---
 
-But the harness injected the project `CLAUDE.md` into my context automatically,
-before I was given the brief, as part of the session preamble. I could not
-decline it. It contains design rationale, a "What is left to build" list, and a
-"Known sharp edges" section. The exercise should know that: my knowledge of the
-library was not purely `docs/schema.md`. I have flagged below where `CLAUDE.md`
-told me something the schema did not, so the contamination is visible rather
-than silent.
+## 1. Things I could not express
 
-## 1. What I could not express
+### 1a. The 80 W and the 800 W/cm² are the same heat, and the drawing says they are two
 
-### The spreading resistance — the headline failure
+**This is the worst one.** The brief states both: the bar "dumps **80 W** as
+waste heat", and "the waste heat leaves the junction as a **heat flux of
+800 W/cm2** through the emitting face". Same joules, described twice — once as
+a total, once per unit area.
 
-The brief is explicit that this is the point of the exercise:
+The schema has `diss` (a `P` in watts, arriving) and `flux` (a `q″` in W/cm²,
+which may leave). It has no way at all to say that one source *is* the other
+expressed per unit area. There is no `area` field on a node or a source, no
+grouping, no cross-reference between sources, no "annotation" flavour of a
+source that decorates a quantity already stated rather than adding a new one.
 
-> "It is not a plain one-dimensional conduction path: the cross-section the
-> heat flows through grows as it goes."
+What I did: I drew both. Source 0 is `diss`, `P_d = 80 W`, arriving at the
+junction. Source 1 is `flux`, `q″_e = 800 W/cm²`, leaving the junction upward
+off a hatched face.
 
-There is no `spread` kind. `docs/schema.md` gives exactly six branch kinds —
-`cond`, `conv`, `rad`, `contact`, `cap`, `break` — and none of them is
-spreading.
+**How misleading this is: quite badly, and in a specific way.** A reader who
+knows the vocabulary reads that node as: 80 W appears here, an unquantified
+amount leaves upward through a hatched face at 800 W/cm², and separately 80 W
+goes right into the semiconductor. That is an energy balance that does not
+close, drawn on purpose. The picture claims the junction is a three-way node
+when it is a two-way one. Anyone summing the arrows gets the wrong answer.
 
-**What I did instead:** `{"kind": "cond", "label": "Spreading in CuW",
-"value": "0.15"}`.
+The alternatives were both worse in a way I could not accept:
 
-**How misleading it is: badly, and in the one place it matters most.** The
-drawn box carries the section-hatching texture the library uses for plain
-solid conduction, and the auto-generated subscript renders the label as
+- Drop the `flux`, and the diagram silently loses the one number the brief
+  calls out as the point of the whole example — "an extremely high flux over a
+  very small area" is the reason this system needs a spreader at all.
+- Drop the `diss` and keep only the `flux`, and the diagram never states 80 W
+  anywhere, which is the number every other resistance in the stack is sized
+  against.
 
-```
-Spreading in CuW | R_cond = 0.15 K/W
-```
+I chose visible redundancy over silent omission, because a reader can see the
+redundancy and cannot see an omission. But I want to be explicit that I did not
+find a right answer here; I picked the least wrong of three wrong ones.
 
-So the drawing *asserts* `R_cond`, in library-set type that the schema says is
-"not yours to set" and that names the physics. The physics it names is wrong.
-This is the single largest resistance in the stack (0.15 of 0.29 K/W total) and
-the whole reason the system is interesting, and the diagram says it is ordinary
-1-D conduction. A reader who trusts the subscript — which the schema trains
-them to do, since it is the library and not the author speaking — is misled
-about the dominant term.
+Secondary problem in the same place: 80 W over the stated 10 mm × 100 µm stripe
+is 8000 W/cm², not 800. The brief's flux corresponds to an area ten times the
+stripe. I drew the brief's number, 800, unchanged. Since the schema cannot
+carry an area, there was nothing to check it against and nothing to write it
+down in — the discrepancy is invisible in the file, and `--physics` skips the
+node rather than noticing.
 
-The word "Spreading" appears only in the free-text label, i.e. in the one part
-of the label the schema tells the reader is the *author's* words. The
-mechanism, which is what the notation exists to carry, is wrong.
+### 1b. Nothing in the file says the TEC is a heat pump rather than a leak
 
-There is no workaround. I cannot suppress the subscript (`sub` is documented as
-"only for `cap`"), so I cannot even leave it silent and let the label carry the
-truth. The choice was `R_cond` or nothing.
+The `flow` branch was, genuinely, the right tool — "heat moved from one node to
+another ... because something pumps it", and "the only directed branch". The
+direction is carried. The 60 W is carried. The 40 W of electrical work lands on
+the hot node as `diss`, which is honest.
 
-### The thermoelectric cooler — no active element
+What is not carried is that this branch moves heat **up a temperature
+gradient**. The cooler body is at 41 C and the hot face is at 48 C, and the
+diagram shows 60 W travelling from the cold one to the hot one. Every other
+branch on the page runs downhill. There is no field — no `kind`, no flag, no
+`sub` convention documented for it — that marks a branch as active rather than
+passive. A `flow` branch carrying water from a cold node to a hot node would be
+a physical impossibility and would render identically.
 
-There is no way to draw a device that moves heat against the temperature
-gradient. Every branch kind is a passive resistance, and a resistance between
-the 41 °C cooler body and the 48 °C TEC hot face would be nonsense — it would
-draw heat flowing uphill through a resistor.
+What I did instead: put the words "TEC pumps heat" in the `label`. That is
+prose, not data. It is not checkable, it does not affect the rendering, and a
+reader who skims the symbols and not the words sees a thermal short circuit
+running the wrong way.
 
-**What I did instead:** I drew the TEC as *nothing*. There is no branch between
-`cool` and `tech`; they are two disconnected components of the graph. The pump
-is represented by three annotation sources:
+The `node-does-not-balance` remedy text actually gestures at this workaround —
+"if a temperature is a limit rather than a result, or a flow is a capacity
+rather than a load, say so in the `label`". Both of its escape hatches are
+"write English in the label". That is the documentation admitting the data
+model cannot express the distinction.
 
-- `{"from": "cool", "kind": "flow", "value": "60"}` — 60 W leaving the cooler
-- `{"to": "tech",  "kind": "flow", "value": "60"}` — the same 60 W arriving
-- `{"to": "tech",  "kind": "diss", "value": "40"}` — the 40 W of electrical work
+Also unexpressed: the TEC's coefficient of performance, which is the entire
+design parameter of the component (60 W pumped for 40 W consumed, COP 1.5). It
+exists only as two numbers on two unrelated elements that a reader has to
+notice are related.
 
-**How misleading it is: moderately, and in a way a reader must reconstruct.**
-Nothing in the drawing states that those two 60 W arrows are the *same* 60 W.
-They are two independent annotations that happen to be vertically aligned and
-happen to carry the same number. A reader has to infer the pump from adjacency.
-There is no symbol saying "Peltier", no element linking the two, and no way to
-label the pair as one device. If they drift apart in a later edit, nothing
-catches it — `check` grades layout, not meaning, and `describe` lists them as
-unrelated rows.
+### 1c. The brief's numbers do not balance, and the diagram cannot say which ones I trust
 
-Nor can I distinguish the 40 W of electrical *work* from 40 W of ohmic
-self-heating: `diss` is "electrical or internal dissipation" and draws the same
-plain arrow for both.
+Worked out by hand before drawing (see `transcript.md`, Step 1), and confirmed
+afterwards by `check --physics` (see the end of `rounds.md`):
 
-### "100 W leaves its hot face" — a power cannot be put on a branch
+| leg | stated | implied | verdict |
+|---|---|---|---|
+| 65 → 58 over 0.0875 | 80 W | 80 W | exact |
+| 58 → 51 over 0.0125 | 80 W | 560 W | out by 7x |
+| 51 → 41 over 0.158 | 80 W | 63 W | out by 1.3x |
+| 41 → 18 over 0.045 | 20 W | 511 W | out by 25x |
+| 48 → 25 over 0.23 | 100 W | 100 W | exact |
 
-The brief states a heat rate crossing the baseplate path. Sources attach to
-**nodes** only (`to`/`from` take a node id), so a heat rate can be annotated at
-a node but never *on the path that carries it*. I left the 100 W out. It is
-recoverable as 60 + 40 from the two arrows at `tech`, but the diagram does not
-say it.
+I drew the brief's numbers exactly as given and changed nothing to please the
+checker. That is the instruction and it is also the right call: the brief is
+the specification. **So yes — `check --physics` disagrees with my diagram, and
+I left the diagram alone.** The disagreement is the brief's arithmetic, not the
+drawing's; both warnings match what I computed by hand before I wrote any JSON.
 
-Adding `{"from": "tech", "kind": "flow", "value": "100"}` would have been
-actively wrong: it draws a second exit arrow leaving `tech` alongside the
-baseplate branch, implying two exit paths where there is one. The same applies
-to the 80 W flowing down the main chain — I can state it at the junction, never
-along the ladder.
+What that leaves is a gap in the schema. There is no way to mark a value as
+provisional, nominal, a design limit, or measured-rather-than-computed.
+`--physics` is opt-in precisely because "a sketch with placeholder numbers is a
+diagram too" — yet the file itself has nowhere to record which of its numbers
+are placeholders. That state lives only in whether someone remembers to pass
+`--physics`, and in this markdown file, which does not travel with the JSON.
+A top-level `"physics": false`, or a per-value `"nominal": true`, would have
+let the file say what I am saying here.
 
-### An interior node with a name but no temperature
+### 1d. The baseplate is not on the diagram
 
-The spreading resistance and the indium contact are in series, so the schema
-forces a node between them. The brief gives no temperature there, and the
-brief's own numbers do not close (51 − 80 × 0.15 = 39 °C, below the cooler body
-at 41 °C), so inventing one would have put a false number on the page.
+The brief has "The TEC hot face is at 48 C and meets a **baseplate**, which
+loses heat by convection to ambient air at 25 C at 0.23 K/W". Two named
+physical parts, one temperature, and one resistance between the *first* of them
+and ambient (0.23 × 100 W = 23 K = 48 − 25, exactly).
 
-A `free` node with `label` and no `value` renders as `Submount base | T` — a
-bare, dangling `T`. Deleting the `label` too still renders a lone `T` (7x17).
-`check` reports 0 findings on both; it is a well-formed label that says nothing.
+No resistance is given between the hot face and the baseplate, and the schema
+has no zero-resistance link, no way to give one node two names, and no `pipe`
+that would read as "these are the same temperature by construction" without
+also claiming a small resistance. I merged them: one node, `T_h = 48 °C`,
+labelled "TEC hot face", with the convection branch labelled "Baseplate to
+air".
 
-**What I did instead:** `"kind": "corner"`, which draws nothing. Honest, but it
-loses the name — a reader cannot tell that the point between the two boxes is
-the submount underside.
+**How misleading: mildly, but really.** The word "baseplate" appears on the
+diagram only inside a branch label, so it reads as a property of the air path
+rather than as a part. A reader counting parts in the assembly gets seven where
+the brief describes eight. I would rather have drawn a `pipe` branch with a
+label and no value — the schema does allow "a path with no number draws its
+label alone" — but `pipe` "still takes a small resistance" by definition, and
+asserting a resistance the brief does not state seemed worse than merging two
+nodes the brief puts at one temperature.
 
-I want a named node with no temperature. The schema comes close and stops
-short: a `break` node gets "the label alone drawn", but a `break` draws a
-boundary wall, which this is not.
+### 1e. The submount base has a temperature; the diagram just does not know it
 
-### Everything else expressed cleanly
+The `spread` structure the brief forces — 51 C at the top of the submount,
+spreading 0.15 K/W, then the indium contact, then 41 C at the cooler — needs an
+intermediate node with no stated temperature. The schema handles this well: no
+`value` and no `sub` gives "its label alone and no `T` at all", which is
+exactly right, and is the one place the schema anticipated my problem before I
+had it.
 
-`contact` covered both the AuSn joint and the indium layer; `conv` covered both
-the microchannel water and the baseplate; `flux` with `from` and its own
-`q″` / `W/cm²` unit covered the 800 W/cm² emitting face exactly, and is the one
-place where the vocabulary was clearly *better* than I expected.
+The cost is downstream and is not the schema's fault, but it is worth recording
+because it is invisible: that missing temperature silently disables the physics
+check on **both** its neighbours. See `rounds.md`. Two of the three broken legs
+in the table above are the two nodes `--physics` never evaluated.
+
+### 1f. Geometry, everywhere
+
+The brief is full of geometry: a 10 mm × 100 µm stripe, a 100 µm line source
+spreading to a 10 mm width, "the cross-section the heat flows through grows as
+it goes". The `spread` branch kind renders that idea as hatching that fans from
+a point, which is a genuinely good symbol and the right one.
+
+But no dimension in the brief can be written down anywhere. Not the stripe
+length, not the source width, not the spread width, not the area the flux is
+per. `spread` says *that* the cross-section grows; nothing says from what, to
+what. The 100 µm → 10 mm hundredfold spread — the most characteristic fact
+about this thermal design, and the reason the spreading resistance is the
+largest term in the stack — survives on the page only as fanning hatch lines
+and the word "submount". I put the ratio in neither place because there is no
+place: `label` is the only free-text field and it is already carrying
+"Spreading in submount".
+
+### 1g. The 120 W of light
+
+"It emits 120 W of light and dumps 80 W as waste heat." The 120 W is energy
+leaving the junction that is not heat. There is no source kind for non-thermal
+power leaving a node, and no way to write the electro-optical efficiency that
+relates 120 W of light, 80 W of heat and 200 W of drive. I omitted the 120 W
+entirely rather than misuse `flow` for it, which would have claimed 120 W of
+*heat* leaves the junction and wrecked the diagram. A clean omission, signposted
+here — but a reader of the SVG alone has no way to know the device is 200 W in.
+
+---
 
 ## 2. Where the documentation failed me
 
-**The lone `T` is undocumented and unwarned.** The schema says a node's `value`
-is optional and never says what happens when you omit it on a `free` node. The
-only hint is buried in the `break` paragraph — "A `break` has no temperature to
-state, so `sub` and `value` are usually left off and the label alone is drawn"
-— which by implication says a non-`break` node does *not* get the label alone.
-I found the stray `T` from `describe` output, and only because I ran `describe`
-at all.
+**2a. The `render`/`theme` warning is wrong for the CLI, and it is the second
+paragraph on the page.**
 
-**"Every finding names the schema field that fixes it" — true, and the fields
-were complete, but the check set has a hole exactly where the docs do.** A
-diagram that renders a naked `T` with no subscript and no value passes with
-0 errors, 0 warnings, 0 notes. The schema's own promise — "so that a number
-never reaches the page without its unit" — has an unguarded mirror image: a
-*symbol* reaching the page without a number.
+> "`render` alone emits CSS custom properties with no fallback, so pass its
+> output through `theme` before saving it ... Without one of them the file
+> draws nothing."
 
-**The `q″` warning earned its length.** The U+2033 paragraph is longer than
-anything else in the document and it saved me: I would have typed `q"` and got,
-per the doc, "a JSON syntax error at best". Documentation doing its job.
+The brief tells me to run `thermodraw render ... -o diode.svg`. The schema tells
+me that output draws nothing. Both cannot be true, and the page never
+distinguishes the Python `render()` function from the `render` CLI command. I
+resolved it by grepping my own SVG (`transcript.md`, Step 5) and finding the
+`:root` block already there — the CLI does the `theme` step for you. That is a
+frightening sentence to hit as the first thing you read, about the exact command
+you are about to be told to run, and it cost a detour to disprove.
 
-**`describe` output is mangled on the platform the docs care about.** The
-schema's `check` section says the report is ASCII for cp1252 consoles.
-`describe` is not: run plainly on Windows it printed my labels as
-`q″_e = 800 W/cm?` and `T_j = 65 ?C` — the degree sign and the superscript
-two both replaced. Since `describe` exists specifically so you can read the
-labels back and confirm they are what you meant, mangling exactly the two
-characters the schema *mandates* (`°C`, `W/cm²`) defeats the tool. I had to set
-`PYTHONIOENCODING=utf-8` to verify my own diagram. The docs do not mention this.
+**2b. Whether `rail` is required is never stated.**
 
-**No guidance on multiple sources at one node.** The `tech` node carries two.
-The layout advice — "Space nodes about 220 apart", "put parallel paths 80 above
-and below" — covers nodes and branches but says nothing about sources sharing a
-node, which is precisely what produced my only error.
+`rail` appears in the "Shape" block alongside `nodes`, `branches` and `sources`
+with no marking. "Only give the keys you use" is said about `units` keys
+specifically, not about top-level keys. The `rail` section says it is "the
+reference the capacitances return to" — this diagram is steady-state and has
+none, so I guessed omit. Right guess (`describe` shows no rail ground, `check`
+is clean), but it was a guess, and one word — "optional" — in the Shape block
+would have removed it.
+
+**2c. Six features have no worked example, and four of them are in this brief.**
+
+The page has exactly one complete example, the hero. It contains `cond`,
+`contact`, `conv`, `rad`, `cap`, `diss`, `fixed`, `via` and a rail. It contains
+no `spread`, no `flow` branch, no `flux` source, no `break`, no `count`, no
+`rate`, no `phase`, no `pipe`, no `mixed`, no `corner`. This brief needed
+`spread`, `flow`, `flux` and `rate` — four of the ten unexemplified features,
+every one of them load-bearing here. The `flow` branch in particular is
+described in prose across three separate paragraphs (in "Branches", in the
+`sub` paragraph, and again under `network-in-pieces`) and never once shown as
+JSON. I assembled `{"kind": "flow", "sub": ..., "value": ...}` from three
+places and hoped.
+
+**2d. `rate` is described but never shown, and its interaction with `--physics`
+is not mentioned where you decide to use it.**
+
+> "`rate` | what this path actually carries. Drawn as `q = 12 W` on its own
+> line"
+
+Nothing there warns that supplying `rate` opts that branch into a consistency
+check (`rate-does-not-match`) that a branch without `rate` never gets. The
+`--physics` paragraph mentions the code; the `rate` row in the branch table —
+where the decision is made — does not. Using `rate` honestly made my file fail
+a check that omitting it would have passed. Correct behaviour, bad signposting:
+the incentive as documented is to leave `rate` off.
+
+**2e. `label-adrift` does not say how far "further" is.**
+
+> "-> move source 0 -> j further from its node with `at`"
+
+The finding gives the overshoot ("pushed 36 past its own clearance"), which is
+more than most tools give, but the remedy is a direction without a distance. I
+moved 160 units and it cleared. I do not know whether 40 would have. On a worse
+day that is a binary search.
+
+**2f. Two things stated as facts I could not verify and had to take on trust:**
+that `angle` is refused on a `flow` branch (I did not try), and that `break`
+refuses `value` and `rate` (I had no `break`). Not failures — just unexercised.
+
+---
 
 ## 3. What I had to guess at
 
-| guess | right? |
+| guess | outcome |
 |---|---|
-| `rail` can be omitted entirely when there are no capacitances | **yes** — "Only give the keys you use" is said of `units`, not of the top level, so this was inference. Renders fine. |
-| Two disconnected components in one diagram (the TEC splits the graph) would be accepted | **yes** — no complaint from `check` or `render`. Not documented either way. |
-| A `corner` node keeps routing the wire, draws no dot, and drops out of the label count | **yes** — count went 19 to 18, both boxes stayed put |
-| `flux` with `from` and `angle: 270` puts the hatched face on top of the junction | **yes** — the schema's `{"from": "cell", "kind": "flux", "angle": 270}` example transferred directly |
-| 260 units of node spacing clears labels up to `R_contact = 0.0125 K/W` | **yes** — no `nodes-too-close`. "about 220" plus "space labels, not symbols" was enough to pick a working number first time |
-| `angle: 0` on a `diss` source puts it to the *left* of its node pointing right | **yes**, per "on the far side of the node for a `to`" |
-| `"side": "down"` on the junction to keep its label clear of the flux arrows above | **yes**, and necessary |
+| Omit `rail` entirely, there being no capacitance | **right** — clean check, `describe` shows only the two `fixed`-node grounds |
+| The TEC is a `flow` **branch**, not two `flow` **sources** | **right**, and the schema half-warned me: "a source has one end ... cannot join two nodes however suggestively you place two of them". `describe` shows `symbol/flow-branch` and `cb --flow-branch-- th` in one connected network |
+| `sub` on a `flow` branch is mine to set, so `q_pump` | **right** — rendered `q_pump = 60 W` |
+| A `flow` branch's `value` takes `units.q`, so I must declare `q` even with no `radin` | **right** — no unknown-quantity error |
+| 260 units of node spacing rather than the suggested 220, because my labels are long | **right** — widest label came out 128 wide, and no `nodes-too-close` |
+| `side: "down"` on `j` and `th`, both crowded | **half right** — it did keep the labels off the vertical wire and the flux face, but it is what provoked both `label-adrift` warnings in round 1 |
+| `angle: 270` with no `at` on the `flux` source puts the hatched face on top | **right**, copied verbatim from the schema's `{"from": "cell", "kind": "flux", "angle": 270}` line, which is the single most useful sentence on the page |
+| The 80 W splits 60 W (TEC) / 20 W (water) at the cooler body | **right by arithmetic** — the only split consistent with "pumps 60 W out" and "100 W leaves its hot face", and node `th` balances exactly under `--physics` |
+| Merging the baseplate into the hot-face node | **defensible, not right** — see 1d |
+| Typing `q″` as one U+2033 character | **right**, and the schema's three-sentence warning was warranted; it is the kind of thing that costs twenty minutes otherwise |
 
-Only one guess was wrong, and it was the `T`.
+---
 
-## 4. Did `describe` confirm the drawing was the one I meant?
+## 4. Did `describe` let me confirm the drawing was the one I meant?
 
-**Partly, and it earned its place — it caught the one defect `check` could
-not.** The `Submount base | T` row is the whole reason round 3 exists. Reading
-every label back as rendered text is the right design.
+**Mostly yes, and it is the better of the two tools.** Full output in
+`transcript.md`, Step 4. Without opening a picture it confirmed:
 
-What it should have said and did not:
+- 18 labels, matching 8 nodes + 7 branches + 3 sources, so nothing was dropped
+- the series order of the stack, in one connected piece
+- `symbol/flow-branch` as a distinct placement kind, so the TEC drew as
+  something other than a resistance
+- the `flux` source at `a270`, `flipped`, label pushed `left` — clear of the
+  node label I had sent `below`
+- `ground x2` for the two `fixed` nodes and no third ground, confirming the
+  omitted `rail` was fine
+- every label's exact rendered text, including `q″_e = 800 W/cm²`, which is how
+  I know the double prime went in correctly
 
-- **Nothing about connectivity.** It lists nodes and it lists elements, but it
-  never says the graph is in two pieces. My diagram is two disconnected
-  components joined only by an implication, and that is the single most
-  load-bearing structural fact about it. `describe` reports `wire x18` and
-  leaves me to work out which 18. A "components: 2" line, or a per-node degree,
-  would have let me confirm at a glance that the TEC really is *the* break in
-  the conduction path and not an accidental one somewhere else.
-- **Nothing pairs a source with anything.** `source 2 cool ->` and
-  `source 3 -> tech` are 114 units apart and are the same 60 W. Nothing relates
-  them; I verified their alignment by reading coordinates by hand.
-- **It does not flag a label with no value.** It faithfully printed `T`, which
-  is how I found it — but in the same register as every other row. A
-  `(no value)` marker, alongside the `(no label)` marker it already has for
-  valueless `break` branches, would have made it jump out.
-- **The `title` field never appears.** The schema says it is "not drawn", and
-  `describe` does not echo it either, so the one human-readable statement of
-  what the diagram *is* is unverifiable by any tool.
+**What it should have said and did not:**
+
+1. **Sources are absent from the `network:` block.** That block is introduced as
+   "which nodes are joined to which", and lists branches only. All three of my
+   sources — 80 W into the junction, 800 W/cm² off it, 40 W of TEC electrical
+   work into the hot face — appear nowhere in it. The 40 W is not decoration;
+   node `th` does not balance without it. The one block designed for verifying
+   topology omits a third of the topology.
+2. **The `network:` block does not show direction.** `cb --flow-branch-- th`
+   uses the same symmetric `--` as `j --cond-- sol`, for the one branch kind the
+   schema calls "the only **directed** branch", where "`from` and `to` are the
+   way the heat goes". Had I written the TEC backwards, this block would look
+   identical. I had to drop to `elements` (`branch 5 cb->th`) to confirm it.
+   `cb --flow-branch-> th` would cost one character.
+3. **`rate` is not surfaced structurally.** The 20 W and 100 W appear only
+   inside label text. Nothing says which branches carry a declared rate, so the
+   power budget cannot be checked from the summary.
+4. **No totals.** `describe` knows every source value and every branch value and
+   never says "sources: 120 W in". A sum would have made 1a — my knowingly
+   double-counted junction — visible in the output instead of only in my head.
+5. **It cannot tell me the physics went unchecked.** `describe` reports
+   placement, `--physics` reports balance, and neither says which nodes
+   `--physics` skipped. Between them, three of my eight nodes went unexamined
+   and nothing in either output says so.
+
+---
 
 ## 5. Features the library lacks, ranked by what they cost me here
 
-1. **A spreading-resistance branch kind.** Cost: the diagram makes a false
-   claim about its own dominant resistance, in library-set type. Nothing else
-   on this list is a correctness failure. (`CLAUDE.md`, which I was given
-   involuntarily, lists this as known gap #2 — but `docs/schema.md`, my only
-   sanctioned source, does not hint that the six kinds are incomplete or that
-   spreading was ever considered. From the schema alone I would conclude
-   spreading simply is not a thing this library draws.)
-2. **An active element — a TEC, a heat pump, anything that moves heat against
-   the gradient.** Cost: a real component drawn as a coincidence between two
-   annotations. That the 60 W in and the 60 W out are the same watts, that the
-   40 W of work is what buys the uphill move, that these are one device — all
-   inference.
-3. **A named node with no temperature.** Cost: lost the name "Submount base"
-   entirely, because the alternative was a bare `T`. The fix is one line — do
-   not emit `T` when there is no `value` — and it would have saved a round.
-4. **Heat rates on branches, not just at nodes.** Cost: "80 W flows down this
-   ladder" and "100 W leaves the hot face" are both unsayable. In a diagram
-   where the power split *is* the story — 80 W in, 60 W pumped, 40 W of work,
-   100 W out — powers can only be pinned to places, never to paths.
-5. **A check for a symbol printed with no value.** Cost: one round. The library
-   already refuses a number without its unit; it should equally refuse a symbol
-   with neither subscript nor number.
-6. **UTF-8 output from `describe` by default on Windows.** Cost: one wasted
-   read of a mangled report before I worked out it was the console.
-7. **Grouping or enclosure.** Not needed for correctness here, but the cooler
-   body / TEC / baseplate assembly is three things a reader would want boxed
-   together, and there is no way to say so.
+1. **A way to state an area, and to relate a flux to the power it is a flux
+   of.** Cost: the junction is drawn with a fabricated third arrow (1a). The
+   most damaging gap by far, because it makes the picture assert something
+   false rather than merely fail to assert something true. One optional `area`
+   on a node, or an `of` cross-reference on a `flux` source naming the `diss`
+   it restates, fixes it.
+2. **A branch kind, or a flag, for active heat transport.** Cost: the TEC reads
+   as a passive link running uphill (1b). Everything else about the `flow`
+   branch is right; it just cannot say the branch does work. `"active": true`,
+   or a `pump` kind with a `work` field, would put the 40 W on the element that
+   consumes it instead of floating it as a `diss` on the node.
+3. **Dimensions on anything.** Cost: the 100 µm → 10 mm spread, the defining
+   feature of this design, is fanning hatch lines and nothing else (1f). The
+   `spread` symbol is good, and is handicapped by having no numbers to carry.
+4. **A way to mark values provisional, and to record in the file whether the
+   physics is meant to hold.** Cost: this diagram is permanently ambiguous
+   between "correct diagram" and "sketch with placeholder numbers", and the only
+   record of which it is, is this file (1c).
+5. **Sources and direction in `describe`'s `network:` block.** Cost: a third of
+   the topology and all direction unverifiable from the block built for
+   verifying topology (4.1, 4.2). Cheapest fix on this list.
+6. **A "skipped" report from `--physics`.** Cost: two wrong nodes passed
+   silently, and I would not have known without having done the arithmetic
+   myself first (`rounds.md`). The check is good; the silence is what is
+   dangerous.
+7. **A zero-resistance or identity link between two named parts.** Cost: the
+   baseplate is not on the diagram as a part (1d). Low harm, easy fix.
+8. **Non-thermal power out of a node.** Cost: the 120 W of light, and with it
+   the device efficiency, is simply absent (1g). Arguably out of scope for a
+   thermal-network tool, so ranked last — but for a laser diode it is the number
+   the customer asks about first.
 
-## What the diagram does say correctly
+---
 
-The conduction stack junction to solder to submount to cooler with its four
-resistances; the 800 W/cm² flux leaving the emitting face with its own unit;
-the microchannel convection to 18 °C water at a fixed boundary; the baseplate
-convection to 25 °C ambient at a fixed boundary; every temperature the brief
-gives; the 80 W dissipation; the 60 W pumped and the 40 W of electrical work as
-separate, correctly-signed arrows. The two things it gets wrong are the
-mechanism of the biggest resistance in it, and the existence of the device that
-makes the whole arrangement work.
+## 6. What worked
+
+Worth saying, because the list above is long. `spread` is the right symbol and
+it exists, which surprised me. The `flow` branch is a well-reasoned piece of
+design and it modelled a Peltier element properly. `diss` on the hot node,
+`flow` into it, and `--physics` folding both into one balance that came out at
+exactly 100 W is the tool doing something genuinely hard, correctly. The
+node-with-no-`sub`-and-no-`value` rule anticipated the submount base before I
+knew I needed it. The `label-adrift` remedy worked on the first literal
+application, twice. And the U+2033 warning, which reads as paranoid on a first
+pass, is the reason this file has no encoding bug in it.
+
+Two rounds, clean, nothing left standing.

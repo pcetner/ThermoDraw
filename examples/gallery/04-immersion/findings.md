@@ -1,232 +1,216 @@
-# Findings — two-phase immersion rack
+# Findings — 04-immersion
 
-Written after one round. `check` was clean on the first draft: 17 labels, 0
-errors, 0 warnings, 0 notes, exit 0. No remedy was ever offered, so the
-question "does the remedy work when applied literally" has no answer from this
-exercise — nothing fired.
+Model: claude-opus-5 — Harness: Claude Code (general-purpose subagent).
+Sources available to me: `docs/schema.md` and `brief.md`. Nothing else. I did
+not open `src/`, `tests/`, any other example, or any existing `.json` diagram.
 
-That is the good news and it is real: a diagram of seven nodes, six branches
-and four sources, in a physical domain the library was not written for, drew
-clean from `docs/schema.md` alone with no traceback and no iteration. The rest
-of this document is what the clean report could not tell anyone.
-
-**Disclosure.** I did not read `src/`, `tests/`, `README.md`, `CHANGELOG.md`,
-any other file under `examples/`, or any existing `.json` diagram. The
-repository's `CLAUDE.md` was injected into my context automatically by the
-harness before I was given the brief, so I had seen it without choosing to.
+Result: `check` exits 0 clean at round 5, after four rounds of edits. Every one
+of those rounds was about label placement. Not one was about the thermal
+network, which was right in the first draft.
 
 ---
 
 ## 1. What I could not express
 
-Ranked by how much damage it does to this drawing.
+Ranked by how much of the brief it lost.
 
-### 1a. Advective transport — heat carried between two nodes by a moving fluid
+### 1.1 A fluid stream has two temperatures. A node has one.
 
-This is the big one, and it is the subject of the brief.
+**The worst one.** The brief says: "Inside the coil runs **technical water**,
+entering at **30 C** and leaving at **38 C**."
 
-> "Inside the coil runs technical water, entering at 30 C and leaving at 38 C.
-> It carries the heat away by flowing, not by conducting: the water physically
-> transports 3.2 kW from the rack to the coolant distribution unit."
+A ThermoDraw node is "A place with a temperature" — singular. A stream is not a
+place; it is 30 C at one end of the coil and 38 C at the other, and the
+difference *is* the heat transfer. There is no primitive for it. `flow` is a
+*branch* between two ordinary nodes carrying a rate, which is a different
+statement: it says heat moved from place A to place B, not that a fluid warmed
+by 8 K on the way through.
 
-**What I wanted:** an element between the condenser coil and the technical
-water at the CDU that says "3.2 kW moves along here because the water moves",
-with no resistance and no temperature drop implied by a resistance.
+I tried three shapes before writing any JSON (recorded in `transcript.md` §1):
 
-**What the schema offers:** six branch kinds — `cond`, `conv`, `rad`,
-`contact`, `cap`, `break`. Four of them are resistances that demand a value in
-K/W; `cap` is storage; `break` explicitly "carries no heat". A source is
-attached to exactly one node — `to` or `from`, never both — so `flow`, which is
-the right *quantity*, cannot be a *link*.
+1. Two nodes `wi` (30) and `wo` (38) with `flow` between them. This claims
+   3.2 kW travels from the 30 C node to the 38 C node, and leaves the coil with
+   nothing carrying its heat away. Physically backwards.
+2. Two nodes with `wi` unattached. `check` would fire `network-in-pieces`, and
+   correctly. Silencing that with a `break` branch would be a lie — `break`
+   means "a mechanical connection that carries no heat, such as a standoff or a
+   mount", and a pumped return line is not a standoff.
+3. One node at 38 C with "30 °C in" written into the node's label text.
 
-**What I did:** two separate `flow` sources nose to tail across a deliberate
-gap — `{"from": "coil", ..., "at": [1350,150], "angle": 0}` and
-`{"to": "tw", ..., "at": [1560,150], "angle": 0}` — both `q_w = 3200 W`, both
-pointing right.
+**I took (3), and it is an approximation.** How misleading: the 38 C is a real
+temperature the library knows about, participates in the physics check, and is
+typeset as `T_w = 38 °C`. The 30 C is *prose*. It is set in the same size as
+the rest of the label, it is not a `T` of anything, no branch connects to it,
+and the physics check cannot see it. A reader gets both numbers; the file only
+means one of them. And nothing in the drawing says the technical water is a
+**closed loop** at all — the return leg simply does not exist in the diagram.
 
-**How misleading: badly.** The network is topologically severed at that point.
-The drawn graph is in two disconnected components: `{j, ihs, sat, coil}` plus
-the rail, and `{tw, fac, air}`. A reader tracing the wire finds the diagram
-stops at the condenser coil and a second, unrelated diagram starts at the
-technical water. The only thing asserting they are the same 3.2 kW is that I
-typed the same number twice; nothing in the file relates them, and nothing in
-the toolchain knows they are related. It is a picture of a thermal network with
-the pipe cut out of it.
+### 1.2 Boiling and condensation are drawn as ordinary convection
 
-I checked, deliberately, whether the library minds a disconnected graph. It
-does not. `check` has no connectivity finding among its nine codes and
-`describe` never prints an edge list, so the single most significant fact about
-this drawing is invisible to both instruments.
+The brief's two most characteristic elements are pool boiling on the spreader
+and film condensation on the coil. The branch kinds are `cond`, `conv`, `rad`,
+`contact`, `spread`, `pipe`, `mixed`, `cap`, `flow`, `break`. There is no
+boiling and no condensation. I used `conv` for both, which is defensible —
+both are convective — but it means:
 
-### 1b. An ideal link — zero resistance, and the phase change itself
+- the two phase-change paths draw with **the same hatching and the same
+  subscript** (`R_conv`) as the dry cooler's air-side convection at the far end
+  of the diagram, and
+- the only thing distinguishing 0.00375 K/W of nucleate boiling from
+  0.0058 K/W of forced air is the words I typed in `label`.
 
-> "The condensation itself happens at constant temperature - this is the latent
-> heat of the fluid being given up, 3.2 kW of it, with no temperature drop
-> across the phase change at all."
+`mixed` was the alternative — "no texture at all, which in this vocabulary is
+not an absence but a statement" — but that says "combined or deliberately
+unstated", and pool boiling is neither combined nor unstated. So `conv` it is,
+and the physics is carried entirely by prose. **How misleading: moderately.** A
+reader who trusts the symbols sees a single-phase loop with an oddly low
+convective resistance in the middle.
 
-**What I wanted:** boiling surface and condensing surface joined by something
-that carries 3.2 kW at zero delta-T and is labelled as a phase change.
+### 1.3 The latent heat is not a quantity anywhere
 
-**What I did:** collapsed both onto a single node, `sat`, "Boiling dielectric,
-T_sat = 49 °C". Pool boiling arrives at it from the spreader; the condensing
-film leaves it to the coil.
+The brief: "the latent heat of the fluid being given up, **3.2 kW** of it, with
+no temperature drop across the phase change at all."
 
-**How misleading: the numbers are right, the physics is deleted.** Zero delta-T
-between two places *is* one node, so this is the correct answer and I am
-content with it. But it is an answer arrived at by erasure. Nothing on the page
-says a phase change happens; a reader sees a middle node between two convection
-boxes and reads it as a lump of fluid. The 3.2 kW of latent heat — the entire
-reason a two-phase system exists — has no symbol, no label and no place to
-stand.
+The "no temperature drop" half is expressed perfectly — the `phase` kind exists
+for exactly this, and the schema's own paragraph ("Condensation at 3.2 kW with
+no temperature drop is one node, not two surfaces with a path between them")
+reads as though it was written at this brief. One node, 49 C, boiling on one
+side and condensing on the other. That is the best-served thing in the diagram.
 
-The alternative was a `cond` branch with `"value": "0"`. The schema would
-accept it, and it would print `R_cond = 0 K/W` inside a section-hatched box,
-i.e. a solid metal conductor. That is worse, so I did not do it. There is no
-third option.
+The **3.2 kW** half is not expressible. A node has no `rate` field, and a
+`phase` node in particular has nothing to say how much latent heat it holds. I
+put `rate: "3200"` on the branches either side, so the number is on the page
+twice, adjacent to the phase node — but that says "these two resistances each
+carry 3.2 kW", not "3.2 kW of latent heat is released here". The physics check
+confirms the gap from the other side: "a `phase` node is holding latent heat
+this cannot see". The library agrees it cannot see it.
 
-There is also no boiling symbol and no condensing symbol. I used `conv` for
-both, which is defensible — both are convective coefficients and the streamline
-interior is honest — but a nucleate-boiling coefficient of 0.00375 K/W and a
-filmwise-condensation coefficient of 0.0028 K/W are drawn identically to a fan
-blowing on a heatsink. The mechanism is carried only by my free-text label.
+### 1.4 `rate` on a counted branch: I left a number off rather than guess
 
-### 1c. A stream has two temperatures; a node has one
+The schema is careful that `value` on a `count`ed branch is per item, and says
+so twice with worked arithmetic. It says **nothing** about `rate`. Eight
+parallel paths carry 400 W each and 3200 W together, and I had no way to know
+which one `rate: "400"` would be read as. So branch 0 carries no `rate` at all,
+and the per-processor 400 W of conducted heat is stated only by the dissipation
+source. One number silently absent from the drawing, because guessing would
+have put a possibly-wrong one there instead.
 
-Technical water enters the coil at 30 °C and leaves at 38 °C. A node has one
-`value` and one `sub`.
+### 1.5 "3.2 kW total" appears nowhere as a number
 
-**What I did:** put the outlet in the data (`"sub": "out", "value": "38"` ->
-`T_out = 38 °C`) and shoved the inlet into free text in the label:
-`"label": "Technical water, 30 C in"`.
+The library does no arithmetic — deliberately, and the schema says why ("values
+are strings so `"2.10"` stays `2.10`"). So the diagram states `P_p = 400 W`
+with 8 of them, and the headline figure of the whole brief, 3.2 kW, is not
+printed anywhere. I could have written it into a label as prose, which is what
+I did for the 30 C, but one prose number per diagram was already one too many.
 
-**How misleading: mildly, and it looks bad.** The rendered block reads
-"Technical water, 30 C in" over "T_out = 38 °C". Two temperatures on the same
-node, set in two different weights, one of them typeset from `units.T` and one
-of them prose with a hand-typed "C" that is not even the degree sign. Only one
-of them is data. If someone later changes `units.T`, half of that node updates.
+### 1.6 The pump is a heat source but not a device in a loop
 
-I considered a second node for the 30 °C return and rejected it: the return leg
-carries the water back to the rack, and drawing it as a wire would close a loop
-that is not a thermal-resistance loop, which is a bigger lie than the one I
-told.
+`{"to": "tw", "kind": "diss", "value": "800"}` says 800 W of dissipation
+appears at the technical-water node. Thermally correct. What is lost is that
+the pump is a *machine on a particular line*, and that its 800 W is shaft work,
+not an electrical loss in a solid. `diss` is glossed as "electrical or internal
+dissipation"; there is no kind for work done on a fluid. Minor — the label
+carries it.
 
-### 1d. Multiplicity — "eight of these, in parallel"
+### 1.7 Units have no prefixes
 
-**This is the one genuinely wrong-looking number in the drawing, and I want it
-read as such.**
+The brief says **240 kJ/K**. `units` is one string per quantity for the whole
+diagram, so the page reads `C_f = 240000 J/K`. Same quantity, so nothing is
+lost physically, but it is six digits where the brief had three.
 
-Junction-to-spreader is 0.0275 K/W **per processor**, carrying **400 W**
-(72 - 61 = 11 K = 400 x 0.0275). Everything downstream of the spreader is
-rack-level, carrying **3200 W** (61 - 49 = 12 K = 3200 x 0.00375). The network
-is eight parallel legs collapsing into one.
-
-**What I wanted:** `"count": 8` on the branch, or any collapsed-parallel
-notation.
-
-**What the schema offers:** nothing. There is no repeat count, no xN, no way to
-say two branches are the same branch.
-
-**What I did:** left the value at the brief's `0.0275`, wrote the label "Each
-of 8 processors", and put a single `P_chip = 3200 W` dissipation at the
-junction.
-
-**How misleading: this is the worst number on the page.** A reader who
-multiplies the source by the first resistance gets 3200 x 0.0275 = 88 K and
-expects a 137 °C junction, not the 72 °C the node states. The rack-level
-equivalent is 0.0275 / 8 = 0.0034375 K/W — a number the brief never gives, so
-writing it would have been exactly the silent substitution the brief forbids. I
-chose to keep the stated number and carry the discrepancy in a label, and to
-report it here.
-
-Neither instrument can catch this. The schema says so plainly: "Two things it
-does not check: whether the numbers are right, and whether the network is the
-one you meant."
-
-### 1e. Unit prefixes
-
-`units` is fixed per quantity and "Every `value` is a **string** ... you get
-exactly the digits you typed". The brief says **240 kJ/K** and **3.2 kW**. The
-diagram says `C_fl = 240000 J/K` and `P_chip = 3200 W`. There is no
-`"C": "kJ/K"` that would let me write `240`, and no scaling.
-
-**How misleading: not at all; just unreadable.** But a six-digit capacitance is
-a wide label, and the schema's own headline advice is "Space labels, not
-symbols". The library's unit policy is fighting its own layout advice.
-
-### 1f. No enclosures, so no idea where the rack stops
-
-The rack, the CDU and the dry cooler are three separate physical boxes with
-three different owners. `docs/schema.md` has no region, group, enclosure or
-frame of any kind — the word does not appear. The result is one undifferentiated
-chain from junction to ambient with no indication of where the immersion tank
-ends, where the facility begins, or which loop the pump is in. The pump's 800 W
-lands on a node whose membership in the technical water loop is something the
-reader has to infer from my label text.
-
-### 1g. One thing that was not a gap
-
-Pump shaft work degrading to heat in the fluid is `diss` — "electrical or
-internal dissipation". I hesitated over whether an 800 W pump belongs as a
-`diss` or a `flow`, decided `diss` because the work appears *at* the fluid
-rather than travelling to it, and the schema's own gloss for `diss` —
-"dissipation *appearing* at a node rather than travelling to it" — settled it
-in one sentence. Recording this as a case where the documentation did its job.
+Honesty about my own choice: `"C": "kJ/K"` with `"240"` would probably have
+worked and read better. I chose `J/K` because the schema warns that in the
+physics check "a unit the check does not know skips the diagram rather than
+guessing", I had exactly one non-iterated shot at `--physics`, and `J/K` is the
+unit the schema's own example uses. I traded page quality for certainty about a
+tool I was allowed to run once. **A per-value unit override, or a published
+list of the units the checker knows, would have removed the trade entirely.**
 
 ---
 
 ## 2. Where the documentation failed me
 
-The schema is good, and I want that on the record before the complaints: it is
-the reason this drew clean on the first attempt. Six holes.
+### 2.1 A finding told me to do something the schema forbids — three times
 
-**2a. `size` is a documented finding about an undocumented field.** The check
-table has two codes that reference it —
+`check` said, on three separate rounds and against three different nodes:
 
-> `off-canvas` | error | the drawing runs past a `size` you fixed
->
-> `frame-off-centre` | warning | the `size` you fixed leaves lopsided margins
+> "move a `via` waypoint on branch 0 j->ihs so it does not run past this label"
 
-— and the "Shape" section, which announces itself as "the whole format", has no
-`size` key. Two of the nine findings are about a field the schema never
-defines: not its name in the object, not its type, not whether it is
-`[w, h]`. I could not have used it, and if either finding had fired I would
-have had nowhere to look.
+Branch 0 is `"count": 8, "arrangement": "parallel"`. `docs/schema.md` says:
 
-**2b. It never says whether `value` is optional on a branch.** The table gives
-`value` with no annotation. `break` is singled out as taking none ("it takes
-**no `value` and no `sub`**, and one given a value is refused"), which by
-contrast implies the others require it, but never says so. I needed exactly a
-value-less labelled branch — the coil wall to water path, which the brief
-describes and gives no number for — and could not tell from the schema whether
-it was legal. I did not try it, because the brief scopes me to the schema and
-the schema is silent. Node `value` has the same silence, but the `break`
-paragraph rescues it: "A `break` has no temperature to state, so `sub` and
-`value` are usually left off".
+> "A repeated branch is drawn between its two nodes, so it cannot also take
+> `via`."
 
-**2c. Nothing about disconnected graphs.** I produced one on purpose (1a) and
-had no way to know in advance whether that would be refused, warned, or
-ignored. It is ignored. I established that by rendering, not by reading.
+The finding's **first** named remedy is a field the library refuses on that
+branch. Anyone following the instruction literally — which is what the brief
+asked me to do — gets an error, not a fix. This is not a one-off: any diagram
+with a counted group will hit it, because a counted group is physically wide
+and is therefore exactly what labels collide with.
 
-**2d. The source default-placement sentence needs a reference frame.**
+### 2.2 `label-adrift`'s remedies cannot say "your label is too wide"
 
-> "Leave `at` out and the source is placed along its own `angle` with room for
-> its label — on the far side of the node for a `to`, so the arrow arrives, and
-> on the near side for a `from`, so it leaves."
+The `sat` finding survived four rounds. Its named remedies were "move branch 1
+ihs->sat along its branch with `at`" and "`angle`". I applied both, literally,
+repeatedly:
 
-"Near" and "far" relative to *what*? Presumably the direction the angle points,
-but the sentence never says, and getting it backwards puts an arrow on the
-wrong side of the node. I gave explicit `at` to both `flow` sources to avoid
-finding out, and let the two `diss` sources default. Both defaults were right,
-which I could only confirm from `describe` afterwards.
+- moved branch 1 by 50: the overshoot stayed at **exactly 48**;
+- moved it by 90: the finding **re-blamed the branch on the other side**, still
+  48, and manufactured a `wire-through-symbol` and a second `label-adrift` on
+  the way;
+- `angle: 135`: the overshoot went **48 -> 84**, worse than doing nothing.
 
-**2e. The sample `describe` output in the schema prints `nodes:` twice.** The
-documented sample lists `nodes:`, then `rail:`, then `nodes:` again with
-identical content. The real thing prints it once. Small, but that block is the
-sample a first-time reader calibrates against, and I spent a moment looking for
-the second block that was not there.
+The actual cause, which no finding ever stated: `sat`'s label is 192 wide (I
+only know that from `describe`) and the runs either side were 260. It was 48
+too wide on *both* sides, which is why moving neighbours could not help and why
+the number never budged. `nodes-too-close` is the finding that speaks in those
+terms — "the labels along that run come to 262" — and that is precisely the
+sentence I needed, but it did not fire for these two runs. **`label-adrift`
+should be able to notice it is really a spacing problem and hand over to
+`nodes-too-close`'s wording.** As written its advice sends you in circles, and
+the brief's instruction to apply remedies literally is what produced rounds 3
+and 4.
 
-**2f. Minor: `"to": "rail"` is documented and `"from": "rail"` is not.** The
-asymmetry is unexplained. I did not need it.
+### 2.3 The library prints an arrangement it documents as not existing
+
+`docs/schema.md`, on a source's `count`:
+
+> "They simply add, so there is no `arrangement` to state."
+
+`describe` on my file:
+
+> `source 0 -> j   symbol/diss ... Processor dissipation | P_p = 400 W | 8 in parallel`
+
+It prints **"8 in parallel"**, borrowing the branch wording, for a quantity the
+schema says has no arrangement and for which I could not have supplied one.
+Eight processors each dissipating 400 W are not "in parallel"; there are simply
+eight of them. This is a false statement on the page put there by the library.
+I left it, because removing `count` would delete "400 W each, eight of them"
+from the data in order to fix a wording bug that is not mine.
+
+### 2.4 The `theme` warning does not say the CLI already does it
+
+> "`render` alone emits CSS custom properties with no fallback, so pass its
+> output through `theme` before saving it ... Without one of them the file
+> draws nothing."
+
+That is written about the Python API, and there is no CLI equivalent of
+`theme.with_variables` in the documented commands. I could not tell whether
+`thermodraw render -o file.svg` produces a file that draws nothing. I checked
+by grepping the output: every `var(--...)` referenced is also defined in the
+SVG's own `<style>`, so the CLI themes for you. **The doc should say so**, in
+that paragraph, because the alternative reading is that the documented render
+command is broken by default.
+
+### 2.5 Small gaps I worked around
+
+- Nothing says whether a `phase` node may carry a `cap` branch to the rail. I
+  did it; it drew.
+- Nothing says what tolerance `--physics` uses. My condensing film is 0.45% out
+  (the brief rounded `0.0028125` to `0.0028`) and passed. I know only that the
+  tolerance lies somewhere between 0.45% and 58%, by observing which nodes
+  fired and which did not.
+- Nothing says whether a source's `at` may sit outside the node extent. Mine is
+  at `x = 20` with a label reaching negative x. It worked; the canvas grew.
 
 ---
 
@@ -234,91 +218,117 @@ asymmetry is unexplained. I did not need it.
 
 | Guess | Right? |
 |---|---|
-| 340 units of node spacing instead of the documented 220, because my labels are the long kind the schema warns about (`R_conv = 0.00375 K/W`) | **Yes** — but untested. Nothing fired, so I have no idea how much margin I had. I would rather have been *told* the numbers than have to break the drawing to see them. |
-| Rail at `y = 380` with nodes at `y = 150`, copied off the hero's 372/150 | **Yes** |
-| Boundary node `air` on the main line at `y = 150` rather than down on the rail, with `"angle": 90` copied from the hero's ambient node | **Yes.** The schema explicitly licenses it: "A `fixed` node may sit anywhere". |
-| `conv` for a plate heat exchanger and for a dry cooler | **Yes, I believe** — both are overall fluid-side coefficients and streamlines are the honest interior. But the schema gives no guidance at all on which kind fits a heat exchanger, and I would have liked one worked line. |
-| `conv` for pool boiling and for filmwise condensation | **Defensible, not right.** See 1b. |
-| That a pair of `flow` sources could stand in for a transport link | **No.** It renders, it checks clean, and it does not mean what I need it to mean. |
-| That a `diss` source and a node label would not collide at node `tw`, which has an arrow coming in from the left, a branch going out right, and a pump coming down from above — four attachments | **Yes**, and the solver handled it without being asked: `describe` shows the node label **flipped** below the line on its own. |
+| `phase` node shared by the boiling and the condensing, rather than two nodes | **Right.** `describe` shows `phase x1`, and `--physics` skips it as latent, exactly as documented. |
+| `mixed` for the CDU plate exchanger's single overall resistance | **Right,** by the schema's own window example. Renders `symbol/mixed`, `R_hx`. |
+| `conv` for pool boiling and for film condensation | **Accepted, but unverifiable.** Nothing rejected it; whether the drawn texture reads as boiling I cannot know without looking at the image, which the brief forbids. |
+| `0.0275` is per processor, `count: 8`, `arrangement: parallel` | **Right,** and `--physics` proved it: `j` and `ihs` balance, which happens only if the count folds to 0.0034375 K/W. |
+| `0.00375` boiling is the whole rack, not per processor | **Right** — `(61-49)/0.00375 = 3200 W` exactly; per processor it would need 0.03. |
+| Facility water is a `free` node, not `fixed` | Judgement call. The brief never calls it a reservoir, and it is cooled by the dry cooler, so it has a balance. Consequence: it gets physics-checked and fires. A `fixed` node "is a reservoir and is not asked", so calling it fixed would have *hidden* one of the brief's inconsistencies. I preferred it visible. |
+| `angle: 270` on the pump source to put it below `tw` | **Right.** `describe`: `source 1 -> tw ... (1500, 198) a270 right`. |
+| `fixed` ambient on the main line rather than at rail level like the hero | **Right** — "A `fixed` node may sit anywhere." Drew clean. |
+| `units.C = "J/K"` to be safe with the physics checker | **Unverified.** The check ran, so nothing was refused, but I never learned whether `kJ/K` would also have been fine. I paid for that ignorance with six digits on the page. |
+| `angle: 135` puts a node label above-left | **Right,** matches the table; `describe` reports `a135 above left`. |
 
 ---
 
-## 4. Did `describe` confirm the drawing was the one I meant?
+## 4. Did `describe` let me confirm the drawing was the one I meant?
 
-**Mostly, and it is the most useful thing in the toolchain.** It is the only
-reason I can make claims about this drawing without having opened it. Four
-things it told me that I could not have known otherwise:
+**Mostly yes, and it is the most useful of the three commands.** The `network:`
+block let me read the topology back and see it was my chain; `phase x1` and
+`symbol/cond x10` with `ellipsis x1` confirmed two kinds I could not otherwise
+verify without an image; and it is the only reason I know `fw`'s label went
+`below ... flipped` and `j` is `pushed 8`. It is also the only reason I found
+the "8 in parallel" bug in section 2.3.
 
-- The exact rendered label text with units appended — which is how I know
-  `C_fl = 240000 J/K` sits on the page, and how bad that looks (1e).
-- Which side each of the 17 labels went, and its measured box.
-- That node `j` and node `tw` **flipped** to the far side of the line on their
-  own, and that `source 3` flipped too. I set neither `side` nor `angle` on any
-  of them.
-- A placement census — `symbol/flow x2`, `symbol/diss x2`, `wire x16` — that
-  let me confirm the element counts against what I wrote.
+What it should have said and did not:
 
-**What it should have said and did not:**
-
-1. **Connectivity.** My drawing is in two disconnected components and
-   `describe` cannot say so. It lists nodes, and it lists elements, and it never
-   once states which node is joined to which. A `components: 2` line, or a
-   degree per node in the `nodes:` block, would have made the severed transport
-   in 1a a visible fact instead of an assertion I have to make in prose here.
-   This is the single highest-value line it is missing.
-2. **What attaches to each node.** I reconstructed the topology by reading the
-   `branch N a->b` rows and matching ids by eye. Fine for seven nodes; the
-   schema is aimed at ladders bigger than this.
-3. **The canvas figure is unexplainable from the schema.** `canvas 2438 x 348`
-   for a drawing whose content spans y = 150 to y = 380. I can back out that
-   the difference is padding plus label extents, but nothing documents it — and
-   `off-canvas` is an *error* graded against a `size` I would have had to guess
-   (2a).
-4. Nothing about whether the numbers hang together, which is fair and stated —
-   "it reports, it does not judge" — but it means 1d passes both instruments in
-   total silence.
+1. **It does not show direction on the one directed branch kind.** The network
+   block prints `coil --flow-branch-- tw`, symmetric dashes, identical in form
+   to `tw --mixed-- fw`. The schema makes a point that `flow` "is the only
+   **directed** branch: `from` and `to` are the way the heat goes", and even
+   refuses `angle` on one so that "turning the symbol would let the drawing
+   contradict the data". Then the summary that exists to tell you what you drew
+   renders that direction invisible. It should print `coil --flow-branch--> tw`.
+   For this diagram — whose entire cold half is "the water carries 3.2 kW *that
+   way*" — that is the single thing I most wanted confirmed.
+2. **Counts do not appear in the network block.** `j --cond-- ihs` gives no
+   hint that it is eight paths. You must infer it from `symbol/cond x10` in the
+   placements line and from the label text. `j --cond x8 parallel-- ihs` would
+   make the most dangerous field in the file — a factor of 64, by the schema's
+   own arithmetic — checkable at a glance.
+3. **`rate` is invisible as a field.** It appears only baked into the label
+   string as `q = 3200 W`, indistinguishable from part of the value. There is
+   no way to confirm from `describe` that a number is an assertion about what
+   the path carries rather than something the library derived.
+4. **The nodes block does not repeat `phase` into the network block.** `sat`
+   shows as `phase` in the nodes list but reads as an ordinary junction in the
+   network. A phase node is topologically special — it is the one node whose
+   temperature is not a result — and the network view is where that matters.
+5. **Non-ASCII is unreliable in the output.** The same run printed the arrow in
+   one row correctly and `°C` as a replacement character in others. So
+   `describe` cannot be used to proofread label text, which is otherwise one of
+   the things it is for.
 
 ---
 
 ## 5. Features the library lacks, ranked by what they cost me here
 
-1. **An advective / transport element.** Cost: the diagram is cut in half. Every
-   other item on this list is cosmetic beside it. A pumped loop and a boiling
-   loop are the whole subject of the brief, and the library cannot draw the leg
-   that makes either one a loop. Shape of the fix:
-   `{"from": "coil", "to": "tw", "kind": "advect", "value": "3200"}` — an arrow
-   along the wire, a `q` not an `R`, no box, no temperature drop implied.
-2. **Multiplicity on a branch.** Cost: the one misleading number on the page
-   (1d). `"count": 8`, rendered as `x8`, and a checker that knows the effective
-   value is R/8 and can say so when the temperatures disagree with it.
-3. **An ideal zero-resistance link, and a phase-change symbol.** Cost: the
-   defining physics of a two-phase system is invisible (1b). Even without a new
-   glyph, a labelled wire between two nodes at the same temperature would have
-   let me write "latent heat, 3.2 kW, no delta-T" on the thing itself instead of
-   deleting it. Boiling and condensing are two mechanisms this brief needed and
-   the vocabulary does not have; both are currently `conv`.
-4. **Unit prefixes.** Cost: `240000 J/K` and `3200 W` where the source says
-   240 kJ/K and 3.2 kW, on a page whose layout advice is "space labels".
-5. **Region enclosures.** Cost: no rack / CDU / facility boundaries, so the
-   drawing cannot show where responsibility changes hands (1f).
-6. **Two temperatures on a stream, or a stream element.** Cost: "30 C in" is
-   prose in a label (1c).
-7. **Connectivity, in both instruments.** Cost: nothing caught the disconnected
-   graph I built on purpose. A `check` finding and a `describe` line.
+1. **A fluid stream / advection primitive.** A node has one temperature; a real
+   coolant loop has an inlet, an outlet, a mass flow and a closed return. Cost:
+   the 30 C inlet demoted from data to prose, the return leg absent entirely,
+   the pumped loop drawn as a one-way chain. The biggest gap between the brief
+   and the file. (1.1)
+2. **Boiling and condensation branch kinds.** The two elements that make this a
+   *two-phase* immersion rack draw as generic convection. Cost: the diagram's
+   defining physics is legible only in the words. (1.2)
+3. **A network layer / auto-layout.** The schema says this is known and not
+   built. Concretely: **all four edit rounds, and every one of the nine
+   findings I cleared, were about where labels sit.** Zero were about the
+   thermal network, which was correct in the first draft. The library made me
+   spend 100% of my iteration budget on typesetting.
+4. **A `label-adrift` that can diagnose a too-wide label.** Its remedies are
+   locally scoped ("move that box") for a problem that is often global ("this
+   run is too short for these three labels"). Cost: two of five rounds spent
+   proving a named remedy had literally no effect. (2.2)
+5. **Any arithmetic at all.** No total dissipation, no series/parallel
+   reduction, no `dT = q x R` shown anywhere. `--physics` proves the library
+   can do the arithmetic; it just will not put the answer on the page. Cost:
+   "3.2 kW total", the brief's headline number, is not in the drawing. (1.5)
+6. **`rate` semantics under `count`.** One undocumented sentence would have put
+   a number on the page that is currently missing. (1.4)
+7. **Per-value unit prefixes, or a published list of the units `--physics`
+   understands.** Cost: `240000 J/K` where the brief said `240 kJ/K`. (1.7)
+8. **A way to state a quantity at a node** — the latent heat a `phase` node
+   passes, or a heat balance at a junction. Cost: the 3.2 kW of latent heat is
+   asserted twice, on the branches either side, rather than once where it
+   belongs. (1.3)
 
 ---
 
-## 6. The summary judgement
+## 6. The physics check disagrees with the diagram, and I did not change the diagram
 
-A clean report on the first attempt, from documentation alone, in a domain the
-library was not designed for. That is a strong result for `docs/schema.md`.
+Verbatim output is at the end of `rounds.md`. Four warnings, all in the cold
+half of the loop:
 
-But the report is clean about the wrong things. `check` graded the typography
-of a drawing whose network is severed in the middle, whose first resistance is
-off by a factor of eight against its own source, and which nowhere indicates
-that the fluid boils. All three are outside what it claims to grade, and it
-says so honestly — "It reports how the drawing reads, not what it says." The
-gap this exercise found is not in the checker. It is that the symbol vocabulary
-covers conduction networks and this system is a fluid loop, and the four
-mechanisms it can draw are not the four mechanisms that move the heat here.
+- `tw` does not balance: 4000 W in (3200 carried + 800 pump), 6316 W out
+  through the CDU at `(38 - 26) / 0.0019`.
+- `fw` does not balance: 6316 W in, 345 W out through the dry cooler at
+  `(26 - 24) / 0.0058`.
+- both `rate` values I wrote (4000 W) disagree with what the ends imply.
+
+**These are the brief's numbers, not a mistake in my drawing.** I did this
+arithmetic by hand before writing any JSON — it is in `transcript.md` section 1,
+written ahead of the first `check` run. To make the CDU balance at 4000 W its
+resistance would have to be about 0.0030 K/W, not 0.0019; to make the dry
+cooler reject 4000 W into 24 C air the facility water would have to sit near
+47 C, not 26 C. Every one of those numbers is given explicitly in the brief,
+and there is no assignment of them that closes.
+
+I have left the diagram saying what the brief says. Silently retuning a
+resistance to make a checker go quiet would have been the one genuinely
+dishonest thing available to me here.
+
+For the record, the hot half is clean: `j`, `ihs` and `sat` all balance, which
+also confirms that `count: 8, arrangement: parallel` folds exactly as
+documented, and the condensing film's 0.45% rounding error (the brief's
+`0.0028` for a true `0.0028125`) is inside tolerance.

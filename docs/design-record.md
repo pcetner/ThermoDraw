@@ -546,8 +546,16 @@ while, did not. The vocabulary findings stand: knowing the design rationale
 does not hand anyone a spreading-resistance symbol. The documentation-quality
 findings are softer than they read, and every sentence in this record that
 leans on "the readers asked for" should be read with that in mind.
-`examples/gallery/RERUN.md` is the protocol for doing it properly, and it has
-not yet been done.
+`examples/gallery/RERUN.md` is the protocol for doing it properly.
+
+It was done on 2026-09-01, in a sibling directory with this file removed,
+and the result is `examples/gallery/FINDINGS.md`. The vocabulary findings
+held, and the first run's nine gaps did not recur; the documentation
+findings turned out not to be softer but harder — one agent took nine rounds
+and all five tripped on the same paragraph — so wherever this record says
+"the readers asked for", the clean run asked for it again, from the schema
+alone, with a transcript. The first run is kept as
+`examples/gallery/FINDINGS-first-run.md`.
 
 ## Three things that are limits, not checks
 

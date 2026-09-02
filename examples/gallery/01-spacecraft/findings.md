@@ -1,246 +1,361 @@
-# Findings — GEO satellite panel, drawn from `docs/schema.md` alone
+# Findings — 01-spacecraft
 
-Six rounds of `check`, ending 0 errors / 0 warnings / 0 notes. The drawing is
-clean. What follows is what it could not say, and what the documentation did
-not tell me.
+Model: claude-opus-5 — Harness: Claude Code (general-purpose subagent).
+Nine `check` rounds to exit 0 with no errors, no warnings and no notes.
+`check --physics` fires four warnings, all of them real contradictions in the
+brief; the diagram was not changed to silence them.
 
-## 0. A disclosure about the experiment
+---
 
-The brief forbids reading `CLAUDE.md`. I did not open it, but **the harness
-injected its full text into my context automatically before I read the brief**,
-as part of a "codebase and user instructions" system message I did not request
-and could not decline. It contains design rationale for the symbol set, the
-label solver and `check.py`. I worked from `docs/schema.md` for every decision
-below and none of the layout choices came from it, but the isolation this
-exercise depends on was not intact, and you should discount this run
-accordingly. If you re-run it, that injection needs to be suppressed first.
+## 1. What I could not express
 
-## 1. Things I could not express
+This is the section that matters, so it is first and it is long.
 
-Ranked by how misleading the result is.
+### 1.1 A heat pipe's temperature drop
 
-### 1a. A heat pipe. Badly misleading. (worst problem here)
+**What I wanted.** The brief says: "A heat pipe is very nearly isothermal: the
+temperature drop along it is about **0.4 K** at this load." That is how heat
+pipes are always specified — a ΔT at a stated load, because the effective
+conductance of a CCHP is not constant and quoting a K/W invites the reader to
+extrapolate it to loads where it is meaningless.
 
-The brief says the heat pipes are "very nearly isothermal: the temperature drop
-along it is about **0.4 K** at this load". The schema has six branch kinds —
-`cond`, `conv`, `rad`, `contact`, `cap`, `break` — and no seventh. There is no
-way to say "isothermal link", and no way to state a **temperature drop** at
-all; `units.R` is fixed for the diagram and every resistance value is read as
-`K/W`.
+**What the schema offers.** A `pipe` branch, whose `value` is "unit appended
+from `units.R`" (line 134). There is no ΔT field anywhere in the format — not
+on branches, not on nodes, nowhere. `rate` is a power, not a temperature.
 
-What I did: divided by the load. Heat into the panel is 220 W from the TWTA
-plus 12 W Earth IR, less the 12.1 W the MLI leaks to space, so about 220 W
-crosses the pipes, giving 0.4 / 220 = **0.0018 K/W**, drawn as a `cond` branch.
+**What I did instead.** Divided. R = 0.4 K / 220 W = 0.001818… and wrote
+`"0.00182"`, with `"rate": "220"` on the same branch so that the load I
+divided by is at least printed on the drawing, as `q = 220 W` beneath
+`R_pipe = 0.00182 K/W`.
 
-How misleading:
+**How misleading the result is: badly, and in a specific way.** The drawing
+now asserts a *linear* conductance of 550 W/K where the brief asserted a
+*fixed offset* of 0.4 K. Those are different physical claims, and a reader who
+takes the number at face value and asks what the pipe does at 400 W will get
+0.73 K, which is not what the brief said and not how a CCHP behaves. Worse,
+the same number is read by `check --physics`, which does exactly that
+extrapolation — against the diagram's own end temperatures, 23 K apart — and
+concludes the pipe carries 12.6 kW. The three-digit rounding is a second,
+smaller lie: 0.4/220 is 0.0018181…, so `0.00182` is the ΔT restated as 0.4004 K.
 
-1. **The number is derived, not given, and it silently encodes an operating
-   point.** In eclipse the same pipe with the same drawing is wrong. Nothing on
-   the page says so.
-2. **The symbol lies about the physics.** `cond` is drawn with the section
-   hatching that means solid material. A constant-conductance heat pipe is a
-   two-phase device; hatching it as a solid is exactly the misreading a thermal
-   engineer would object to. `conv` (streamlines, a moving fluid) is arguably
-   closer but wrong in a different direction — it implies a convective film
-   coefficient. I picked `cond` and it is wrong.
-3. **`0.0018 K/W` is unreadable as printed.** It renders as
-   `R_cond = 0.0018 K/W` beside `R_rad = 26 K/W` on the same page. The one
-   thing a reader needs to see about a heat pipe — that it is orders of
-   magnitude below everything else and effectively a short — is buried in
-   leading zeros. `mK/W` would fix it, and the schema forbids mixed units
-   explicitly: "a diagram cannot mix `K/W` with `mK/W`".
-4. **The drawing now contains a contradiction the library cannot see.** Panel
-   45 C, radiator 22 C, and between them a branch labelled 0.0018 K/W carrying
-   220 W — which is a 0.4 K drop, not 23 K. The temperatures are the brief's
-   and the resistance is the brief's, and they do not agree. `check` reports 0
-   findings, which is correct per its own charter ("Two things it does not
-   check: whether the numbers are right"), but it means a clean report was
-   available for a diagram that is arithmetically impossible.
+**What would have fixed it.** A `drop` field on a branch, or letting `value`
+carry a ΔT with `units.T` when the kind is `pipe` or `phase`-adjacent. One
+field.
 
-### 1b. Emissivity. Moderately misleading.
+### 1.2 A source that is present but off
 
-"second-surface mirror with emissivity **0.80**" and MLI with "effective
-emissivity **0.02**" are the whole reason the two radiative paths differ by a
-factor of 23. There is no field for a surface property. A `rad` branch carries
-`kind`, `label`, `value`, and its subscript is library-set to `rad`.
+**What I wanted.** "A **survival heater** on the panel supplies **30 W** when
+the thermostat calls for it. It is off in this condition, but must appear on
+the diagram." Two facts: a rating of 30 W, and a current value of zero.
 
-What I did: dropped both numbers and leaned on the labels — "Second-surface
-mirror" and "MLI blanket" — to carry the identity of the surface. The
-resistances are on the page, so the *effect* survives; the *cause* does not. I
-did not smuggle the emissivity into the label text, because that label is
-already the widest thing on the page (120 units) and label width is what sets
-node spacing.
+**What the schema offers.** A source has one `value` (line 217) and no state.
+There is no `enabled`, no `off`, no distinction between a capacity and a load,
+and no `style: "dashed"` or similar to draw an inactive element differently.
 
-### 1c. A source that is present but not currently active. Mildly misleading.
+**What I did instead.** `"value": "0"` with the rating pushed into the label
+text: `"Survival heater (30 W when on)"`, rendering as
+`Survival heater (30 W when on) | P_htr = 0 W`.
 
-The brief: the survival heater "supplies 30 W when the thermostat calls for it.
-It is **off** in this condition, but must appear on the diagram." A `diss`
-source has `kind`, `label`, `value`, `sub`, `at`, `angle`, `side` — nothing for
-state, and no dashed or greyed variant. Colour is unavailable by design.
+**How misleading it is: not very, but it cost more than anything else in the
+file.** The reading is unambiguous. But it puts a number on the page through a
+label rather than through `value`, which is precisely what schema line 36 says
+the design exists to prevent — "A value whose quantity has no entry here is
+refused, so that a number never reaches the page without its unit." I had to
+type the `W` myself, and no check will ever verify it against `units.P`. And
+the resulting label is 167 units wide, the widest object in the diagram,
+attached to the most crowded node in it; four of the nine layout rounds were
+spent fighting it. The thing the schema could not say is the thing that
+dominated the work.
 
-What I did: wrote the state into the label — `Survival heater (off)` with
-`P_htr = 30 W`. It draws a solid arrow pushing 30 W into the panel,
-contradicted only by a parenthesis. A reader skimming the arrows will count
-30 W that is not flowing, and the node energy balance on the page will not
-close. I checked the alternative — omitting `value` is accepted by the
-validator (round 6) — but that loses the 30 W rating, which is the thing an
-engineer wants from a survival heater. Neither option is right. A
-`"state": "off"` that dashed the arrow and parenthesised the value would be.
+Interestingly, `check --physics` reads `0 W in by source 2` and is right to.
+So the zero is honest to the solver even though it is dishonest about the
+hardware.
 
-### 1d. Deep space as a reservoir. Not misleading here, but fragile.
+### 1.3 Surface properties: ε 0.80 and ε* 0.02
 
-Both radiative paths end at the same boundary, so I drew one `fixed` node and
-routed the MLI over the top of the diagram to reach it. That created a loop
-(panel to radiator to space, back along the MLI to the panel) and cost me the
-`label-in-a-corridor` warning in round 1.
+**What I wanted.** The brief specifies the radiator's optical coating by
+emissivity (0.80, second-surface mirror) and the blanket by effective
+emissivity (0.02). For a spacecraft panel these are the *design* quantities;
+the K/W is derived from them and an area.
 
-The obvious alternative — draw deep space twice, as thermal-network diagrams
-routinely do — is not available, because **a `fixed` node's wall is always
-drawn below it**: "The wall is always drawn flat below the node, at every
-orientation. `angle` does not turn it, and neither does anything else." A
-boundary a branch must reach from *below* cannot be drawn; the wall is in the
-way. So every boundary in a ThermoDraw diagram has to be approached from above
-or from the side, which pins where the cold end of a network can go.
+**What the schema offers.** Six quantities: `R`, `C`, `T`, `P`, `q`, `q″`
+(line 38). Emissivity is dimensionless and is none of them. There is no
+`area`, no `epsilon`, no free-form property bag.
 
-### 1e. Grazing incidence. Not drawn, not important.
+**What I did instead.** Put them in the branch labels:
+`"Second-surface mirror, ε 0.80"` and `"MLI blanket, ε* 0.02"`.
 
-"Solar flux falls on the radiator at **grazing incidence**". A `radin` arrow's
-`angle` is a real direction, so I could have pointed it shallowly — but the
-angle also decides where the symbol and its label land, so geometry and physics
-compete for one field. I used `angle: 270` for placement and let the incidence
-go unsaid. Low cost.
+**How misleading it is: not misleading, but unverifiable and expensive.** The
+mirror's label is 160 units wide because of it, which is what made it collide
+with the MLI's descending wire in round 5 and forced its label below the line.
+Nothing connects ε to the 1.15 K/W beside it; the two could contradict each
+other freely.
+
+### 1.4 "Heat pipes", plural
+
+The brief says pipes. `count` + `arrangement` exists (line 171) but `value` is
+explicitly **per item** (line 183), and the brief gives one aggregate ΔT and no
+pipe count. Writing `"count": 4, "arrangement": "parallel"` with the aggregate
+resistance would state that each pipe has that resistance, i.e. it would
+divide the real conductance by four. I drew **one** `pipe` branch labelled
+"Embedded heat pipes". The drawing therefore shows a single link where the
+hardware has several — a drafting simplification, not a numerical error.
+
+### 1.5 The operating case
+
+"in sunlight (not eclipse)" and "18 kJ/K, which matters when the satellite
+enters eclipse" are statements about a *case*, not about an element. A thermal
+diagram of a spacecraft is meaningless without its case, and the schema has
+nowhere to put one. `title` exists but line 21 says "optional, **not drawn**".
+So the one sentence that tells the reader which of the two operating points
+they are looking at is in the JSON and never on the page. I put it in `title`
+anyway, knowing it is invisible.
+
+### 1.6 The thermostat
+
+The heater is thermostatically controlled. There is no control element of any
+kind — no setpoint, no switch, no hysteresis band. The `break` branch draws an
+open circuit for "a mechanical connection that carries no heat" (line 204) and
+I considered using it to suggest a switch, but a `break` is by definition
+something that never carries heat, which is the opposite of a thermostat. That
+would have been exactly the "silently substitute something that looks similar"
+the brief warns against, so I did not.
+
+### 1.7 kJ/K
+
+Minor but real. The brief says 18 kJ/K. Units are fixed per diagram (line 31)
+and I have only one capacitance, so `"C": "kJ/K"` with `"18"` would have been
+legal. I wrote `"J/K"` and `"18000"` instead, because line 450 says "a unit the
+check does not know skips the diagram rather than guessing" and the page never
+lists the units it knows. I traded readability for certainty that the physics
+run would not silently no-op. I never found out whether `kJ/K` would have
+worked.
+
+---
 
 ## 2. Where the documentation failed me
 
-**The check output's remedies are wrong more often than they are right.** This
-is the largest documentation failure, because the remedy strings are the only
-guidance an author gets once the schema page is exhausted.
+### 2.1 The one sentence that cost the most
 
-> "move a `via` waypoint on source 1 -> panel so it does not run past this
-> label"
+> "A lead is drawn from the symbol to the node whichever you choose, so `at`
+> only has to be roughly right." — line 250
 
-`via` is not a field on a source. The validator says so:
-`source 1: unknown field 'via'. Expected: angle, at, from, kind, label, side,
-sub, to, value`. The checker recommends a field its own validator rejects.
+This is wrong in the way that matters. A source's `at` does not just place a
+symbol approximately; it determines the **lead**, and the lead is a
+first-class obstacle that other labels are pushed around and that other
+symbols can be reported as crossing. Three separate findings in this session
+were caused by it:
 
-> "move a `via` waypoint on branch 0 twta->panel so it does not run past this
-> label"
+- round 5, `label-adrift` on branch 4, "to get around **the wire of** source 2
+  -> panel";
+- round 6, `label-collision`, "printed over **the wire of** source 3 ->
+  radiator" — caused by my having moved source 3 *further out* on the tool's
+  own instruction, which lengthened its lead;
+- round 8, `wire-through-symbol`, "source 1 -> panel runs straight through
+  branch 4 panel->rail".
 
-Branch 0 is a straight two-node run with no `via`. There is no waypoint to
-move. The remedy appears to be generated from the fact that the blocker was a
-*wire*, without checking whether that wire has any waypoints.
+`at` on a source has to be exactly right, and the page tells you the opposite.
+Nothing anywhere describes how a lead is routed or how much room a source
+needs. The advice that does exist — "Space labels, not symbols… A box is 84
+wide" (line 374) — is about node-to-node spacing and says nothing about
+sources.
 
-> "or set `side` to one of the two the solver does not try (it tries only the
-> sides of the branch)"
+### 2.2 Findings that name remedies which cannot be applied
 
-For node `panel` the two not tried are left and right — which is exactly where
-its two branches leave the node. Applied literally it turned two warnings into
-**two errors** (`label-collision`, label printed over a wire), both ways round.
-The checker is holding the occupancy list it used to find the collision; it
-could have known left and right were occupied, and it recommended them anyway.
+Not the documentation as such, but the same contract. Three times a finding
+named a remedy that does not exist:
 
-> "or `angle` for a direction between those four"
+> "-> move a `via` waypoint on branch 0 twta->panel so it does not run past
+> this label" (round 2, twice)
 
-Printed verbatim on a **source** finding, where it is not merely useless but
-harmful: `angle` on a source is documented on the same page as "the direction
-the arrow points". Taking this advice moves the arrow and its lead, not the
-label. One remedy string is being emitted for nodes, branches and sources, and
-it is only true for nodes.
+Branch 0 is a straight run between two adjacent nodes. It has no `via`. There
+is no waypoint to move. The text appears to be generated from "the obstruction
+is a wire" without checking whether that branch has any waypoints.
 
-The schema page itself has two real gaps:
+> "-> route it around with `via`, or move the symbol along its branch with
+> `at`" (round 8, on `wire-through-symbol` for **source** 1)
 
-- **Node labels can only go up.** The Angles section is explicit that a node's
-  `angle` is "symmetric about 180°" and lists 0/45/90/135 as above /
-  above-right / right / above-left. It never states the consequence: **`angle`
-  cannot put a node label below the line, ever, and `side: "down"` is the only
-  way to get it there.** That is the single fact that ended four rounds of
-  thrash, and it has to be inferred from a table.
-- **"Leave `at` out and the source is placed along its own `angle` with room
-  for its label ... That is usually what you want"** is wrong on a busy node.
-  `describe` showed the survival heater auto-placed at (533, 177) — 34 units
-  from its own node — with a 106-wide label that had no choice but to cross the
-  contact branch's wire. The automatic distance reserves room for the label
-  against nothing else on the page.
+`via` is a branch field. The source table at lines 228-258 has no `via`, and
+line 157 confirms sources are not routed ("Route it with `via` instead" is said
+of `flow` *branches*). Half of that remedy is inapplicable to the element it
+was offered for.
 
-Two sentences were exactly right and saved time: the `q″` warning about U+2033,
-and "Space labels, not symbols. A box is 84 wide, but
-`R_cond = 0.000877 K/W` is over twice that." The second is why I spaced nodes
-320-360 apart on the first draft instead of the suggested 220, and why nothing
-ever collided horizontally.
+The brief asked me to apply each named remedy literally before trying anything
+else. In these three cases that was impossible, and I had to fall through to
+the second option each time.
+
+### 2.3 `render` and the theme warning
+
+> "`render` alone emits CSS custom properties with no fallback, so pass its
+> output through `theme` before saving it… Without one of them the file draws
+> nothing." — lines 12-15
+
+This is placed immediately under a Python snippet but reads as a statement
+about "render", and the only invocation the brief gives me is the **CLI**
+`thermodraw render`. I could not tell from the page whether the SVG I was
+about to commit would draw at all. It does — the CLI writes a `:root` block
+into the file — but I had to grep the output to find that out, and the page
+never says that the subcommand and the function differ.
+
+### 2.4 Undocumented `describe` annotations
+
+Line 507 says the output includes "`flipped` and `pushed N` where the solver
+had to work for it" and never defines either. `OVERLAPS`, which appeared in my
+round-4 output on source 2, is not mentioned at all. `flipped` on node `twta`
+is in my final, clean diagram and I do not know from the documentation whether
+it is a problem, or how to prevent it if it were.
+
+### 2.5 The units the physics check knows
+
+> "a unit the check does not know skips the diagram rather than guessing" —
+> line 450
+
+No list. See 1.7.
+
+### 2.6 Nothing about how the label solver behaves globally
+
+The page presents label placement as local: `side` moves a label, `angle`
+reaches diagonals. In practice pushes propagate hundreds of units and clearing
+one finding creates another somewhere else entirely — in round 4, freeing
+source 1 let source 2's label travel 160 units to the far right of a
+1234-wide canvas and land on a different branch's label. There is no hint of
+this anywhere, and it is the single most important thing to know before
+laying out a diagram with more than four elements on a node.
+
+---
 
 ## 3. What I had to guess at, and whether the guess was right
 
 | guess | right? |
 |---|---|
-| A non-listed unit string (`kJ/K`) is legal | **Yes** — accepted, 0 findings. The schema only ever shows `J/K` and does not say whether the string is validated. It is not: `"18"` with `"J/K"` would also have passed, and would have been wrong by 1000x. |
-| `via` on a `"to": "rail"` capacitance can move where it drops | **Yes.** The Rail section says "Give it `via` if you want it somewhere else"; `[[460,150],[460,430]]` put the capacitance on its own vertical and freed the space under the panel. Whether the last waypoint should sit on the rail line was a guess; including it worked. |
-| A node's `sub` can be a word (`twta`, `pnl`, `space`), not a letter | **Yes.** `T_twta` and `T_space` render fine. |
-| Deriving a resistance from a stated temperature drop | Accepted, but see 1a. It draws; it is not right. |
-| `cond` for a heat pipe | **No.** Accepted by the validator, wrong to a reader, and there is no better option in the vocabulary. |
-| Routing the MLI over the top at y=20 to reach the shared boundary node | **Yes**, once the heat-pipe label was pushed out of the resulting loop with `side: "down"`. |
-| Whether collinear overlapping wires are acceptable — the capacitance's first leg lies on the contact branch's wire between x=460 and x=560 | **Unknown.** `check` has no rule for it and says nothing. I believe it reads correctly, since that stretch of wire *is* the panel node, but the library never confirmed it either way. |
+| `radin` rather than `flux` for "solar flux… 45 W absorbed" — the brief says W, and line 40 says a flux "is per unit area" | **right** — and `flux` would also have made the node unaskable by `--physics` (line 449: "a `flux` source has no area, so its node is skipped") |
+| one `fixed` "Deep space" node can be the far end of two `rad` branches from two *different* nodes, rather than needing two space nodes | **right** — `describe` shows `radiator --rad-- space` and `panel --rad-- space` as separate edges |
+| `"value": "0"` is accepted on a source | **right** |
+| `rate` is allowed on a `pipe` branch — line 135 refuses it only "on `flow`… and on `break`" | **right**, and `--physics` reads it |
+| `rail.reference` may name a node that is not on the rail line (`space` is at y 180, rail at y 400) | **right** — line 270, "does not move the rail… does not have to be a `fixed` node" |
+| a negative temperature string `"-269"` is fine | **right** |
+| `angle: 270` on a `to` source places the symbol *below* the node with the arrow pointing up into it | **right** — line 253, "on the far side of the node for a `to`" |
+| `side` works on a source label | **right** — line 258, and `"right"` on source 2 is what finally cleared rounds 6-7 |
+| a `via` on a `cap`-to-`rail` branch may have a single waypoint and then drop | **right** — `describe` shows the symbol on the vertical run at (440, 350) |
+| the shared wire segment where two branches leave the same node in the same direction (panel → x 620 for both the pipe and the MLI) is idiomatic rather than a fault | **right** — no finding, and the hero does the same thing at x = 696 |
+| `units.C` of `"kJ/K"` might be rejected or might skip the physics run | **never found out** — I avoided it, so this guess is untested |
+| `angle: 135` on the panel node would keep its label clear of the MLI wire | **wrong** — round 2 flagged it `label-adrift`; plain `side: "up"` was correct |
+| moving the *other* object, as most findings suggest first, would clear a `label-adrift` | **wrong, repeatedly** — it relocated the problem six times out of seven |
 
-## 4. Did `describe` confirm the drawing was the one I meant?
+The one guess I would most like to have been able to check without guessing is
+the last one, because it is the difference between converging in three rounds
+and converging in nine.
 
-**Partly, and it was the most useful tool in the set** — more useful than
-`check`, because `check`'s remedies were wrong and `describe`'s facts were not.
-It was `describe` that revealed the survival heater had been auto-placed 34
-units from its node, which is what actually diagnosed rounds 2 to 4. The
-`pushed N` column and the direction column ("above", "below", "flipped") are
-exactly the right things to expose.
+---
 
-What it confirmed: 13 labels, all present; four nodes at the coordinates I
-wrote; five branches with the kinds I chose; four sources with the arrow
-directions I chose; and every label's rendered text, so I could read
-`R_cond = 0.0018 K/W` and `C_pnl = 18 kJ/K` as a reader would.
+## 4. Did `describe` let me confirm the drawing was the one I meant?
 
-What it did **not** tell me, in order of how much I wanted it:
+**Mostly yes, and it was the most useful tool in the set** — more useful than
+`check`, because `check` grades a picture I was forbidden to look at while
+`describe` tells me what is in it.
 
-1. **The topology, as a topology.** It lists elements, not a network. There is
-   no line reading "twta -contact- panel -cond- rad -rad- space, plus
-   panel -rad- space and panel -cap- rail". I verified the network by re-reading
-   my own JSON, which is circular: had I mistyped `"to": "rad"` as
-   `"to": "space"` on the heat pipes, `describe` would have printed
-   `branch 1 panel->space` in a column of `->` pairs and I would very plausibly
-   have missed it.
-2. **Any energy balance.** It knows every source, every node and every
-   resistance. It could say "node panel: 232 W in, 232 W out", or that it does
-   not balance. It says nothing, and an unbalanced network is the most common
-   way a thermal diagram is wrong. This is the check that would have caught 1a.
-3. **The wires it drew.** It reports `wire x15` as a count — fifteen wires, no
-   coordinates. When I wanted to know whether the capacitance's first leg lay on
-   top of the contact branch's wire, that count was all I had.
-4. **The degree sign, on a Windows console.** Every temperature prints as
-   `78 ?C`. The SVG is correct — I grepped it, all four degree signs are there —
-   but `describe`'s whole job is letting you read what got drawn, and on the
-   platform this ran on it cannot print the one character every temperature
-   label ends with.
+What it confirmed outright:
 
-## 5. Features the library lacks, ranked by what they cost here
+- the `network` block is exactly the network I intended, five edges, with the
+  two radiative paths listed separately rather than collapsed;
+- every label's full rendered text, so I could see `R_pipe = 0.00182 K/W`
+  and `q = 220 W` actually reaching the page, and `P_htr = 0 W` for the heater;
+- 13 labels placed = 4 nodes + 5 branches + 4 sources, so nothing was dropped;
+- where the solver *actually* put things I had left to it — this is what told
+  me in round 1 that auto-placed sources land ~40 units from their node, which
+  no amount of reading the schema would have.
 
-1. **A heat-pipe / isothermal-link branch kind, and a way to state a temperature
-   drop.** Cost: the diagram is physically wrong (1a), in the way an engineer
-   would catch instantly. Every spacecraft, laptop and base-station thermal
-   network has one of these.
-2. **Remedies that consult the occupancy list before they advise.** Cost: four
-   wasted rounds, three of which made the diagram strictly worse. The
-   information needed to say "left and right are occupied; use `side: down`" is
-   already in the checker's hand at the moment it prints the finding.
-3. **Per-quantity unit scaling** (`0.0018 K/W` becoming `1.8 mK/W`). Already
-   item 4 on the roadmap. Here it is not cosmetic: it is the difference between
-   a heat pipe reading as a short and reading as a rounding error.
-4. **Automatic placement, or even automatic relief, for a crowded node.**
-   `panel` has six attachments plus its own label, for eight directions. Rounds
-   1 to 5 were me solving that packing problem by hand with `at`, `angle`,
-   `side` and `via`, in a coordinate space I had to hold in my head. This
-   exercise is a clear vote for the network layer.
-5. **Surface properties on a `rad` branch** (emissivity, area, view factor) —
-   enough to tell an optical solar reflector from an MLI blanket without relying
-   on the caller's prose.
-6. **An inactive or conditional state on a source.** A dashed arrow with a
-   parenthesised value.
-7. **An energy-balance check.** The one diagnostic `check` does not have that
-   would have caught the real error in this drawing.
-8. **A boundary wall that can face a direction other than down.** Until then the
-   cold end of every network is laid out around that constraint rather than
-   around the physics.
+What it should have said and did not:
+
+1. **Sources are absent from the `network` block.** It lists `panel --pipe--
+   radiator` but not "220 W of `diss` arrives at `twta`". They appear in the
+   `elements` table as `source 0 -> twta`, so the information is there, but the
+   one block whose stated purpose is "which nodes are joined to which, and by
+   what" (line 510) omits the four elements that inject all the heat. If I had
+   attached the survival heater to the radiator instead of the panel — a
+   plausible slip, they are adjacent in the file — the `network` block would be
+   byte-identical.
+2. **It never restates `units`.** A wrong unit key is invisible here.
+3. **It cannot tell me what a number means.** `R_pipe = 0.00182 K/W` is the
+   whole of section 1.1 compressed into a number, and nothing in `describe`
+   (or anywhere) records that it came from "0.4 K at 220 W". The provenance of
+   every derived value in the diagram is lost at the moment I type it.
+4. **No totals.** It knows every source and every resistance at a node; a
+   single "node `panel`: 4 attachments, 232 W in by sources and branches" line
+   would have caught the brief's inconsistency in round 1 instead of at the
+   very end. `--physics` does this, but it is opt-in and I was told to run it
+   once, last.
+5. **Non-ASCII is escaped inconsistently.** The elements table prints
+   `Second-surface mirror, ε 0.80` with the epsilon escaped, but prints
+   `°C` raw in the same table (where my console then mangled it). Whatever the
+   rule is — it looks like "escape above Latin-1" — it makes the one place I
+   can verify my label text against what I typed harder to read.
+
+---
+
+## 5. Features the library lacks, ranked by what they cost me here
+
+1. **No way to state a temperature drop instead of a resistance.** Cost: the
+   central number of the diagram is a derived approximation with invented
+   provenance (§1.1), and it is what makes three of the four `--physics`
+   warnings fire. For spacecraft thermal work specifically this is close to
+   disqualifying — heat pipes, thermal straps and interface fillers are all
+   quoted as ΔT at a load.
+2. **No inactive/rated state on a source.** Cost: four of nine layout rounds,
+   the widest label in the file, and a number on the page that bypasses the
+   unit machinery (§1.2).
+3. **No network layer — every node needs `at`, and the label solver is
+   non-local.** Cost: all nine rounds were layout. Not one was about whether
+   the diagram said the right thing. The schema is honest that this is coming
+   (line 320), but until it does, drawing a six-attachment node is a
+   trial-and-error process with no way to reason ahead, because a change at
+   x = 380 can move a label at x = 1020.
+4. **Sources cannot be routed.** No `via`, no control over the lead, and the
+   lead is an obstacle. Cost: three findings (§2.1), and one remedy the tool
+   offered that cannot be carried out (§2.2).
+5. **No place for dimensionless or geometric properties** — ε, α/ε, area.
+   Cost: two overwide labels and no link between a coating and the resistance
+   it produces (§1.3).
+6. **No operating case / scenario.** Cost: the sentence that makes the whole
+   diagram meaningful ("in sunlight, not eclipse") cannot be drawn (§1.5).
+7. **No control elements.** Cost: the thermostat is simply absent (§1.6).
+8. **`count` cannot express "n of these, aggregate value given".** Cost: the
+   heat pipes are drawn as one (§1.4).
+
+---
+
+## 6. The `--physics` disagreement, stated plainly
+
+Run once, record only, output at the end of `rounds.md`. It fires four
+warnings. **It is right and the brief is wrong**, and I did not change the
+diagram.
+
+- **Gasket.** 220 W through 0.05 K/W is an 11 K drop. The brief puts the TWTA
+  baseplate at 78 °C and the panel at 45 °C — 33 K. For 33 K at 220 W the
+  contact resistance would have to be 0.15 K/W, three times what the brief
+  says. One of the three numbers is wrong; nothing in the brief says which.
+- **Heat pipe.** Stated as dropping 0.4 K, and stated as having ends 23 K
+  apart. Those cannot both hold. The checker takes the resistance seriously
+  and reports 12.6 kW. Physically the brief is describing a real panel in which
+  there *are* saddle and condenser resistances between the panel skin and the
+  pipe and between the pipe and the radiator, absorbing the other 22.6 K — but
+  the brief gives no values for them, and inventing nodes to make the
+  arithmetic close would have been exactly the silent substitution I was told
+  not to make.
+- **What does hold.** The radiative half is nearly self-consistent, which is
+  worth saying because it shows the brief is not simply random: the radiator at
+  22 °C over 1.15 K/W to −269 °C rejects 253 W; 45 W of that is absorbed solar,
+  leaving 208 W to arrive by pipe. The panel receives 220 W plus 12 W of Earth
+  IR and leaks 12.1 W through the MLI, sending 220 W down the pipe. 220 against
+  208 is a 5 % closure. The brief's radiator, MLI and solar numbers were built
+  to fit each other; its conduction numbers were not.
+- **The remedies `--physics` names do not apply.** "give it `count` and
+  `arrangement`" makes the heat-pipe discrepancy *worse* by a factor of *n*,
+  not better. "say so in the `label`" asks me to annotate an inconsistency
+  rather than resolve it, and would not silence the check anyway.
+
+The honest summary: `check` passes because the picture is legible;
+`check --physics` fails because the brief's numbers do not close. Those are
+different questions and the library is right to separate them. What the
+library cannot do — and what would have caught this on the first round rather
+than the last — is tell me that before I spend nine rounds on label positions.

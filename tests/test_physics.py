@@ -46,7 +46,7 @@ class TestKirchhoffAtANode:
         """`value` is per item. Eight 8 K/W paths in parallel are 1 K/W, so
         the drawing that says so balances and the one that leaves `count`
         off — a box captioned "each of 8" with no field behind it — does not.
-        That is the rack diagram in the gallery."""
+        That was the rack diagram in the first gallery run."""
         assert "node-does-not-balance" not in codes(
             check(ladder(value="8.0", count=8, arrangement="parallel"),
                   physics=True))

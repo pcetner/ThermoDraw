@@ -1,183 +1,171 @@
-# Rounds
+Model: claude-opus-5 — Harness: Claude Code (general-purpose subagent)
 
-Iteration log for `house.json`. One section per `check` run, written as it happened.
+# Rounds — 02-building
+
+Each section is one `check` run: the verbatim output, then what I did about each
+finding and whether the remedy the finding named cleared it when applied
+literally.
+
+---
 
 ## Round 1 — first draft
 
-Diagram written from `docs/schema.md` and the brief alone. 10 nodes, 13
-branches, 4 sources, rail at y 1360.
-
 ```
-examples/gallery/02-building/house.json: 27 labels placed, 0 errors, 1 warning, 0 notes
-warning: [label-adrift] branch 7 zg->grd: its label was pushed 20 past its own clearance to get around the wire of source 2 zg -> and now sits nearer that than the thing it names  -> move a `via` waypoint on source 2 zg -> so it does not run past this label, or set `side` to one of the two the solver does not try (it tries only the sides of the branch), or `angle` for a direction between those four
-EXIT=1
+$ PYTHONPATH=src python -m thermodraw check examples/gallery/02-building/house.json
+examples/gallery/02-building/house.json: 27 labels placed, 0 errors, 0 warnings, 1 note
+note: [parallel-pair-same-side] branch 6 gf->out and branch 7 gf->out run between the same two nodes and both labels went to the same side  -> set `side` to "down" on the lower of the two
+EXIT=0
 ```
 
-27 labels placed = 10 nodes + 13 branches + 4 sources, so nothing was dropped.
+27 labels placed is exactly the count I predicted from the file (10 nodes + 15
+branches + 2 sources), so nothing was dropped. No errors and no warnings on the
+first draft — the "leave a node sideways before turning" and "space labels, not
+symbols" habits, applied by hand while laying it out, appear to have been worth
+following.
 
-Findings and what the remedy did — see below.
+**Finding 1 — `parallel-pair-same-side` on branches 6 and 7.**
 
-## Round 2 — remedy 1, literally
+Remedy as named: *set `side` to "down" on the lower of the two.*
 
-The finding's first remedy: "move a `via` waypoint on source 2 zg -> so it does
-not run past this label". Source 2 has no `via` waypoints, so there is nothing
-to move; the only literal reading is to add one. Added
-`"via": [[860, 700], [700, 940]]` to source 2.
+Applied literally: **no-op.** Branch 6 is the window (horizontal run at y = 820),
+branch 7 is infiltration (horizontal run at y = 1000). y increases downward, so
+branch 7 *is* the lower of the two, and it already carries `"side": "down"`. So
+does branch 6. The remedy the finding names is already satisfied and the finding
+fires anyway. Re-running unchanged to confirm that, then trying something else.
 
-```
-error: examples/gallery/02-building/house.json: source 2: unknown field 'via'. Expected: angle, at, from, kind, label, side, sub, to, value
-EXIT=2
-```
+---
 
-**Remedy 1 did not work, and cannot.** Sources have no `via` field. The
-remedy text is written for branches and is emitted verbatim on a finding whose
-blocker is a source. Reverted.
-
-## Round 3 — remedy 2, literally
-
-Second remedy: "set `side` to one of the two the solver does not try (it tries
-only the sides of the branch)". Branch 7 (`zg->grd`) is vertical, so the solver
-tried left and right; the two untried are `up` and `down`. Set `"side": "down"`.
+## Round 2 — literal remedy applied (no-op), re-run unchanged
 
 ```
+$ PYTHONPATH=src python -m thermodraw check examples/gallery/02-building/house.json
+examples/gallery/02-building/house.json: 27 labels placed, 0 errors, 0 warnings, 1 note
+note: [parallel-pair-same-side] branch 6 gf->out and branch 7 gf->out run between the same two nodes and both labels went to the same side  -> set `side` to "down" on the lower of the two
+EXIT=0
+```
+
+Confirmed: the named remedy was already in the file and the note still fires.
+**Remedy applied literally: did not clear.**
+
+---
+
+## Round 3 — move the *upper* of the pair to "up" instead
+
+The finding's own remedy is unusable, so I inverted it: branch 6 (window, run at
+y = 820) set to `"side": "up"`, leaving branch 7 (infiltration, y = 1000) "down".
+
+```
+$ PYTHONPATH=src python -m thermodraw check examples/gallery/02-building/house.json
+examples/gallery/02-building/house.json: 27 labels placed, 0 errors, 0 warnings, 1 note
+note: [parallel-pair-same-side] branch 5 gf->out and branch 6 gf->out run between the same two nodes and both labels went to the same side  -> set `side` to "down" on the lower of the two
+EXIT=0
+```
+
+The note **moved** rather than cleared: branch 5 is the steel lintel, whose run
+is at y = 470 with `"side": "up"`. There are **three** branches between `gf` and
+`out` (lintel, glazing, infiltration) and a horizontal run has only two usable
+sides, so at least one pair must always share one. Applying the remedy again
+here — set "down" on the lower of 5 and 6, i.e. put branch 6 back to "down" —
+returns exactly to Round 1. It is a two-state cycle.
+
+---
+
+## Round 4 — try a side the finding does not offer
+
+Set branch 6 to `"side": "right"`, to see whether a non-vertical side escapes the
+cycle.
+
+```
+$ PYTHONPATH=src python -m thermodraw check examples/gallery/02-building/house.json
 examples/gallery/02-building/house.json: 27 labels placed, 1 error, 1 warning, 0 notes
-error: [label-collision] branch 7 zg->grd: its label is printed over the wire of branch 7 zg->grd  -> move a `via` waypoint on branch 7 zg->grd so it does not run past this label, or set `side` to one of the two the solver does not try (it tries only the sides of the branch), or `angle` for a direction between those four
-warning: [label-adrift] branch 7 zg->grd: its label was pushed 160 past its own clearance to get around node 'grd'  -> move node 'grd' with `at`, or set `side` to one of the two the solver does not try (it tries only the sides of the branch), or `angle` for a direction between those four
+error: [label-collision] branch 6 gf->out: its label is printed over the wire of branch 6 gf->out  -> move a `via` waypoint on branch 6 gf->out so it does not run past this label, or set `side` to "up" or "down"
+warning: [label-adrift] branch 6 gf->out: its label was pushed 160 past its own clearance to get around branch 2 w2->w3  -> move branch 2 w2->w3 along its branch with `at`, or set `side` to "up" or "down"
 EXIT=1
 ```
 
-**Remedy 2 made it strictly worse** — a warning became an error plus a warning.
-On a vertical branch, `up` and `down` are the two sides that lie *along the
-wire*, so the label lands on top of the branch's own wire. The remedy is
-generic text that does not know the branch's orientation, and for a vertical
-branch it is guaranteed to be wrong.
-
-## Round 4 — remedy 3, literally
-
-Third remedy: "`angle` for a direction between those four". Set
-`"angle": 135` on branch 7.
+Worse: `left`/`right` on a long horizontal branch puts the label on its own wire.
+Both findings' remedies say to go back to "up" or "down", which is the cycle.
+Reverted branch 6 to `"side": "down"`, i.e. back to the Round 1 file.
 
 ```
-examples/gallery/02-building/house.json: 27 labels placed, 0 errors, 0 warnings, 0 notes
+$ PYTHONPATH=src python -m thermodraw check examples/gallery/02-building/house.json
+examples/gallery/02-building/house.json: 27 labels placed, 0 errors, 0 warnings, 1 note
+note: [parallel-pair-same-side] branch 6 gf->out and branch 7 gf->out run between the same two nodes and both labels went to the same side  -> set `side` to "down" on the lower of the two
 EXIT=0
 ```
 
-**Remedy 3 cleared the finding — and silently broke the drawing.** On a *node*,
-`angle` "turns the node's label frame... It moves the label and nothing else".
-On a *branch*, the schema says `angle` "overrides the direction taken from the
-wire" — it rotates the **symbol**. `describe` confirms it:
+**Decision: the note stands, deliberately.** The brief allows a standing note if
+I say why, and this one cannot be cleared: three parallel paths, two sides. The
+two that share "down" are the glazing (y = 820) and the infiltration flow
+(y = 1000), 180 units apart with nothing between them, so nothing is actually
+ambiguous on the page — which is the same reason the schema gives for the hero
+being allowed to trip it: "`parallel-pair-same-side` is a note rather than a
+warning because the hero diagram breaks it and is fine."
+
+`check` is now **0 errors, 0 warnings, exit 0**.
+
+---
+
+## Round 5 — `describe` and `render` (not check rounds, recorded for completeness)
+
+`describe` exited 0 and reported `canvas 2771 x 1270, 27 labels`, `ground x3`,
+`node x10`, `symbol/cond x6`, `symbol/mixed x2`, `symbol/flow-branch x2`,
+`symbol/cap x2`, `symbol/conv x2`, `symbol/rad x1`, `symbol/diss x1`,
+`symbol/radin x1`, `wire x36` — every count matching the file. Its `network`
+block shows one connected graph, so `roof` hanging off `out` alone (which is all
+the brief gives it) does not trip `network-in-pieces`.
+
+`render` exited 0 and wrote `house.svg` (29,474 bytes). Grepping the file shows
+the CLI already applies `theme.with_variables` (`:root{--sym:...}` blocks for
+light, `prefers-color-scheme:dark`, and `[data-theme="dark"]`), so the schema's
+"`render` alone ... draws nothing" warning does not apply to the command line.
+
+---
+
+## Final `check` state
 
 ```
-  branch 7 zg->grd       symbol/cond     (760, 880) a135   below right   107x33   flipped   Slab to deep ground | R_cond = 0.6 K/W
+$ PYTHONPATH=src python -m thermodraw check examples/gallery/02-building/house.json
+examples/gallery/02-building/house.json: 27 labels placed, 0 errors, 0 warnings, 1 note
+note: [parallel-pair-same-side] branch 6 gf->out and branch 7 gf->out run between the same two nodes and both labels went to the same side  -> set `side` to "down" on the lower of the two
+EXIT=0
 ```
 
-`a135` on a wire that runs straight down: the conduction box now sits at 45
-degrees across a vertical wire. `check` reports the diagram clean. The third
-remedy on a branch finding is the node remedy's wording, and taking it
-literally trades a misplaced label for a symbol pointing the wrong way that
-nothing checks. Not kept.
+Four rounds. One finding, uncleanable, left standing with the reason above.
 
-### What else `describe` turned up in round 4
+---
 
-Two defects that `check` passed clean:
+## Record-only: `check --physics`
 
-1. `node 'w1' ... Gypsum-wool | T` — the four wall-layer interface nodes have
-   a label but no `sub` and no `value`, because the brief gives no temperature
-   for them. The second line renders as a bare, meaningless `T`.
-2. `branch 12 zu->rail symbol/cap (480, 1200) a81.8699` — the upper-zone
-   capacitance is drawn at 81.87 degrees, not vertical. `via: [[480, 380]]`
-   moved the wire sideways but *not* the point where it meets the rail, which
-   stays directly below `zu` at x=620, so the last leg is a long diagonal.
-
-## Round 5 — structural rework, not a remedy
-
-Round 4's `angle` was reverted. The real cause of round 1's warning was that
-the slab branch and the two down-left sources on `zg` occupied the same column,
-so a source lead always crossed the slab's label. Reworked instead:
-
-- `zg`'s capacitance moved off the straight-down column (`via` now has a second
-  waypoint on the rail line so the drop is a true vertical - see round 4 note 2)
-- the slab now runs straight down from `zg` to `grd`, with its label on the
-  right
-- the four wall-layer interface nodes lost their labels
+Run once on the final diagram. **Not iterated on.** Where it disagrees with the
+drawing, the disagreement is discussed in findings.md and the diagram was not
+changed to please it.
 
 ```
-examples/gallery/02-building/house.json: 27 labels placed, 0 errors, 1 warning, 0 notes
-warning: [label-adrift] branch 7 zg->grd: its label was pushed 20 past its own clearance to get around the wire of branch 5 zg->out and now sits nearer that than the thing it names  -> move a `via` waypoint on branch 5 zg->out so it does not run past this label, or set `side` to one of the two the solver does not try (it tries only the sides of the branch), or `angle` for a direction between those four
+$ PYTHONPATH=src python -m thermodraw check --physics examples/gallery/02-building/house.json
+examples/gallery/02-building/house.json: 27 labels placed, 0 errors, 2 warnings, 1 note
+warning: [node-does-not-balance] node 'roof': 0 W arrives and 190 W leaves at the stated values — 85.7 W out by branch 11 roof->out (12 K over 0.14 K/W); 105 W out by branch 12 roof->sky (23 K over 0.22 K/W)  -> check the values. If one box stands for several identical paths, give it `count` and `arrangement`; if a temperature is a limit rather than a result, or a flow is a capacity rather than a load, say so in the `label`
+warning: [node-does-not-balance] node 'uf': 240 W arrives and 22.2 W leaves at the stated values — 240 W in by branch 10 gf->uf; 22.2 W out by branch 9 gf->uf (2 K over 0.09 K/W)  -> check the values. If one box stands for several identical paths, give it `count` and `arrangement`; if a temperature is a limit rather than a result, or a flow is a capacity rather than a load, say so in the `label`
+note: [parallel-pair-same-side] branch 6 gf->out and branch 7 gf->out run between the same two nodes and both labels went to the same side  -> set `side` to "down" on the lower of the two
 EXIT=1
 ```
 
-Note: still "27 labels placed" with four nodes carrying no `label` at all, so
-an unlabelled node is still counted.
+(The first invocation printed the same text with `—` mangled to `?` by the
+Windows console codepage; the block above is the same run re-captured with
+`PYTHONIOENCODING=utf-8` so the characters are the real ones. No other
+difference, and the diagram was not touched between them.)
 
-## Round 6 — remedy 1, literally (this time it applies)
+Both warnings are true of the brief's own numbers and both would be wrong to
+"fix":
 
-"move a `via` waypoint on branch 5 zg->out so it does not run past this label".
-Branch 5 turns down at x=960, inside the slab label's band (x 920-1080). Moved
-the turn to x=1120, clear of the label on the right.
-
-```
-examples/gallery/02-building/house.json: 27 labels placed, 0 errors, 1 warning, 0 notes
-warning: [wire-through-symbol] branch 5 zg->out runs straight through branch 0 zg->w1  -> route it around with `via`, or move the symbol along its branch with `at`
-EXIT=1
-```
-
-**Remedy 1 applied cleanly and traded one warning for another.** There is no
-free x between the slab label's right edge (1080) and the gypsum board symbol
-(988-1072): the label and the symbol overlap in x, so any turn that clears the
-label is inside the symbol. The remedy is locally correct and globally
-impossible, and the finding cannot know that.
-
-## Round 7 — move the label out of the corridor instead
-
-Reverted branch 5 to x=960. Moved the slab symbol from `at [900, 720]` to
-`at [900, 1060]`, below both the lintel run (y=820) and the glazing run
-(y=980), so a right-hand label has nothing to get around. Moved `grd` to
-(900, 1240), both capacitance columns left (x 620 and x 380), both `zg`
-sources to x=760, rail to y=1420.
-
-```
-examples/gallery/02-building/house.json: 27 labels placed, 0 errors, 0 warnings, 0 notes
-EXIT=0
-```
-
-`describe` confirms the symbols are back on their wires - `branch 7 ... a90`,
-`branch 8 ... a90`, `branch 11/12 symbol/cap ... a90` - so the round-4 damage
-is undone and the capacitance drops are true verticals.
-
-Two things `describe` still showed wrong:
-
-```
-  node 'w1'              node            (1160, 620)       above           7x17   T
-  node 'out'             node            (2240, 620) a135  below right   70x33   flipped   Outdoor air | T_out = -4 C
-```
-
-- `w1`-`w4` print a lone italic `T` even with **no `label`, no `sub` and no
-  `value` at all**. There is no way to write a plain junction.
-- `out` asked for `angle: 135` (above-left) and got below-right, because
-  branch 4's label was sitting in the above-left slot.
-
-## Round 8 — final
-
-- `w1`-`w4` changed to `"kind": "corner"`. This is the only way found to get a
-  series junction that prints nothing; the cost is that the layer interfaces
-  are no longer nodes a reader can point at, and the label count drops by four.
-- branch 4 (`w4->out`) given `"side": "down"` to free the above-left slot for
-  `out`'s label.
-
-```
-examples/gallery/02-building/house.json: 23 labels placed, 0 errors, 0 warnings, 0 notes
-EXIT=0
-```
-
-23 = 6 labelled nodes + 13 branches + 4 sources; the four `corner` nodes are
-correctly excluded. `describe` now shows every symbol on its own wire, `out`
-`a135 above left` with no flip, and no stray `T`.
-
-Rendered: `house.svg`, canvas 2354.6 x 1429.8.
-
-One placement left standing, deliberately: `node 'zu' ... below flipped`. The
-upper-zone label sits below its node because the stairwell source's lead
-occupies the space above it. It is legible and unambiguous, and the design the
-solver is documented to have - try the automatic side, then the opposite -
-worked exactly as advertised. No note was raised for it.
+- **`roof`** has 190 W leaving and nothing arriving because the brief gives the
+  roof a temperature (8 °C) and two loss paths but never says what heats it —
+  there is no roof-to-upper-zone resistance anywhere in the brief. Inventing one
+  would be inventing data.
+- **`uf`** takes 240 W up the stairwell and loses only 22.2 W back down through
+  the intermediate floor, because the brief gives the upper zone no other path to
+  anywhere. Also true, also not mine to fix.
+- **`gf` is not listed at all**, and it is the node that is furthest out of
+  balance (1.47 kW in, 693 W out). See findings.md §5 — the physics check skips
+  it, silently, because the wall's interior junction nodes have no temperature,
+  which is the idiom `docs/schema.md` itself recommends for series layers.

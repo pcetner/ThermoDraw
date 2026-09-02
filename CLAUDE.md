@@ -42,7 +42,7 @@ examples/
   hero.json              the README diagram, as data
   render_demo.py         the three README images
   render_reference.py    renders every symbol at every 45°
-  gallery/               five networks from five domains; RERUN.md is the protocol
+  gallery/               five networks from five domains, drawn twice; FINDINGS.md is the clean run
 docs/
   schema.md              the format, written to be pasted into a prompt
   design-record.md       why each decision below was made — read before changing one
@@ -144,9 +144,13 @@ sentence after it says what would overturn it.
   diffs; CI re-renders the gallery and README images and diffs.
 
 ### Evidence
-- The gallery was five subagents in this checkout with this file injected.
-  The vocabulary findings stand; the documentation findings are softer.
-  `examples/gallery/RERUN.md` is the clean-room protocol, not yet run.
+- The gallery has been run twice. The first run was five subagents in this
+  checkout with this file injected (`FINDINGS-first-run.md`). The second,
+  2026-09-01, was five agents in a clean room outside the checkout, from the
+  schema alone, transcripts committed (`FINDINGS.md`), graded against the
+  outcomes `RERUN.md` wrote down first. All four pre-registered claims
+  failed. The first run's nine vocabulary gaps did not recur; the second
+  run's gaps are what the format can state, not what it can draw.
 
 ## Sharp edges
 
@@ -175,9 +179,11 @@ sentence after it says what would overturn it.
 1. **The network layer.** The only genuinely hard piece. The record's table of
    what survives it says which checks it must satisfy, which it minimises, and
    which it may delete.
-2. **Re-run the gallery in a clean room** (`examples/gallery/RERUN.md`). The
-   five diagrams are left as their agents drew them, because they are
-   evidence, and all five fail `--physics`. The re-run produces the next set.
+2. **Act on the clean-room run** (`examples/gallery/FINDINGS.md`). Five
+   checker and describer defects with file and line, each verified; two
+   schema sentences that every agent tripped on; and a ranked list of what
+   the format cannot state — relations between elements first. The next
+   set of briefs should be written so their numbers close.
 3. Region enclosures that auto-size to their contents.
 4. Unit handling — `0.35` choosing between K/W and mK/W, with a deliberate
    per-element override.
