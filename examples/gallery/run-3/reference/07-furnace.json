@@ -1,0 +1,112 @@
+{
+  "title": "Industrial furnace wall, steady state",
+  "units": {
+    "R": "K/W",
+    "T": "°C",
+    "q": "W",
+    "q″": "W/cm²"
+  },
+  "nodes": [
+    {
+      "id": "hot",
+      "kind": "fixed",
+      "label": "Furnace interior",
+      "sub": "f",
+      "value": "1200",
+      "at": [
+        200,
+        170
+      ]
+    },
+    {
+      "id": "mid",
+      "label": "Brick / board interface",
+      "sub": "m",
+      "value": "660",
+      "at": [
+        620,
+        170
+      ]
+    },
+    {
+      "id": "shell",
+      "label": "Steel shell",
+      "sub": "s",
+      "value": "120",
+      "at": [
+        940,
+        170
+      ]
+    },
+    {
+      "id": "amb",
+      "kind": "fixed",
+      "label": "Shop air",
+      "sub": "a",
+      "value": "30",
+      "at": [
+        1260,
+        170
+      ]
+    }
+  ],
+  "branches": [
+    {
+      "from": "hot",
+      "to": "mid",
+      "kind": "cond",
+      "label": "Firebrick courses",
+      "value": "0.06",
+      "count": 3,
+      "arrangement": "series",
+      "rate": "3000"
+    },
+    {
+      "from": "mid",
+      "to": "shell",
+      "kind": "cond",
+      "label": "Ceramic fibre board",
+      "value": "0.18"
+    },
+    {
+      "from": "shell",
+      "to": "amb",
+      "kind": "conv",
+      "label": "Natural convection",
+      "value": "0.05",
+      "side": "up"
+    },
+    {
+      "from": "shell",
+      "to": "amb",
+      "kind": "rad",
+      "label": "Shell to shop",
+      "value": "0.075",
+      "via": [
+        [
+          940,
+          300
+        ],
+        [
+          1260,
+          300
+        ]
+      ],
+      "side": "down"
+    }
+  ],
+  "sources": [
+    {
+      "to": "hot",
+      "kind": "flux",
+      "label": "Flame radiation",
+      "value": "18",
+      "sub": "fl",
+      "at": [
+        200,
+        60
+      ],
+      "angle": 90
+    }
+  ]
+}

@@ -1,0 +1,106 @@
+{
+  "title": "Subsea electronics bottle on the seabed",
+  "units": {
+    "R": "K/W",
+    "T": "°C",
+    "P": "W",
+    "q": "W"
+  },
+  "nodes": [
+    {
+      "id": "board",
+      "label": "Power board",
+      "sub": "b",
+      "value": "37",
+      "at": [
+        200,
+        170
+      ]
+    },
+    {
+      "id": "base",
+      "label": "Spreader flange",
+      "sub": "f",
+      "value": "19",
+      "at": [
+        560,
+        170
+      ]
+    },
+    {
+      "id": "turn",
+      "kind": "corner",
+      "at": [
+        860,
+        170
+      ]
+    },
+    {
+      "id": "wallin",
+      "label": "Housing bore",
+      "sub": "w",
+      "value": "13",
+      "at": [
+        860,
+        400
+      ]
+    },
+    {
+      "id": "sea",
+      "kind": "fixed",
+      "label": "Seawater",
+      "sub": "sea",
+      "value": "4",
+      "at": [
+        1220,
+        400
+      ]
+    }
+  ],
+  "branches": [
+    {
+      "from": "board",
+      "to": "base",
+      "kind": "spread",
+      "label": "Spreading into the flange",
+      "value": "0.30",
+      "rate": "60"
+    },
+    {
+      "from": "base",
+      "to": "turn",
+      "kind": "pipe",
+      "label": "Vapour chamber",
+      "value": "0.02"
+    },
+    {
+      "from": "turn",
+      "to": "wallin",
+      "kind": "conv",
+      "label": "Oil-filled gap",
+      "value": "0.08"
+    },
+    {
+      "from": "wallin",
+      "to": "sea",
+      "kind": "mixed",
+      "label": "Housing wall to sea",
+      "value": "0.15",
+      "sub": "hw"
+    }
+  ],
+  "sources": [
+    {
+      "to": "board",
+      "kind": "diss",
+      "label": "Converter loss",
+      "value": "60",
+      "sub": "d",
+      "at": [
+        200,
+        60
+      ],
+      "angle": 90
+    }
+  ]
+}
