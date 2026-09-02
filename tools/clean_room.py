@@ -231,11 +231,21 @@ def main(argv=None):
         target, sha, len(briefs)))
 
 
-def swap_block(text, after, new):
-    """Replace the first fenced block following `after`."""
-    start = text.index(after)
-    open_fence = text.index("```", start)
-    close_fence = text.index("\n```", open_fence + 3)
+def swap_block(text, after, new, skip=0):
+    """Replace a fenced block following `after`, skipping `skip` fences.
+
+    `skip` exists because the anchor is sometimes *inside* a block: the
+    describe example is introduced by a ```bash fence holding the command,
+    so the first fence after that anchor is the bash block's closing one and
+    the block wanted is the next. Getting this wrong does not raise -- it
+    quietly replaces the wrong span and leaves the original example in place,
+    which is exactly what the first build did.
+    """
+    i = text.index(after)
+    for _ in range(skip + 1):
+        open_fence = text.index("```", i)
+        i = open_fence + 3
+    close_fence = text.index("\n```", i)
     return text[:open_fence] + new + text[close_fence + len("\n```"):]
 
 
@@ -248,16 +258,19 @@ def strip_hero(target):
         sys.exit("error: STUB_JSON and STUB have drifted apart")
     stub = target / "_stub.json"
     stub.write_text(STUB_JSON, encoding="utf-8")
+    # `encoding` explicitly: PYTHONIOENCODING settles what the child writes,
+    # and this settles what the parent reads. Without it a Windows parent
+    # decodes as cp1252 and every degree sign in the page becomes "Â°".
     described = subprocess.run(
         [sys.executable, "-m", "thermodraw", "describe", "_stub.json"],
-        cwd=str(target), env=room_env(), text=True, capture_output=True,
-        check=True).stdout.replace("_stub.json:", "diagram.json:")
+        cwd=str(target), env=room_env(), capture_output=True, check=True,
+        encoding="utf-8").stdout.replace("_stub.json:", "diagram.json:")
     stub.unlink()
 
     text = swap_block(text, "## A whole diagram",
                       "```jsonc\n" + STUB_JSON + "\n```")
     text = swap_block(text, "thermodraw describe diagram.json",
-                      "```\n" + described.rstrip() + "\n```")
+                      "```\n" + described.rstrip() + "\n```", skip=1)
 
     for find, put in EDITS:
         if text.count(find) != 1:
@@ -305,8 +318,16 @@ def verify(target, briefs):
     leftover = sorted(p.as_posix() for p in (target / "examples").rglob("*.json"))
     if leftover:
         problems.append("finished diagrams left: " + ", ".join(leftover))
-    if "hero" in (target / "docs" / "schema.md").read_text(encoding="utf-8"):
+    schema = (target / "docs" / "schema.md").read_text(encoding="utf-8")
+    if "hero" in schema:
         problems.append("schema.md still names the hero")
+    # Naming it is one leak; showing it is the other. A bad fence swap
+    # replaced the wrong span once and left the whole worked example behind.
+    for shown in ("j --cond-- c", "Switching loss", "Die attach"):
+        if shown in schema:
+            problems.append("schema.md still shows the hero: " + shown)
+    if "Â" in schema:
+        problems.append("schema.md has mojibake: something was decoded twice")
     # Anything else at the top level was put there by accident, and the
     # accident worth catching is a subprocess writing into the room.
     expected = {".git", ".gitattributes", ".gitignore", "LICENSE", "NOTICE",
