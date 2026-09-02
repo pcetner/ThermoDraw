@@ -187,7 +187,10 @@ deciding what it showed.
 **The physics claim — new, and the sharpest.** Each brief's numbers close by
 construction, and each reference solution is silent under `check --physics`.
 So a `--physics` finding on a run-3 diagram is either the agent's arithmetic
-or the library's, and the transcript says which. The claim **fails** if any
+or the library's, and the transcript says which. The briefs do **not** say
+this: an agent told the numbers ought to close has an incentive to adjust one
+until they do, which would destroy the only signal this claim carries. They
+are told to paste the output verbatim and to leave the brief's values alone. The claim **fails** if any
 final diagram reports a `node-does-not-balance` or `rate-does-not-match` that
 the reference does not.
 
