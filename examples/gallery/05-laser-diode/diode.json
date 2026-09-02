@@ -2,28 +2,27 @@
   "title": "High-power laser diode bar on a microchannel cooler",
   "units": {"R": "K/W", "T": "°C", "P": "W", "q": "W", "q″": "W/cm²"},
   "nodes": [
-    {"id": "j",    "label": "Junction",      "sub": "j",    "value": "65", "at": [200, 150], "side": "down"},
-    {"id": "sol",  "label": "AuSn solder",   "sub": "sol",  "value": "58", "at": [460, 150]},
-    {"id": "sm",   "label": "CuW submount",  "sub": "sub",  "value": "51", "at": [720, 150]},
-    {"id": "smb",  "kind": "corner", "at": [980, 150]},
-    {"id": "cool", "label": "Cooler body",   "sub": "cool", "value": "41", "at": [1240, 150]},
-    {"id": "wat",  "kind": "fixed", "label": "Coolant water", "sub": "w", "value": "18", "at": [1500, 150]},
-    {"id": "tech", "label": "TEC hot face",  "sub": "hot",  "value": "48", "at": [1240, 460]},
-    {"id": "amb",  "kind": "fixed", "label": "Ambient air", "sub": "amb", "value": "25", "at": [1500, 460]}
+    {"id": "j",   "label": "Diode junction",   "sub": "j",   "value": "65", "at": [200, 150], "side": "down"},
+    {"id": "sol", "label": "AuSn solder joint", "sub": "sol", "value": "58", "at": [460, 150]},
+    {"id": "sm",  "label": "CuW submount",     "sub": "sm",  "value": "51", "at": [720, 150]},
+    {"id": "smb", "label": "Submount base",                                 "at": [980, 150]},
+    {"id": "cb",  "label": "Cooler body",      "sub": "cb",  "value": "41", "at": [1240, 150]},
+    {"id": "w",   "kind": "fixed", "label": "Channel water", "sub": "w",   "value": "18", "at": [1500, 150]},
+    {"id": "th",  "label": "TEC hot face",     "sub": "h",   "value": "48", "at": [1240, 420], "side": "down"},
+    {"id": "amb", "kind": "fixed", "label": "Ambient air",   "sub": "amb", "value": "25", "at": [1500, 420]}
   ],
   "branches": [
-    {"from": "j",    "to": "sol",  "kind": "cond",    "label": "Semiconductor",      "value": "0.0875"},
-    {"from": "sol",  "to": "sm",   "kind": "contact", "label": "AuSn joint",         "value": "0.0125"},
-    {"from": "sm",   "to": "smb",  "kind": "cond",    "label": "Spreading in CuW",   "value": "0.15"},
-    {"from": "smb",  "to": "cool", "kind": "contact", "label": "Indium layer",       "value": "0.008"},
-    {"from": "cool", "to": "wat",  "kind": "conv",    "label": "Microchannel water", "value": "0.045"},
-    {"from": "tech", "to": "amb",  "kind": "conv",    "label": "Baseplate to air",   "value": "0.23"}
+    {"from": "j",   "to": "sol", "kind": "cond",    "label": "Semiconductor",         "value": "0.0875"},
+    {"from": "sol", "to": "sm",  "kind": "contact", "label": "Solder to submount",    "value": "0.0125"},
+    {"from": "sm",  "to": "smb", "kind": "spread",  "label": "Spreading in submount", "value": "0.15"},
+    {"from": "smb", "to": "cb",  "kind": "contact", "label": "Indium layer",          "value": "0.008"},
+    {"from": "cb",  "to": "w",   "kind": "conv",    "label": "Microchannel water",    "value": "0.045", "rate": "20"},
+    {"from": "cb",  "to": "th",  "kind": "flow",    "label": "TEC pumps heat", "sub": "pump", "value": "60", "side": "right"},
+    {"from": "th",  "to": "amb", "kind": "conv",    "label": "Baseplate to air",      "value": "0.23", "rate": "100"}
   ],
   "sources": [
-    {"to": "j",    "kind": "diss", "label": "Waste heat",     "sub": "d", "value": "80",  "angle": 0, "at": [40, 150]},
-    {"from": "j",  "kind": "flux", "label": "Emitting face",  "sub": "e", "value": "800", "angle": 270},
-    {"from": "cool", "kind": "flow", "label": "Pumped by TEC", "sub": "p", "value": "60", "angle": 90},
-    {"to": "tech", "kind": "flow", "label": "From TEC cold side", "sub": "p", "value": "60", "angle": 90, "at": [1240, 300]},
-    {"to": "tech", "kind": "diss", "label": "TEC electrical work", "sub": "el", "value": "40", "angle": 0, "at": [1010, 460]}
+    {"to": "j",   "kind": "diss", "label": "Waste heat",   "sub": "d",   "value": "80", "at": [40, 150]},
+    {"from": "j", "kind": "flux", "label": "Emitting face", "sub": "e",  "value": "800", "angle": 270},
+    {"to": "th",  "kind": "diss", "label": "TEC electrical power", "sub": "tec", "value": "40", "at": [980, 420]}
   ]
 }

@@ -1,34 +1,42 @@
 {
-  "title": "GEO communications satellite north panel, sunlit",
-  "units": {"R": "K/W", "C": "kJ/K", "T": "°C", "P": "W", "q": "W"},
+  "title": "GEO communications satellite north panel — TWTA to radiator, sunlit",
+  "units": {"R": "K/W", "C": "J/K", "T": "°C", "P": "W", "q": "W"},
   "nodes": [
-    {"id": "twta",  "label": "TWTA baseplate",  "sub": "twta", "value": "78",  "at": [200, 150]},
-    {"id": "panel", "label": "Equipment panel", "sub": "pnl",  "value": "45",  "at": [560, 150],
-     "side": "down"},
-    {"id": "rad",   "label": "Radiator",        "sub": "rad",  "value": "22",  "at": [920, 150]},
-    {"id": "space", "kind": "fixed", "label": "Deep space", "sub": "space", "value": "-269",
-     "at": [1240, 150], "side": "right"}
+    {"id": "twta",     "label": "TWTA baseplate",  "sub": "twta",  "value": "78",   "at": [220, 180]},
+    {"id": "panel",    "label": "Equipment panel", "sub": "pnl",   "value": "45",   "at": [540, 180], "side": "up"},
+    {"id": "radiator", "label": "Radiator",        "sub": "rad",   "value": "22",   "at": [860, 180]},
+    {"id": "space",    "kind": "fixed", "label": "Deep space", "sub": "space", "value": "-269",
+     "at": [1180, 180], "angle": 90}
   ],
   "branches": [
-    {"from": "twta", "to": "panel", "kind": "contact", "label": "Silicone gasket", "value": "0.05",
-     "at": [320, 150]},
-    {"from": "panel", "to": "rad", "kind": "cond", "label": "Heat pipes", "value": "0.0018",
-     "side": "down"},
-    {"from": "rad", "to": "space", "kind": "rad", "label": "Second-surface mirror", "value": "1.15"},
-    {"from": "panel", "to": "space", "kind": "rad", "label": "MLI blanket", "value": "26",
-     "via": [[660, 150], [660, 20], [1240, 20]], "at": [950, 20]},
-    {"from": "panel", "to": "rail", "kind": "cap", "label": "Panel mass", "sub": "pnl",
-     "value": "18", "via": [[460, 150], [460, 430]]}
+    {"from": "twta", "to": "panel", "kind": "contact",
+     "label": "Filled silicone gasket", "value": "0.05", "at": [380, 180], "side": "up"},
+
+    {"from": "panel", "to": "radiator", "kind": "pipe",
+     "label": "Embedded heat pipes", "value": "0.00182", "rate": "220",
+     "at": [730, 180], "side": "down"},
+
+    {"from": "radiator", "to": "space", "kind": "rad",
+     "label": "Second-surface mirror, ε 0.80", "value": "1.15", "at": [1090, 180], "side": "down"},
+
+    {"from": "panel", "to": "space", "kind": "rad",
+     "label": "MLI blanket, ε* 0.02", "value": "26",
+     "via": [[620, 180], [620, 60], [1180, 60]], "at": [1000, 60], "side": "up"},
+
+    {"from": "panel", "to": "rail", "kind": "cap",
+     "label": "Panel honeycomb", "sub": "pnl", "value": "18000",
+     "via": [[440, 180]], "at": [440, 350]}
   ],
   "sources": [
-    {"to": "twta", "kind": "diss", "label": "TWTA waste heat", "value": "220", "sub": "twta",
-     "angle": 0},
-    {"to": "panel", "kind": "radin", "label": "Earth IR", "value": "12", "sub": "eir",
-     "angle": 45, "at": [360, 10]},
-    {"to": "panel", "kind": "diss", "label": "Survival heater (off)", "value": "30", "sub": "htr",
-     "angle": 90, "at": [560, 30]},
-    {"to": "rad", "kind": "radin", "label": "Absorbed solar", "value": "45", "sub": "sol",
-     "angle": 270}
+    {"to": "twta", "kind": "diss", "label": "TWTA waste heat", "value": "220", "sub": "twta"},
+
+    {"to": "panel", "kind": "radin", "label": "Earth IR", "value": "12", "sub": "eir", "angle": 315, "at": [380, 320], "side": "left"},
+
+    {"to": "panel", "kind": "diss", "label": "Survival heater (30 W when on)", "value": "0",
+     "sub": "htr", "angle": 225, "at": [660, 350], "side": "right"},
+
+    {"to": "radiator", "kind": "radin", "label": "Absorbed solar", "value": "45", "sub": "sol",
+     "angle": 270, "at": [860, 300]}
   ],
-  "rail": {"reference": "space", "y": 430, "span": [200, 1240]}
+  "rail": {"reference": "space", "y": 400}
 }

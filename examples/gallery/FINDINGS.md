@@ -1,227 +1,296 @@
-# What five agents found
+# What five agents found, in a clean room
 
-Five thermal networks, five domains, five agents that had never seen the
-library, each working from `docs/schema.md` and a plain-English brief. All five
-diagrams check clean. Getting them there cost 22 rounds between them, and
-**6 of the 18 remedies the checker offered actually worked**.
+The second run of the gallery, and the first one whose reading restriction
+held. Five briefs, five agents, `docs/schema.md` and nothing else — no
+`CLAUDE.md`, no design record, no tests, no goldens, no finished diagram to
+copy. `RERUN.md` is the protocol; this is what it produced, graded against the
+outcomes that protocol wrote down before the run. The first run, which leaked,
+is kept as `FINDINGS-first-run.md`.
 
-| | domain | rounds | remedies that worked |
-|---|---|---|---|
-| 01 | GEO satellite payload panel | 6 | 1 of 9 — three made it strictly worse |
-| 02 | Two-zone house, ground-coupled | 8 | 1 of 4 |
-| 03 | LHe dewar, two-stage cryocooler | 4 | 1 of 2 — one has no fixed point |
-| 04 | Two-phase immersion rack | 1 | none offered |
-| 05 | Laser diode on a microchannel cooler | 3 | 3 of 3, first try |
+| | run on | model | harness | from |
+|---|---|---|---|---|
+| all five | 2026-09-01 | `claude-opus-5` | Claude Code, general-purpose subagents, in parallel | clean-room commit `df3a92f`, a `git archive` of `c95b816` with the files `RERUN.md` lists removed |
 
-The spread between 01/02 and 05 is the shape of the result. The remedies hold
-up on a linear stack and fall apart at a node where several branches meet,
-which is where an author actually needs them.
+The clean room was a sibling directory of this checkout, not inside it, so no
+ancestor `CLAUDE.md` could be loaded. Each agent's transcript is committed
+beside its diagram as `transcript.md`, one commit per agent. Every command in
+them is recorded with its output, and every `check` run reproduces against
+this tree: all five SVGs are byte-identical to fresh renders of their JSON.
 
-Every claim below was reproduced against the library before being written down.
+| | diagram | rounds to exit 0 | standing notes | `check --physics` |
+|---|---|---|---|---|
+| 01 | `satellite.json` | 9 | — | 4 warnings |
+| 02 | `house.json` | 4 | `parallel-pair-same-side` | 2 warnings |
+| 03 | `dewar.json` | 3 | `parallel-pair-same-side` ×2 | 2 warnings |
+| 04 | `rack.json` | 5 | — | 4 warnings |
+| 05 | `diode.json` | 2 | — | 2 warnings |
 
-> **Since this was written, §1 to §5 have been fixed.** Each section below is
-> left as the agents found it, because the record of what went wrong is worth
-> more than a tidy list of what is now right. Where a fix landed it is marked
-> **[fixed]**, and the last section says what changed.
->
-> Two consequences worth knowing before you read on. `04-immersion` and
-> `05-laser-diode` **now report a warning** where they used to be clean: the
-> new connectivity check finds exactly the severed network their agents had to
-> describe in prose. That is the check working, not a regression. And the
-> remedy strings quoted below no longer exist in that form.
+## The pre-registered outcomes
 
----
+`RERUN.md` named four ways the run could go, before it went. All four went the
+way that counts as a finding.
 
-## 1. The remedies are wrong more often than they are right — [fixed]
+**The vocabulary claim fails, in every domain.** Each agent reported things it
+could not express and had to approximate, and each ranked them by how badly
+the drawing lies as a result. The one gap the protocol expected to recur —
+active, pumped heat — did, in 03 and 05. Everything else in the list below is
+new. What is *not* on it is also the result: of the first run's nine gaps,
+eight shipped as symbols and fields, and no agent asked for any of them again.
+`phase`, `spread`, `flow`, `count` and `mixed` were each used for exactly what
+they were built for, and three agents said so unprompted. The second run's
+gaps are not glyphs. They are things the data model cannot state.
 
-All four of these were introduced in the same change that claimed each finding
-"names the schema field that fixes it". Three agents hit them independently.
+**The documentation claim fails.** 01 needed nine `check` rounds, three past
+the limit the protocol set, and every one of the nine was about label
+placement. Four of the five asked a question the schema should have answered
+and had to guess: whether `rail` and a node's `label` are optional, which
+units `--physics` accepts, whether `rate` on a counted branch is per item, and
+which of two contradictory sentences about `flow` to believe. One complaint
+was unanimous: the schema's second paragraph says the `render` output "draws
+nothing" without a theme step, and all five agents could not tell whether the
+`render` *command* they were told to run would produce a file that draws.
+It does; the CLI applies the theme. Two words — "from Python" — close it.
 
-**`angle` is offered for every element, and means three different things.**
-The schema's own tables say so: on a node it "moves the label and nothing
-else"; on a branch it "overrides the direction taken from the wire"; on a
-source it aims the arrow. Only the node case is label advice. Following it on
-a branch lays the conduction box diagonally across a vertical wire — and
-`check` then reports the diagram clean:
+**The remedy claim fails.** Applied literally, as the briefs required:
 
-```
-angle=None  symbol drawn at 90.0 deg   check: clean
-angle=45    symbol drawn at 45.0 deg   check: clean
-```
+| | applied | cleared its finding | made the next report strictly worse | not applicable as written |
+|---|---|---|---|---|
+| 01 | 15 | 9 | 3 | 2 |
+| 02 | 1 | 0 | 0 | 1 |
+| 03 | 6 | 2 | 2 | 1 |
+| 04 | 7 | 3 | 2 | 3 |
+| 05 | 2 | 2 | 0 | 0 |
+| | **31** | **16** | **7** | **7** |
 
-This is the most dangerous of the four, precisely because it is the one that
-appears to work.
+Better than the first run's 6 of 18, and for a reason the table shows: the
+remedy that works is "move the source further from its node with `at`", and
+05 hit nothing else. The seven that could not be applied are two defects in
+the checker, below, not seven judgement calls. Three agents converged only by
+abandoning the remedies for a restructure the finding never suggested — and
+in each case the restructure cleared everything at once, which says the
+findings were describing one geometric mistake as several label problems.
 
-**`via` is offered on sources, which have no such field.** A source's lead is a
-wire carrying the source's ref, so a source lead as culprit produces *"move a
-`via` waypoint on source 1 -> panel"*. The validator rejects it outright:
-`source 0: unknown field 'via'`.
+**The run was clean**, with two caveats worth recording. `docs/schema.md`
+quotes `examples/hero.json` in full and its `describe` output, so "no
+finished diagram" was not strictly true: every agent had one worked example,
+and 03 found it actively misleading (below). And the user's global
+instructions file, which names browser tooling and nothing about this
+project, is loaded into every session and cannot be excluded by the recipe.
+No transcript shows a file read beyond the brief and the schema; 02 built a
+probe file in a scratch directory outside the repository to test a hypothesis
+rather than open `src/`.
 
-**`side` is offered without consulting the occupancy that produced the
-finding.** Telling a node to try left or right, when those are the two
-directions its branches leave in, is advice guaranteed to print the label on a
-wire — and the checker held the `Occupancy` when it said so. On a vertical
-branch the two untried sides lie *along* the wire, so following it turned a
-warning into an error.
+## What the vocabulary cannot say, second set
 
-**`parallel-pair-same-side` has no fixed point with three parallel paths.**
-Two sides, three branches: the remedy cannot be satisfied. It should say so.
+Ranked by how many briefs hit it and how badly the drawing misleads.
 
-## 2. Two false cleans — [fixed]
+**The format cannot say that two elements are related — 5 of 5.** No ids on
+branches or sources, no groups, no cross-references. It is one hole with five
+faces. 03's two-stage cryocooler is one machine and can only be two unrelated
+`flow` sources; nothing says stage 2's lift is a load on stage 1. 03's current
+leads conduct and dissipate, and become a branch and a source with no link.
+05's 80 W and its 800 W/cm² are the same joules stated twice, and with no
+`area` and no cross-reference the agent drew both, so the junction now shows a
+balance that deliberately does not close — the only place in the five where
+the picture asserts something false rather than omitting something true. 05's
+TEC has a 60 W pumped and a 40 W consumed on two unrelated elements, so its
+COP is unwritable. 01's survival heater has a 30 W rating and a 0 W value, and
+the rating went into label prose.
 
-**Setting `side` silences `parallel-pair-same-side` whether or not it helped.**
-The check skips any pair where neither label is `auto`, so following its own
-remedy removes the pair from consideration:
+**A fluid stream has two temperatures; a node has one — 2 of 5.** 04's
+technical water enters at 30 °C and leaves at 38 °C. Three shapes were tried
+before any JSON was written; the one taken puts 38 °C in the data and 30 °C
+in prose, and the closed return leg does not exist in the diagram. 02 found
+the other face of it: `flow`'s direction is the heat's, so infiltration — a
+185 W loss — must run `gf → out`, and the chevrons point *out* of the house,
+the opposite of the sentence the brief spends two lines on. Undetectable to a
+reader.
 
-```
-both auto          -> ['label-in-a-corridor', 'parallel-pair-same-side']
-both set to "down" -> ['label-in-a-corridor']          <-- same side, silent
-set to up / down   -> []
-```
+**No quantity outside `R C T P q q″` — 4 of 5.** No area, dimension, flow
+rate, emissivity or ΔT. 01's heat pipe is specified as 0.4 K at 220 W, which
+is how heat pipes are specified; divided into `0.00182 K/W` it becomes a
+linear conductance the physics check extrapolates to 12.6 kW. So the
+first run's "isothermal link" gap is half closed: the `pipe` symbol exists,
+and the quantity a heat pipe is quoted in still does not. 02's "dominant loss
+per unit area" was dropped outright, there being nothing to approximate it
+with. 05's 100 µm → 10 mm spread, the reason the spreader exists, survives as
+fanning hatch lines and a word.
 
-The author does the documented thing and is rewarded with a clean report
-either way. Found by 03.
+**No way to mark a number a capacity, a limit, or provisional — 3 of 5.**
+03's 35 W and 1.5 W are what the stages *can* lift, not what arrives; both of
+its physics warnings follow from that and nothing in the file can say so. The
+checker's own remedy text — "if a flow is a capacity rather than a load, say
+so in the `label`" — is the library conceding the point in prose. 05
+generalises it: `--physics` is opt-in because a sketch with placeholder
+numbers is a diagram too, and the file has nowhere to record which of its
+numbers are placeholders.
 
-**A node with no temperature prints a bare italic `T`,** and `check` says
-nothing. Interior junctions between series layers — four of them in 02, one in
-05 — have no temperature to state. Both agents were forced to `corner`, which
-draws nothing and loses the name. Found independently by 02 and 05.
+**Nothing marks a branch as active — 3 of 5, and the one gap expected.**
+`flow` was the right choice for a Peltier, a pumped loop, a stairwell. It
+carries direction and a rate. It cannot say the branch does work: 05's TEC
+moves 60 W from 41 °C to 48 °C and renders identically to a physically
+impossible passive link.
 
-## 3. Nothing checks that the network is connected — [fixed]
+**Missing kinds and structures.** Boiling and condensation (04: drawn as the
+same `R_conv` as the dry cooler's air side). A thermal bridge (02: a steel
+lintel quoted air-to-air had to be `mixed`, so the one path the brief calls
+dominant says "mechanism unstated"; `cond` would have been a lie). Enclosure
+or nesting (03: a dewar is concentric, and the drawing is a chain). `count`
+for *different* paths in parallel (03: a cryostat stage is three unlike
+paths, so the comb, the condensed form and the page control are unavailable
+to the commonest cryogenic figure there is). `count` with an aggregate value
+(01: "heat pipes", one ΔT, no pipe count). An operating case (01: "in
+sunlight, not eclipse" has nowhere to go but the undrawn `title`). A control
+element (01: the thermostat is absent). Non-thermal power leaving a node
+(05: 120 W of light, ranked last by the agent that lost it).
 
-04 drew a two-phase loop whose two halves are joined only by two `flow`
-annotations pointing at each other. The result is a thermal network **severed
-into two components**, and neither instrument noticed. 02 left its roof wired
-to nothing indoors, likewise unremarked.
+## Where the documentation failed
 
-The obvious fix is barred: the hero's own *wire* graph has two components
-(sizes 3 and 24), so a check on wire connectivity would condemn the flagship.
-The right formulation is a graph over **nodes joined by branches**.
+Line numbers are in `docs/schema.md` at `c95b816`. Each was checked.
 
-A `break` branch counts, though it carries no heat. Excluding it was tempting
-— the two sides of a standoff really are thermally apart — and wrong: this
-finding is for a path the author *meant* to draw and did not, and a break is
-the opposite, an explicit statement that nothing flows. Excluding it warns
-about every standoff ever drawn.
+- **Lines 12–15, the `render`/`theme` paragraph** — 5 of 5, unanimous. It is
+  about the Python function and does not say so. Every agent grepped its own
+  SVG for the `:root` block to find out whether the file it was about to
+  commit would draw.
+- **Line 426, "heat carried from one node to another by a moving fluid has no
+  branch kind yet"** — stale since `flow` shipped as a branch, and it sits
+  200 lines under the table that documents the branch. 02 had to choose which
+  half of the page to trust before drawing either of the two features that
+  most needed it.
+- **Line 250, "`at` only has to be roughly right"** — wrong in the way that
+  matters. A source's `at` sets its lead, the lead is an obstacle other labels
+  are pushed around, and 01 traced three findings to it, including one where
+  moving a source further out *on the tool's instruction* lengthened the lead
+  into a collision. 03: automatic placement is 38 units from the node, which
+  for a 123-wide label is not "room for its label", and two auto-placed
+  sources on one node overlapped.
+- **Line 449, "a unit the check does not know skips the diagram"** with no
+  list — 4 of 5. The check knows `K/W`, `°C/W`, `C/W`, `mK/W`, `K/kW` for
+  resistance and `W`, `kW`, `mW` for power (`_physics.py:38`); it never reads
+  a capacitance, and it never scales a temperature, since only differences
+  are used. So 01's `18000 J/K` and 04's `240000 J/K`, written in place of
+  the briefs' `18 kJ/K` and `240 kJ/K` to be safe, bought nothing but six
+  digits on the page. The failure mode the sentence names is silence, which
+  is why they hedged.
+- **The hero as the only worked example** — 2 of 5, decisive there. It shows
+  none of `spread`, `flow`, `flux`, `break`, `count`, `rate`, `phase`,
+  `pipe`, `mixed` or `corner`; 05 needed four of those and assembled its
+  `flow` branch from three prose paragraphs that never show JSON. 03 found
+  the hero misleading in a specific way: "leave a node sideways before
+  turning" is stated for the end a branch leaves, and the hero then drops
+  straight down *onto* its ambient node, which works only because that node
+  has no other traffic. Copying it was the root cause of four findings.
+- **Unstated:** whether `rail` and a node's `label` are optional (02 invented
+  four labels and a 2771 px canvas rather than risk a dropped one); whether
+  `rate` on a counted branch is per item (04 left the per-processor 400 W off
+  the page rather than guess — the code reads it as the whole group's,
+  `_physics.py:208`); what `--physics`'s tolerance is; what `describe`'s
+  `flipped`, `pushed N` and `OVERLAPS` mean; and that supplying `rate` opts a
+  branch into `rate-does-not-match`, so the incentive as documented is to
+  leave it off.
 
-Nothing checks energy balance either. 01's heat pipe is drawn with a
-resistance that contradicts the temperatures printed either side of it by a
-factor of 50, and the report is clean.
+## What the library got wrong
 
-## 4. `describe` reports everything except the network
+Each of these was found by an agent that could not read the source, and each
+was confirmed against it afterwards.
 
-Three of five named this as its single largest omission, and two called it the
-most valuable tool they had. It caught what `check` passed: a rotated symbol,
-a bare `T`, a source auto-placed 34 units from its node, a capacitance sitting
-at `a101.768` instead of vertical.
+1. **`--physics` skips a node silently when a neighbour has no temperature.**
+   `_physics.py:170`: a path to a node with no stated `T` sets `known = False`
+   and the node is dropped without a word; the same at line 125 for the node
+   itself, and at 133 for a `flux` source. The schema documents the `fixed`,
+   `phase` and `flux` skips and not this one, and the trigger is the idiom the
+   schema recommends for layered assemblies — interior junctions with no
+   temperature. 02 proved it by experiment: `gf`, the worst-balanced node in
+   its system at 1.47 kW in against 693 W out, is not mentioned in the output.
+   05 counted: of eight nodes, two reported, three silently skipped, and a
+   reader would conclude they passed. Both asked for one line, `5 of 8 nodes
+   checked, 3 skipped`. This is the most actionable thing in the run.
+2. **A wire's remedy names a `via` the branch cannot have.** `_check.py:240`
+   says "move a `via` waypoint on {branch}" for any branch wire. 01 got it
+   twice on a straight run with no `via`; 04 got it three times on a
+   `count: 8` branch, which the schema says cannot take `via` at all — and a
+   counted group is wide, so it is exactly what labels collide with. The
+   source case was already special-cased at line 237; the branch cases were
+   not.
+3. **`wire-through-symbol` offers `via` for a source's lead.** `_check.py:740`
+   is a fixed string; 01 was told to route a source around with a field the
+   source table does not have.
+4. **`parallel-pair-same-side`'s remedy is a fixed string.** `_check.py:810`:
+   "set `side` to \"down\" on the lower of the two", not re-derived from the
+   file. 02's pair both already carried `"side": "down"` and the lower one was
+   the lower one; the remedy was a no-op and the note survived it. With three
+   parallel branches and two usable sides, it only rotates which pair is
+   reported — 02 and 03 each proved the cycle — and the one escape, `side:
+   "right"`, puts the label along the wire into the next node for two errors
+   and four warnings. Neither the note nor the `side` table says left and
+   right are meaningless on a horizontal run. Both agents left the note
+   standing, deliberately, and were right to.
+5. **A counted source prints "8 in parallel".** `_layout.py:399` passes a
+   source's `count` through `count_text(count, "parallel")`; the schema says
+   sources "simply add, so there is no `arrangement` to state". Eight
+   processors are not in parallel. 04 left it, because removing `count` would
+   delete "400 W each, eight of them" from the data to fix a wording bug.
+6. **`label-adrift` cannot say the label is too wide.** 04's `sat` label is
+   192 wide between runs of 260, so it is 48 too wide on both sides. The
+   finding blamed the neighbour on one side, then the other, with the
+   overshoot at exactly 48 both times; the named remedies moved neighbours
+   and changed nothing, and `angle` made it 84. `nodes-too-close` speaks in
+   the right terms and did not fire for those runs. Two of 04's five rounds
+   went to proving a remedy had no effect.
+7. **`describe`'s `network:` block omits what the agents most needed to
+   verify.** Sources are absent from it (01, 03, 05: "if I had attached the
+   heater to the wrong node the block would be byte-identical"). Direction is
+   invisible on the one directed branch kind — `coil --flow-branch-- tw`,
+   symmetric dashes, and written backwards it would look the same (all four
+   that used `flow`). Parallel groups collapse to `gf --mixed/mixed/flow-branch--
+   out`, so the two paths easiest to swap cannot be told apart, and
+   `j --cond-- ihs` gives no hint of eight paths. `rate` appears only inside
+   label text. The `elements` table does carry direction, as `source 1 shield
+   ->`; the block where you would look does not.
+8. **The label solver is non-local, and nothing says so.** 01, round 4: freeing
+   one source let another's label travel 160 units across a 1234-wide canvas
+   onto a different branch's label. "The single most important thing to know
+   before laying out a diagram with more than four elements on a node."
 
-But it prints `wire x19` and not one coordinate, and it never states what is
-connected to what. 02 put it best: *the one question `describe` exists to
-answer is the one it doesn't.*
+Cosmetic but consistent, 4 of 5: on a Windows cp1252 console, `check` and
+`describe` print characters outside the codepage as `\uXXXX` escapes
+(`__main__.py:84`) and the rest raw, so `ε` is escaped and `°C` is not. Two
+agents re-captured their `--physics` output under `PYTHONIOENCODING=utf-8`.
+Under `--json` on that console the escapes happen to be valid JSON, but the
+stream is the console's encoding, not UTF-8.
 
-## 5. The documentation — [fixed]
+## The physics
 
-- **`size` is never defined.** It appears in `docs/schema.md` only inside the
-  check-codes table, as a field two findings tell you to adjust, in a page
-  whose opening line calls itself "the whole format".
-- **The `via` sentence is wrong.** *"waypoints work on a capacitance exactly as
-  they do on any other branch, which is how you free up the space directly
-  under a node that already has too much attached to it."* A rail branch's
-  endpoint is always directly below its node, so a waypoint buys a detour that
-  comes back to the same place. Cost 03 a full re-layout.
-- **Whether `value` is optional on a branch is not stated.** Both 03 and 04
-  needed a path the brief gives no number for.
-- **`angle`'s three meanings are never set beside each other**, and the
-  consequence that a node label cannot be sent *below* the line by `angle`
-  alone is never stated. Four of 01's six rounds were about that one fact.
+All five fail `check --physics`, 14 warnings between them. No agent changed a
+diagram to quiet it, independently and for the same stated reason: the
+numbers are the brief's, and retuning a resistance to please a tool would be
+falsifying data. Four of the five did the arithmetic by hand before writing
+any JSON and predicted the warnings they later got. Every warning is a
+contradiction inside a brief — 01's gasket at 0.05 K/W cannot drop 33 K at
+220 W; 04's CDU cannot pass 4 kW at 12 K over 0.0019 K/W — and `RERUN.md` said
+in advance that if this happened it would be a fact about the briefs, not the
+agents. It is. The briefs' numbers were written to read well, not to close,
+and the next set should be written to close.
 
----
+Two things the check did right are worth as much as the list above: it folded
+`count: 8, arrangement: parallel` exactly as documented, proven by 04's hot
+half balancing; and it folded a `flow` branch and a `diss` source into one
+correct 100 W balance at 05's TEC hot face, which one agent called the tool
+doing something genuinely hard, correctly.
 
-## What was fixed
+## What this changes
 
-- **`angle` is offered only for a node's label**, the one element where it
-  means what the remedy said. `via` is never offered on a source, which has no
-  such field. `side` is offered only for directions `core.free_sides` says are
-  actually free — the checker now asks the occupancy it is holding.
-- **`parallel-pair-same-side` no longer skips a pair whose sides were set
-  explicitly**, so its own remedy can no longer buy a clean report by silencing
-  it.
-- **A node with no value and no sub draws no `T`.** Interior junctions stop
-  needing to be `corner`s.
-- **`network-in-pieces`** is new: a graph over nodes joined by branches, so the
-  hero's two-piece wire graph is not condemned. Its remedy names why a source
-  cannot join two nodes.
-- **A waypoint on a rail branch now frees the space it promised.** The rail end
-  drops from the last waypoint rather than from the node, which makes the
-  sentence in §5 true rather than merely corrected.
-- **`size` is defined**, branch `value` is documented as optional, and the
-  Angles section now says outright that no `angle` sends a node's label below
-  the line.
+The first run's headline was that the symbol set was short by nine. Eight of
+those shipped, and this run did not ask for them again. Its headline is
+different: every one of the 23 rounds across the five agents was a layout
+round, and not one concerned whether a diagram said the right thing — the
+network layer is the whole of the iteration cost — and the gaps that remain
+are in what the format can *state*, not what it can draw. Ids and relations
+between elements, quantities beyond the six the units block knows, a
+capacity-versus-load distinction, an inlet and an outlet on a stream. Those
+are schema decisions, and each one is now backed by a transcript in which
+someone needed it.
 
-§6 was untouched when this was written. Since then eight of its nine gaps
-have shipped, in `a47d64a` and after — `flow` as a directed branch, `rate`,
-`spread`, `phase`, `pipe`, `count` with `arrangement`, `mixed`, and the rule
-that a bare `T` is not a statement. Active, pumped heat is the one still open.
-
----
-
-## 6. What the vocabulary cannot say
-
-This is what the exercise was for. Ranked by how many domains needed it and
-how badly the drawing lies without it.
-
-**Two-ended advective transport — heat carried by a moving fluid.** Needed by
-three of the five, and the only gap that makes a drawing state something
-false. Infiltration, an open stairwell between zones, a pumped water loop: in
-each case heat leaves one node and arrives at another because mass moves. A
-`flow` source is the right *quantity* with the wrong *arity* — it has one end.
-02 drew the stairwell with one end missing, so 240 W appears at the upper zone
-from nowhere and never leaves the lower one. 04's loop severed its own network
-in half. Both refused to fake it as an `R_conv`, which would have named physics
-that is not happening.
-
-**A branch cannot carry a heat rate.** Five of 03's numbers are heat loads in
-watts on paths — the actual subject of a cryostat budget — and there is
-nowhere to put them. They ended up inside the free-text `label`, reading as
-part of the path's name, bypassing the `units` block entirely.
-
-**Spreading resistance.** 05's largest resistance. Drawn as `cond`, whose
-library-set subscript the schema says "names the physics", so the diagram
-positively asserts one-dimensional conduction for the one path that is not.
-
-**Active, pumped heat.** A Peltier stage and a cryocooler both move heat
-against a gradient. 05 drew its TEC as two `flow` annotations plus a `diss`,
-with nothing stating they are one device.
-
-**Latent heat at constant temperature.** 04's condensation is 3.2 kW with no
-temperature drop — the whole reason a two-phase system exists. Representable
-only by collapsing both surfaces onto one node: correct by erasure.
-
-**An isothermal link.** A heat pipe drops 0.4 K at load. 01 divided by the
-load to get `0.0018 K/W`, a number that encodes one operating point and wears
-solid-conduction hatching on a two-phase device.
-
-**Multiplicity.** 04's eight processors. There is no `x8`, so a reader
-multiplying the drawn source by the drawn resistance gets 88 K and expects a
-137 °C junction against the 72 °C stated.
-
-**A combined-mechanism resistance.** 02's window is "conduction and convection
-at 0.31 K/W" as one number. Flattened to `cond`, section hatching and all.
-
-**An interior node with no temperature.** See §2.
-
----
-
-## A note on method
-
-The harness auto-injected the project `CLAUDE.md` into every agent's context
-before it received its brief. All five disclosed this. None read `src/`,
-`tests/`, the README, or an existing diagram, and none reported it changing a
-layout decision — but the reading restriction was not intact, so the
-*documentation-quality* half of this result is softer than it looks. The
-vocabulary findings are unaffected: knowing the design rationale does not hand
-anyone a spreading-resistance symbol.
-
-Suppress that injection before re-running. `RERUN.md` is how, with the
-outcomes written down in advance; it cannot be done from inside this
-checkout, for the same reason this run leaked.
+The cheap fixes are items 1 to 5 above and the first two documentation lines.
+None needs a design decision, and all of them were reached by an agent
+working from the schema alone, which is the reader they would be fixed for.

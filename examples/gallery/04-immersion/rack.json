@@ -1,35 +1,38 @@
 {
   "title": "Two-phase immersion-cooled rack with a condenser loop",
   "units": {"R": "K/W", "C": "J/K", "T": "°C", "P": "W", "q": "W"},
-
   "nodes": [
-    {"id": "j",    "label": "Processor junction", "sub": "j",    "value": "72", "at": [200, 150]},
-    {"id": "ihs",  "label": "Heat spreader",      "sub": "ihs",  "value": "61", "at": [540, 150]},
-    {"id": "sat",  "label": "Boiling dielectric", "sub": "sat",  "value": "49", "at": [880, 150]},
-    {"id": "coil", "label": "Condenser coil",     "sub": "coil", "value": "40", "at": [1220, 150]},
-    {"id": "tw",   "label": "Technical water, 30 C in", "sub": "out", "value": "38", "at": [1700, 150]},
-    {"id": "fac",  "label": "Facility water",     "sub": "fac",  "value": "26", "at": [2040, 150]},
-    {"id": "air",  "kind": "fixed", "label": "Ambient air", "sub": "amb", "value": "24",
-     "at": [2380, 150], "angle": 90}
+    {"id": "j",    "label": "Processor junction", "sub": "j",   "value": "72", "at": [200, 160], "angle": 135},
+    {"id": "ihs",  "label": "Heat spreader",      "sub": "ihs", "value": "61", "at": [460, 160]},
+    {"id": "sat",  "kind": "phase", "label": "Dielectric fluid, boiling / condensing",
+     "sub": "sat", "value": "49", "at": [820, 160]},
+    {"id": "coil", "label": "Condenser coil",     "sub": "coil", "value": "40", "at": [1180, 160]},
+    {"id": "tw",   "label": "Technical water (30 °C in)", "sub": "w", "value": "38", "at": [1500, 160]},
+    {"id": "fw",   "label": "Facility water",     "sub": "fw",  "value": "26", "at": [1760, 160]},
+    {"id": "amb",  "kind": "fixed", "label": "Ambient air", "sub": "amb", "value": "24",
+     "at": [2020, 160], "angle": 90}
   ],
-
   "branches": [
-    {"from": "j",   "to": "ihs",  "kind": "cond", "label": "Each of 8 processors", "value": "0.0275"},
-    {"from": "ihs", "to": "sat",  "kind": "conv", "label": "Pool boiling",         "value": "0.00375"},
-    {"from": "sat", "to": "coil", "kind": "conv", "label": "Condensing film",      "value": "0.0028"},
-    {"from": "tw",  "to": "fac",  "kind": "conv", "label": "CDU plate exchanger",  "value": "0.0019"},
-    {"from": "fac", "to": "air",  "kind": "conv", "label": "Dry cooler",           "value": "0.0058"},
-    {"from": "sat", "to": "rail", "kind": "cap",  "label": "Fluid inventory", "sub": "fl", "value": "240000"}
+    {"from": "j", "to": "ihs", "kind": "cond", "label": "Junction → spreader",
+     "value": "0.0275", "count": 8, "arrangement": "parallel"},
+    {"from": "ihs", "to": "sat", "kind": "conv", "label": "Pool boiling",
+     "value": "0.00375", "rate": "3200"},
+    {"from": "sat", "to": "coil", "kind": "conv", "label": "Condensing film",
+     "value": "0.0028", "rate": "3200"},
+    {"from": "coil", "to": "tw", "kind": "flow", "label": "Technical water, rack → CDU",
+     "sub": "w", "value": "3200"},
+    {"from": "tw", "to": "fw", "kind": "mixed", "label": "CDU plate exchanger",
+     "sub": "hx", "value": "0.0019", "rate": "4000", "at": [1670, 160]},
+    {"from": "fw", "to": "amb", "kind": "conv", "label": "Dry cooler",
+     "value": "0.0058", "rate": "4000"},
+    {"from": "sat", "to": "rail", "kind": "cap", "label": "Fluid inventory",
+     "sub": "f", "value": "240000"}
   ],
-
   "sources": [
-    {"to": "j",     "kind": "diss", "label": "8 processors x 400 W", "value": "3200", "sub": "chip"},
-    {"from": "coil", "kind": "flow", "label": "Carried out by water", "value": "3200", "sub": "w",
-     "at": [1350, 150], "angle": 0, "side": "up"},
-    {"to": "tw",    "kind": "flow", "label": "Carried in by water",  "value": "3200", "sub": "w",
-     "at": [1560, 150], "angle": 0, "side": "down"},
-    {"to": "tw",    "kind": "diss", "label": "Pump work", "value": "800", "sub": "pump", "angle": 90}
+    {"to": "j", "kind": "diss", "label": "Processor dissipation", "sub": "p",
+     "value": "400", "count": 8, "at": [20, 160]},
+    {"to": "tw", "kind": "diss", "label": "Pump work", "sub": "pump",
+     "value": "800", "angle": 270}
   ],
-
-  "rail": {"reference": "air", "y": 380, "span": [200, 2380]}
+  "rail": {"reference": "amb", "y": 420, "span": [180, 2040]}
 }

@@ -1,9 +1,11 @@
 # The gallery
 
 Five thermal networks from five engineering domains, each drawn by a separate
-agent that had never seen this library, working from `docs/schema.md` — and,
-it turned out, from the project's `CLAUDE.md`, which the harness injected into
-every agent's context unasked. See the protocol below.
+agent that had never seen this library, working from `docs/schema.md` and a
+brief. It has been run twice: once in this checkout, where the harness
+injected the project's `CLAUDE.md` into every agent unasked, and once in a
+clean room outside it, with transcripts. The folders hold the clean-room
+set. See the protocol below.
 
 ## Why it exists
 
@@ -41,18 +43,21 @@ Each agent was given:
 
 No agent could open a browser or look at an image.
 
-The reading restriction did not hold. The harness auto-injected `CLAUDE.md`
-— the design record, with the reasoning behind every symbol — into each
-agent's context before it received its brief, and all five disclosed it.
-None read the source, the tests, the README or an existing diagram, and none
-reported it changing a layout decision. The vocabulary findings stand:
-knowing the design rationale does not hand anyone a spreading-resistance
-symbol. The documentation-quality findings are softer than they look, because
-the agents were not working from the schema alone. *A note on method* in
-`FINDINGS.md` says the same. The run has not yet been repeated with the
-injection suppressed; `RERUN.md` is the protocol for doing so, with the
-outcomes written down in advance, and it cannot be run from inside this
-checkout for the same reason the first run leaked.
+The first time, the reading restriction did not hold. The harness
+auto-injected `CLAUDE.md` — the design record, with the reasoning behind
+every symbol — into each agent's context before it received its brief, and
+all five disclosed it. That run is `FINDINGS-first-run.md`, and its diagrams
+are at commit `c95b816`.
+
+The second time, on 2026-09-01, it held. `RERUN.md` is the recipe: a copy of
+the repository in a directory outside this checkout, with the design record,
+the tests, the goldens, the README images, the worked example and every
+finished diagram removed, and the outcomes that would count as failure
+written down before the run. Five agents (`claude-opus-5`, Claude Code) ran
+in parallel from the briefs alone, one commit each, full transcripts. No
+transcript shows a file read beyond the brief and the schema. `FINDINGS.md`
+grades the run against the pre-registered outcomes and collects what the
+five agreed on.
 
 ## What is in each folder
 
@@ -63,6 +68,7 @@ checkout for the same reason the first run leaked.
 | `*.svg` | the render |
 | `rounds.md` | every `check` round, and whether each remedy worked |
 | `findings.md` | what it could not express, and what the documentation lacked |
+| `transcript.md` | the agent's full working record, every command with its output |
 
 `FINDINGS.md` in this directory collects what all five agreed on.
 
@@ -74,12 +80,11 @@ approximated to get there — is in `rounds.md` and `findings.md`. A diagram tha
 checks clean while quietly drawing a heat pipe as a conduction resistance has
 told you something about the vocabulary, not about the drawing.
 
-Three of them no longer check clean. `04-immersion` and `05-laser-diode`
-report `network-in-pieces`, because the check added after this run finds the
-severed network their agents could only describe in prose. `03-cryogenic`
-reports `parallel-pair-same-side` twice: its agent set `side` explicitly to
-silence that note, as the remedy said to, and the note later stopped being
-silenceable by its own remedy. All three are left as they were drawn: the
-findings are the point. And all five fail `thermodraw check --physics`, added
-later still: the numbers their agents were given, or chose, do not close at
-every node. That too is left as drawn — these are evidence, not examples.
+All five exit 0. Two carry a `parallel-pair-same-side` note that cannot be
+cleared: three branches in parallel on a horizontal run have two usable label
+sides, and both agents proved the remedy only rotates which pair is reported.
+And all five fail `thermodraw check --physics`: the briefs' numbers do not
+close at every node, every agent found that by hand before drawing, and none
+retuned a value to quiet the check. That is left as drawn — these are
+evidence, not examples — and the next set of briefs should be written to
+close.

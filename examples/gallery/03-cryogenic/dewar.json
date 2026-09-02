@@ -1,53 +1,49 @@
 {
   "title": "Liquid-helium dewar with a two-stage pulse-tube cryocooler",
   "units": {"R": "K/W", "C": "J/K", "T": "K", "P": "W", "q": "W"},
-
   "nodes": [
-    {"id": "v",  "kind": "fixed", "label": "Vacuum vessel", "sub": "v",
-     "value": "300", "at": [220, 460]},
-    {"id": "sh", "label": "Radiation shield", "sub": "sh",
-     "value": "40", "at": [760, 460], "angle": 135},
-    {"id": "cm", "label": "Cold mass", "sub": "cm",
-     "value": "4.2", "at": [1300, 460], "angle": 135}
+    {"id": "vessel", "kind": "fixed", "label": "Vacuum vessel", "sub": "vac",
+     "value": "300", "at": [200, 340]},
+    {"id": "shield", "label": "Radiation shield", "sub": "sh",
+     "value": "40", "at": [760, 340], "angle": 45},
+    {"id": "cold", "label": "Cold mass (magnet)", "sub": "cm",
+     "value": "4.2", "at": [1320, 340]}
   ],
-
   "branches": [
-    {"from": "v", "to": "sh", "kind": "cond",
-     "label": "G10 support struts, 0.6 W", "value": "433", "side": "down"},
-
-    {"from": "v", "to": "sh", "kind": "rad",
-     "label": "MLI blanket, 0.9 W", "value": "289",
-     "via": [[320, 460], [320, 310], [760, 310]]},
-
-    {"from": "v", "to": "sh", "kind": "cond",
+    {"from": "vessel", "to": "shield", "kind": "rad",
+     "label": "MLI, vessel to shield", "value": "289", "rate": "0.9",
+     "via": [[290, 340], [290, 100], [580, 100], [580, 340]],
+     "at": [435, 100], "side": "up"},
+    {"from": "vessel", "to": "shield", "kind": "cond",
      "label": "HTS current leads", "value": "1720",
-     "via": [[320, 460], [320, 160], [760, 160]]},
+     "at": [435, 340], "side": "up"},
+    {"from": "vessel", "to": "shield", "kind": "cond",
+     "label": "G10 struts, vessel to shield", "value": "433", "rate": "0.6",
+     "via": [[290, 340], [290, 580], [580, 580], [580, 340]],
+     "at": [435, 580], "side": "down"},
 
-    {"from": "sh", "to": "cm", "kind": "cond",
-     "label": "G10 support struts, 0.05 W", "value": "716", "side": "down"},
+    {"from": "shield", "to": "cold", "kind": "rad",
+     "label": "MLI, shield to cold mass", "value": "1790", "rate": "0.02",
+     "via": [[940, 340], [940, 100], [1230, 100], [1230, 340]],
+     "at": [1085, 100], "side": "up"},
+    {"from": "shield", "to": "cold", "kind": "cond",
+     "label": "Instrumentation wiring", "value": "239", "rate": "0.15",
+     "at": [1085, 340], "side": "up"},
+    {"from": "shield", "to": "cold", "kind": "cond",
+     "label": "G10 struts, shield to cold mass", "value": "716", "rate": "0.05",
+     "via": [[940, 340], [940, 580], [1230, 580], [1230, 340]],
+     "at": [1085, 580], "side": "down"},
 
-    {"from": "sh", "to": "cm", "kind": "rad",
-     "label": "MLI blanket, 0.02 W", "value": "1790",
-     "via": [[940, 460], [940, 310], [1300, 310]]},
-
-    {"from": "sh", "to": "cm", "kind": "cond",
-     "label": "Instrumentation wiring, 0.15 W", "value": "239",
-     "via": [[940, 460], [940, 160], [1300, 160]]},
-
-    {"from": "cm", "to": "rail", "kind": "cap",
-     "label": "Cold mass", "sub": "cm", "value": "900", "side": "left"}
+    {"from": "cold", "to": "rail", "kind": "cap", "label": "Cold mass",
+     "sub": "cm", "value": "900"}
   ],
-
   "sources": [
-    {"to": "sh", "kind": "diss", "label": "HTS lead Joule heating",
-     "sub": "J", "value": "1.2", "at": [600, 640], "angle": 315},
-
-    {"from": "sh", "kind": "flow", "label": "Cryocooler stage 1",
-     "sub": "1", "value": "35", "at": [920, 640], "angle": 45},
-
-    {"from": "cm", "kind": "flow", "label": "Cryocooler stage 2",
-     "sub": "2", "value": "1.5", "at": [1460, 640], "angle": 45}
+    {"to": "shield", "kind": "diss", "label": "HTS lead Joule heating",
+     "value": "1.2", "sub": "lead", "angle": 55, "at": [660, 190]},
+    {"from": "shield", "kind": "flow", "label": "Cryocooler stage 1",
+     "value": "35", "sub": "s1", "angle": 90, "at": [760, 500], "side": "right"},
+    {"from": "cold", "kind": "flow", "label": "Cryocooler stage 2",
+     "value": "1.5", "sub": "s2", "angle": 0, "at": [1460, 340], "side": "up"}
   ],
-
-  "rail": {"reference": "v", "y": 760, "span": [220, 1300]}
+  "rail": {"reference": "vessel", "y": 780}
 }

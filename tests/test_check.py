@@ -160,7 +160,7 @@ class TestNodesTooClose:
 class TestNetworkInPieces:
     """A drawing can be severed in half and pass everything else.
 
-    Two of the five gallery diagrams are: a two-phase loop whose halves are
+    Two of the first gallery run's diagrams were: a two-phase loop whose halves are
     joined only by a `flow` annotation at each end, and a stack whose Peltier
     stage is drawn the same way. Nothing in either file relates the two
     arrows except that the same number was typed twice.
@@ -188,7 +188,7 @@ class TestNetworkInPieces:
         assert found.where == "node 'cold'", "the orphan, not the main body"
 
     def test_the_remedy_names_why_a_source_cannot_join_them(self):
-        """Which is the actual gap the two gallery diagrams ran into."""
+        """Which is the actual gap those two diagrams ran into."""
         found = one(check(self.two_halves()), "network-in-pieces")
         assert "a source has one end" in found.remedy
 
