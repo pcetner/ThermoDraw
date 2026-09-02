@@ -109,32 +109,62 @@ class _Net:
                 break
 
 
+def _grouped(skipped) -> str:
+    """`a, b (reason); c (other reason)`, in the order first met."""
+    by_reason: Dict[str, List[str]] = {}
+    for who, why in skipped:
+        by_reason.setdefault(why, []).append(who)
+    return "; ".join(f"{', '.join(who)} ({why})"
+                     for why, who in by_reason.items())
+
+
 def balance(diagram) -> List[Finding]:
-    """Findings for every free node whose stated numbers do not close."""
+    """Findings for every free node whose stated numbers do not close.
+
+    And one `note` saying which free nodes it could not ask, and why. Every
+    skip used to be silent, and the worst one was invisible from the file:
+    a free node beside a node with no temperature was dropped, and the
+    node with no temperature is the idiom `docs/schema.md` recommends for
+    an interior junction. One clean-room reader's worst-balanced node was
+    absent from the report; another counted three of eight nodes never
+    examined, and both asked for one line saying so.
+    """
     out: List[Finding] = []
     units = diagram.units
-    if (units.get("R", "K/W") not in R_SCALE
-            or units.get("P", "W") not in P_SCALE
-            or units.get("q", "W") not in P_SCALE):
-        return out
+    for quantity, table, default in (("R", R_SCALE, "K/W"),
+                                     ("P", P_SCALE, "W"), ("q", P_SCALE, "W")):
+        unit = units.get(quantity, default)
+        if unit not in table:
+            out.append(Finding(
+                "physics-not-checked", "note", "the diagram",
+                f"nothing was checked: `units` gives {quantity!r} as "
+                f"{unit!r}, and the check knows only "
+                + ", ".join(table),
+                remedy="state it in one of those, or read the diagram as "
+                       "unchecked"))
+            return out
     p_scale, q_scale = P_SCALE[units.get("P", "W")], P_SCALE[units.get("q", "W")]
     net = _Net(diagram)
+    free = [n for n in diagram.nodes if n.kind == "free"]
+    skipped: List[Tuple[str, str]] = []
 
-    for n in diagram.nodes:
+    for n in free:
         here = net.temps.get(n.id)
-        if n.kind != "free" or here is None:
+        if here is None:
+            skipped.append((n.id, "it has no temperature"))
             continue
-        arrive, leave, said, known = 0.0, 0.0, [], True
+        arrive, leave, said = 0.0, 0.0, []
+        why = None
 
         for i, s in enumerate(diagram.sources):
             if s.node != n.id:
                 continue
             if s.kind == "flux":
-                known = False
+                why = f"source {i} is a flux, which has no area"
                 break
             v = _num(s.value)
             if v is None:
-                known = False
+                why = f"source {i} has no numeric value"
                 break
             v *= (p_scale if s.kind == "diss" else q_scale) * (s.count or 1)
             if s.outward:
@@ -143,14 +173,12 @@ def balance(diagram) -> List[Finding]:
             else:
                 arrive += v
                 said.append(f"{_fmt(v)} W in by source {i}")
-        if not known:
-            continue
 
         for a, b, q, label in net.flows:
-            if n.id not in (a, b):
+            if why or n.id not in (a, b):
                 continue
             if q is None:
-                known = False
+                why = f"{label} has no numeric value"
                 break
             q *= q_scale
             if a == n.id:
@@ -159,16 +187,20 @@ def balance(diagram) -> List[Finding]:
             else:
                 arrive += q
                 said.append(f"{_fmt(q)} W in by {label}")
-        if not known:
-            continue
 
         for a, b, r, label in net.paths:
-            if n.id not in (a, b):
+            if why or n.id not in (a, b):
                 continue
             other = b if a == n.id else a
             there = net.temps.get(other)
-            if r is None or there is None or r <= 0:
-                known = False
+            if r is None:
+                why = f"{label} has no numeric value"
+                break
+            if there is None:
+                why = f"neighbour '{other}' has no temperature"
+                break
+            if r <= 0:
+                why = f"{label} has a resistance of zero"
                 break
             q = (here - there) / r
             if q >= 0:
@@ -179,7 +211,10 @@ def balance(diagram) -> List[Finding]:
                 arrive += -q
                 said.append(f"{_fmt(-q)} W in by {label} "
                             f"({_fmt(there - here)} K over {_fmt(r)} K/W)")
-        if not known or not said:
+        if why is None and not said:
+            why = "nothing is attached to it"
+        if why:
+            skipped.append((n.id, why))
             continue
 
         biggest = max(arrive, leave)
@@ -188,7 +223,7 @@ def balance(diagram) -> List[Finding]:
         out.append(Finding(
             "node-does-not-balance", "warning", f"node '{n.id}'",
             f"node '{n.id}': {_fmt(arrive)} W arrives and {_fmt(leave)} W "
-            f"leaves at the stated values — " + "; ".join(said),
+            f"leaves at the stated values: " + "; ".join(said),
             remedy="check the values. If one box stands for several identical "
                    "paths, give it `count` and `arrangement`; if a temperature "
                    "is a limit rather than a result, or a flow is a capacity "
@@ -216,4 +251,13 @@ def balance(diagram) -> List[Finding]:
             f"({_fmt(abs(ta - tb))} K over {_fmt(r_eff)} K/W)",
             remedy="one of `rate`, `value` or an end temperature is wrong",
             at=tuple(b.at) if b.at else None))
+
+    if skipped:
+        checked = len(free) - len(skipped)
+        out.append(Finding(
+            "physics-not-checked", "note", "the diagram",
+            f"checked {checked} of {len(free)} free nodes; not checked: "
+            + _grouped(skipped),
+            remedy="give the node, or its neighbour, a `value`, or read "
+                   "those nodes as unchecked"))
     return out

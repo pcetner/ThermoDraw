@@ -146,6 +146,18 @@ class Description:
     rail: Optional[Tuple[str, float, Tuple[float, float]]] = None
     edges: List[Tuple[str, str, str]] = field(default_factory=list)
     pieces: List[List[str]] = field(default_factory=list)
+    # Beside each edge, in the same order: (count, arrangement, directed).
+    # The network block used to print `a --flow-branch-- b` with the same
+    # symmetric dashes as a resistance, so a `flow` written backwards read
+    # identically, and `j --cond-- ihs` gave no hint of eight paths; four
+    # clean-room readers said the block could not confirm the one thing
+    # each most needed confirmed.
+    detail: List[Tuple[Optional[int], Optional[str], bool]] = field(
+        default_factory=list)
+    # (index, node, kind, outward) per source. The block that says what is
+    # joined to what left out the elements that inject all the heat: three
+    # readers noted a source on the wrong node would leave it byte-identical.
+    sources: List[Tuple[int, str, str, bool]] = field(default_factory=list)
 
     def text(self):
         out = [f"{self.source}: canvas {self.canvas[0]:.0f} x "
@@ -161,13 +173,25 @@ class Description:
             ref, y, (x0, x1) = self.rail
             out += ["", f"rail: y {y:.0f}, span ({x0:.0f}, {x1:.0f}), "
                         f"reference {ref!r}"]
-        if self.edges or len(self.pieces) > 1:
+        if self.edges or self.sources or len(self.pieces) > 1:
             out += ["", "network:"]
-            joined = {}
-            for a, b, kind in self.edges:
-                joined.setdefault((a, b), []).append(kind)
+            joined, directed = {}, []
+            details = self.detail or [(None, None, False)] * len(self.edges)
+            for (a, b, kind), (count, arrangement, arrow) in zip(
+                    self.edges, details):
+                text = kind if not count else f"{kind} x{count} {arrangement}"
+                if arrow:
+                    directed.append(f"  {a} --{text}-> {b}")
+                else:
+                    joined.setdefault((a, b), []).append(text)
             for (a, b), kinds in joined.items():
                 out.append(f"  {a} --{'/'.join(kinds)}-- {b}")
+            out += directed
+            # Heat reads left to right: into its node for a source that
+            # arrives, out of it for one that leaves.
+            for i, node, kind, outward in self.sources:
+                out.append(f"  {node} --{kind}-> source {i}" if outward
+                           else f"  source {i} --{kind}-> {node}")
             loose = [g for g in self.pieces if not any(
                 set(g) & {a, b} for a, b, _ in self.edges)]
             for group in loose:
@@ -190,8 +214,14 @@ class Description:
             "counts": dict(self.counts),
             "nodes": [{"id": i, "kind": k, "at": list(a)}
                       for i, k, a in self.nodes],
-            "edges": [{"from": a, "to": b, "kind": k}
-                      for a, b, k in self.edges],
+            "edges": [{"from": a, "to": b, "kind": k, "count": count,
+                       "arrangement": arrangement, "directed": arrow}
+                      for (a, b, k), (count, arrangement, arrow) in zip(
+                          self.edges, self.detail or
+                          [(None, None, False)] * len(self.edges))],
+            "sources": [{"index": i, "node": node, "kind": kind,
+                         "outward": outward}
+                        for i, node, kind, outward in self.sources],
             "pieces": [list(g) for g in self.pieces],
             "rail": None if not self.rail else {
                 "reference": self.rail[0], "y": self.rail[1],
@@ -284,6 +314,21 @@ def describe(diagram, size=None, padding=PADDING, source="diagram"):
         lines.append(line)
 
     edges = network(placements)
+    # The same walk `network` makes, for what it leaves out: one placement
+    # per branch carries the group and the kind, and the symbol key says
+    # which kind is the directed one.
+    detail, seen = [], set()
+    for p in placements:
+        if p.role != "branch" or p.symbol is None or p.ref in seen:
+            continue
+        seen.add(p.ref)
+        detail.append((p.count if p.count and p.count > 1 else None,
+                       p.arrangement if p.count and p.count > 1 else None,
+                       p.symbol.key == "flow-branch"))
+    sources = [(i, p.ends[0], p.symbol.key, bool(p.outward))   # keys = kinds
+               for i, p in enumerate(q for q in placements
+                                     if q.role == "source"
+                                     and q.symbol is not None)]
     return Description(
         source=source,
         canvas=(round(bx1 - bx0, 1), round(by1 - by0, 1)),
@@ -291,6 +336,8 @@ def describe(diagram, size=None, padding=PADDING, source="diagram"):
         lines=lines,
         nodes=[(n.id, n.kind, tuple(n.at)) for n in diagram.nodes if n.at],
         edges=edges,
+        detail=detail,
+        sources=sources,
         pieces=_pieces(edges,
                        [n.id for n in diagram.nodes if n.kind != "corner"]),
         rail=None if not diagram.rail else (
