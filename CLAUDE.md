@@ -160,6 +160,13 @@ sentence after it says what would overturn it.
   outcomes `RERUN.md` wrote down first. All four pre-registered claims
   failed. The first run's nine vocabulary gaps did not recur; the second
   run's gaps are what the format can state, not what it can draw.
+- A third run is prepared and not yet run: five new domains, briefs whose
+  numbers were solved before they were written, and reference solutions
+  committed beforehand so the pre-registration can be checked. Its five
+  briefs use every symbol between them — run 2 and the hero never used
+  `break` in either position, `corner`, or `series`. `tools/clean_room.py`
+  builds the room and verifies it, and strips the worked example the schema
+  quotes, which is a recorded deviation.
 
 ## Sharp edges
 
@@ -193,8 +200,9 @@ sentence after it says what would overturn it.
    schema defects are fixed; what is left is design: a way to relate two
    elements first, then a stream with an inlet and an outlet, quantities
    beyond the six, a capacity-versus-load marker. Each needs its argument
-   in the record before it is built. The next set of briefs should be
-   written so their numbers close.
+   in the record before it is built. The next set of briefs is written and
+   its numbers close; run 3 will say whether these four are still what is
+   missing.
 3. Region enclosures that auto-size to their contents.
 4. Unit handling — `0.35` choosing between K/W and mK/W, with a deliberate
    per-element override.
