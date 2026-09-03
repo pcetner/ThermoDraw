@@ -223,8 +223,13 @@ removed, or referring to a rationale the brief does not contain.
 ## Running it
 
 ```bash
-python tools/clean_room.py ../ThermoDraw-cleanroom-run3
+python tools/clean_room.py ../ThermoDraw-cleanroom-run3     --briefs 06-battery 07-furnace 08-cryostat 09-subsea 10-pv
 ```
+
+The briefs are named rather than inferred. The gallery holds every run's
+folders, so a room built from a list of *past* folders is wrong the moment a
+run lands: run 3's five diagrams went into the repository and the next room
+would have handed them to five agents told there were none.
 
 Then one fresh session per brief, started **in that directory**, each given
 one line naming its brief. `START-HERE.txt` in the room carries the five
