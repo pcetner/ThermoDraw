@@ -118,9 +118,10 @@ sentence after it says what would overturn it.
 - `arrangement` is never inferred; it is refused when missing.
 - The group's own value is drawn beside the count — `4 in parallel =
   0.4 K/W` — and the per-item value stays exactly as typed. The fold is a
-  table, not a formula: a capacitance is the dual of a resistance, `flow`
-  and `break` state none. This overturns "the library does no arithmetic",
-  which `--physics` had already made half false.
+  table, not a formula: a capacitance is the dual of a resistance, a rate
+  adds in parallel and is one item's worth in series, `break` states none.
+  `--physics` reads the same table. This overturns "the library does no
+  arithmetic", which `--physics` had already made half false.
 - Each form is a complete drawing; the canvas is sized for the larger,
   **text included**. The hidden form's label was solved against nothing and
   measured by nothing, so an eight-way group's expanded label sat above the
@@ -170,7 +171,7 @@ sentence after it says what would overturn it.
   which free nodes it did not check, in one note: a silent skip on the
   neighbour of a node with no temperature hid the worst-balanced node in
   a diagram from the only tool that looks for that.
-- What survives the solver: three constraints, two objectives, four unchanged,
+- What survives the solver: four constraints, two objectives, four unchanged,
   three scaffolding. The table is in the record.
 
 ### Describing
