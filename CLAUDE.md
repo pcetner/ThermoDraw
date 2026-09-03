@@ -5,8 +5,9 @@ Thermal network diagrams for Python. Emits SVG. No runtime dependencies.
 A symbol library and label-placement engine for drawing thermal resistance
 networks — the R–C ladders and branch networks used in electronics thermal
 design — in heat-transfer notation: hatched boxes carrying a mechanism
-texture, not resistor zigzags. The network layer (solving for coordinates you
-leave out) is not built yet.
+texture, not resistor zigzags. The network layer solves the coordinates you
+leave out for a chain of nodes, which is what nearly every such network is;
+a general placer is not built.
 
 This file is the list of decisions. **The argument behind each one is in
 `docs/design-record.md`, under the same heading** — read that before changing
@@ -19,7 +20,8 @@ order.
 ```
 src/thermodraw/
   model.py     the diagram as data — what you write, what an LLM emits
-  _layout.py   model -> placements. The one stage the network layer replaces
+  _solve.py    `at` for the nodes you left out: a chain, on a copy
+  _layout.py   model -> placements. Calls _solve first; the seam a general placer sits at
   _render.py   placements -> SVG. Pure, deterministic, sizes its own canvas
   builder.py   sugar over model.py, holding no state the data cannot express
   core.py      text metrics, transforms, the label solver, occupancy, textures
@@ -27,7 +29,7 @@ src/thermodraw/
   _physics.py  do the numbers agree with each other? behind --physics
   _describe.py is it the drawing you meant? placements -> prose, no SVG
   _page.py     the same SVG inline in HTML, with its controls
-  __main__.py  the command line: `check`, `describe`, `render`, `page`
+  __main__.py  the command line: `check`, `describe`, `render`, `page`, `solve`
   symbols.py   the eighteen symbols, plus sheet renderers
   theme.py     CSS variables for web, baked literals and fonts for Word/slides
   _metrics.py  generated character widths — do not edit
@@ -72,8 +74,16 @@ sentence after it says what would overturn it.
   container types. **Exit 1 means findings and nothing else** — a diagram
   that cannot be drawn is refused and exits 2, and `__main__` has a net so
   an unexpected exception cannot reach the shell as 1.
-- `layout` is the seam the network layer replaces. It is not named after a
-  version number, since 0.3.0 shipped without it.
+- `layout` is the seam. `_solve` sits in front of it, a pre-pass on a copy,
+  so `describe` and `to_dict` see the numbers it chose and nothing either
+  side changes. It is not named after a version number, since 0.3.0 shipped
+  without it; 1.0 ships the chain.
+- `at` is optional. The solver places a chain from the hot end, each run as
+  wide as its labels need and never under 220, measured through the same
+  `compose` the renderer uses; a pair between one node pair goes above and
+  below; a source goes half a run out and an interior angle-0 source is
+  turned to arrive from above. Anything else is refused naming the node,
+  never drawn badly in silence. Explicit `at` is kept and measured from.
 - Rendering is a pure function of its input; element ids are content-addressed.
 
 ### Symbols
@@ -258,9 +268,10 @@ sentence after it says what would overturn it.
 
 ## What is left to build
 
-1. **The network layer.** The only genuinely hard piece. The record's table of
-   what survives it says which checks it must satisfy, which it minimises, and
-   which it may delete.
+1. **The general placer.** The chain is solved; anything a node joins three
+   others in is still the author's. The record's table of what survives a
+   solver says which checks it must satisfy, which it minimises, and which it
+   may delete, and the chain solver says which it meets by construction.
 2. **What the format cannot state** (`examples/gallery/FINDINGS.md`, the
    second set, and its deferred table). The clean-room run's checker and
    schema defects are fixed; what is left is design: a way to relate two

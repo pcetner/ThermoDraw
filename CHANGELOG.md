@@ -9,6 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`at` is optional: the ladder solver.** A node without coordinates is
+  placed. What is placed is a chain — every node joined to at most two
+  others by branches, which is the shape nearly every network in this
+  notation has — from the hot end, left to right on one line, each run as
+  wide as the labels on it need and never narrower than the 220 the schema
+  always recommended. Widths are measured through the same `compose` the
+  renderer uses, so the arithmetic `nodes-too-close` reports is done
+  before the drawing instead of after it. Two branches between one pair of
+  nodes go above and below with leads at each end and their labels on the
+  outer sides; a repeated branch keeps the straight run; a source without
+  `at` sits half a run out along its angle, and an angle-0 source on any
+  node but the hot end is turned to arrive from above. Anything that is
+  not a chain is refused naming the node that joins three others, so
+  nothing is drawn badly in silence. Explicit `at` is kept and the next
+  node measured from it. It is a pre-pass on a copy in `_solve.py`, so
+  `layout` is still the seam, `describe` marks a solved node `solved` on
+  its row, and `thermodraw solve` writes the file back with every node
+  placed, to edit from. Written with every coordinate removed, the hero
+  checks clean; so do the battery, cryostat, subsea and immersion-rack
+  diagrams from the gallery, and the four that are not chains are refused
+  by name.
 - **A boundary's wall can be turned.** `fixed` and `break` nodes take
   `wall`: `down`, which is what every diagram drew before, or `up`, `left`,
   `right`. A mount that a cold mass hangs from has its wall above, and the

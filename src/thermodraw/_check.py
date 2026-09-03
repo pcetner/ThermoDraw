@@ -597,9 +597,14 @@ def _too_wide(rect, half, culprit, placements):
               for p in beside if p.at[axis] < x]
     after = [(p.at[axis] - p.symbol.half_len, p)
              for p in beside if p.at[axis] > x]
+    # By distance alone: a tie compared the placements themselves, which
+    # have no order, and two symbols the solver put the same distance out
+    # on either side of a node crashed the checker here.
+    before.sort(key=lambda t: t[0])
+    after.sort(key=lambda t: t[0])
     if not before or not after:
         return None
-    (lo, pa), (hi, pb) = max(before), min(after)
+    (lo, pa), (hi, pb) = before[-1], after[0]
     room, width = hi - lo, 2 * half[axis]
     if width <= room:
         return None

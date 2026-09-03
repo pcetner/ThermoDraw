@@ -1,10 +1,10 @@
 """Turning a diagram into placements.
 
 Pure: a `Diagram` in, a list of `Placement` out, no SVG and no globals. This
-is the one stage the network layer replaces. Today it reads the coordinates
-you supplied and works out the wire runs between them; the network layer,
-when it lands, will solve for the coordinates you left out. Nothing either
-side of it needs to change.
+is the seam the network layer sits at. It reads the coordinates you supplied
+and works out the wire runs between them; the coordinates you left out are
+solved first by `_solve`, for a chain of nodes, on a copy. A general placer
+would replace that pre-pass and nothing either side of it.
 
 A branch is routed as `[source, *via, target]`. The symbol sits at `at`, or at
 the midpoint of the longest straight segment, and the wire is interrupted
@@ -15,6 +15,7 @@ import math
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Sequence, Set, Tuple, Union
 
+from . import _solve
 from . import model as M
 from . import symbols as S
 
@@ -338,8 +339,13 @@ def _endpoint(diagram, ref, other):
 
 
 def layout(diagram) -> List[Placement]:
-    """Placements for everything in the diagram, back to front."""
+    """Placements for everything in the diagram, back to front.
+
+    Nodes without `at` are placed first by `_solve`, on a copy; a diagram
+    with every node placed goes through untouched.
+    """
     diagram.validate()
+    diagram = _solve.solve(diagram)
     out = []
 
     for i, b in enumerate(diagram.branches):

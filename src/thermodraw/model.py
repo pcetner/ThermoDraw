@@ -581,13 +581,11 @@ class Diagram:
                     f"node {n.id!r}: unknown kind {n.kind!r}; expected one of "
                     + ", ".join(sorted(NODE_KINDS))
                     + (f". `{n.kind}` was {gone}" if gone else ""))
-            if n.at is None:
-                raise DiagramError(
-                    f"node {n.id!r} has no coordinates. Every node needs `at` "
-                    "for now; solving for the ones you leave out is the "
-                    "network layer, which is not built yet.")
             where = f"node {n.id!r}"
-            _point(n.at, where, "at")
+            # `at` is optional since 1.0: `_solve` places a chain of nodes
+            # that leave it out, and refuses anything else by name.
+            if n.at is not None:
+                _point(n.at, where, "at")
             _number(n.angle, where, "angle")
             _text(n.label, where, "label")
             _text(n.sub, where, "sub")

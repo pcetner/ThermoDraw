@@ -94,7 +94,7 @@ A place with a temperature.
 | `label` | the words above the symbol — the top line, always. Optional: a node with none draws its `T` line alone, or nothing, and still counts as a label placed |
 | `sub` | subscript on `T`. Identity: you choose it, it names a place |
 | `value` | temperature, unit appended from `units.T` |
-| `at` | `[x, y]`. **Required** until the network layer lands |
+| `at` | `[x, y]`. Optional: left out, the node is placed by the solver, which places a chain of nodes and refuses anything else by name |
 | `angle` | turns the node's label frame, in degrees. It moves the label and nothing else |
 | `side` | `auto` (default), `up`, `down`, `left`, `right` — where the label goes |
 | `wall` | `down` (default), `up`, `left`, `right` — which way a `fixed` or `break` node's wall faces. Refused on a node that has no wall |
@@ -371,16 +371,47 @@ the README.
 
 ## Coordinates
 
-Every node needs `at` for now. The library places what you give it and works
-out the wire runs, the label positions and the canvas size for itself.
+`at` is optional on a node. Leave it out and the library places the node;
+give it and the node goes exactly there. The two mix: a node with `at` keeps
+it, and the solver measures the next one from it. Wire runs, label positions
+and the canvas size are worked out either way.
 
-Solving for coordinates you leave out is the network layer, which is not
-built yet. It changes one stage — `layout` — and nothing in this schema. A
-diagram written today keeps working; it just stops needing the numbers.
+What is solved is a **ladder**: the nodes form one chain, each joined to at
+most two others by branches (`rail` and sources do not count). Heat runs left
+to right from the hot end — the end with the higher stated temperature, or
+failing numbers the end a source arrives at, or failing that the one written
+first — along one line at `y = 150`, and each run is as wide as the labels on
+it need and never narrower than 220. Two branches between the same pair of
+nodes are routed one above and one below, 80 off the line, leaving and
+arriving 48 sideways of each node, and their labels take the outer sides; a
+third between the same pair keeps the straight run, and a repeated branch
+always does. A source without `at` is placed half a run out along its
+`angle`, and an `angle` of 0 on any node but the hot end is turned to arrive
+from above, because on the line "from the left" is the branch. A node given
+a source above it that also has a capacitance below it gets `angle: 45` for
+its label, since above is the lead, below is the wire and beside is the run;
+an `angle` you wrote is kept.
 
-Until then, a workable habit: heat runs left to right, hottest node on the
-left, the reference rail along the bottom. Space nodes about 220 apart and put
-parallel paths 80 above and below the main line.
+Anything that is not a chain is refused, naming the node that joins three
+others: give that node `at`, and `via` to the branches that leave it
+sideways. Nothing is drawn badly in silence. A general placer is the network
+layer proper; a chain is the shape nearly every network in this notation has,
+placed the way the gallery's authors placed theirs by hand.
+
+`via`, and `at` on a branch or a source, are absolute coordinates. A file
+that leaves node `at` out should leave those out too, or the solver places
+its nodes around waypoints written for a different layout.
+
+`thermodraw solve diagram.json` writes the file back with every node placed,
+which is how to start from the solver's numbers and move what you would have
+put elsewhere. `describe` marks a node the solver placed with `solved` on its
+row, and a `check` remedy that says to move such a node with `at` means give
+it one: the row says what number to start from.
+
+Whether you place nodes or the solver does, the habit is the same: heat runs
+left to right, hottest node on the left, the reference rail along the bottom.
+Space nodes about 220 apart and put parallel paths 80 above and below the
+main line.
 
 ### Angles
 

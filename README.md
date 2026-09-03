@@ -115,8 +115,10 @@ it went. `check` grades the drawing; this says what is in it.
 `thermodraw render` writes the SVG. `thermodraw page` writes the same drawing
 as a self-contained HTML page with its controls — a repeated group of sixteen
 draws two and an ellipsis, and the page lets a reader expand it without
-anything being rebuilt. All four work as `python -m thermodraw` from a
-checkout.
+anything being rebuilt. `thermodraw solve` writes a diagram back with every
+node placed, to edit from: write the network without coordinates, solve it,
+move what you would have put elsewhere. All five work as `python -m
+thermodraw` from a checkout.
 
 ```bash
 python examples/render_demo.py       # the three images above
@@ -136,10 +138,11 @@ with each other.
 
 So the parts that are ThermoDraw's own are the eighteen-symbol vocabulary and
 the rule behind it, the label solver, `check`, `describe` and `--physics`.
-The part that is not yet built — solving for node coordinates — is the part
+Node coordinates are solved for a chain of nodes, which is what nearly every
+network in this notation is. A general placer for anything else is the part
 most likely to be someone else's solved problem, and the design record says
-which of the twelve checks a solver must satisfy, which it minimises, and which
-it makes redundant.
+which of the twelve checks it must satisfy, which it minimises, and which it
+makes redundant.
 
 If you want circuit notation, use schemdraw. If you want a graph laid out and
 do not care what the boxes mean, use Graphviz. If you want a thermal network
@@ -152,9 +155,9 @@ that a reviewer can read from the picture, this.
 [`CLAUDE.md`](CLAUDE.md) — the decisions, one line each.
 [`docs/design-record.md`](docs/design-record.md) — the argument behind each one.
 
-Alpha. The symbol vocabulary is settled; labels, wire runs and canvas size are
-solved for you, and `thermodraw check` reports what a reader would notice.
-Node coordinates are still yours to supply; solving for those is the network
-layer, which changes one stage and nothing in the schema.
+The symbol vocabulary is settled; labels, wire runs, canvas size and, for a
+chain of nodes, the coordinates are solved for you, and `thermodraw check`
+reports what a reader would notice. A network that is not a chain still takes
+its coordinates from you, and says so by name.
 
 MIT. The bundled subset of IBM Plex Sans is [OFL-1.1](src/thermodraw/fonts/OFL.txt).

@@ -4,6 +4,7 @@
     thermodraw describe diagram.json
     thermodraw render   diagram.json -o out.svg --mode light
     thermodraw page     diagram.json -o out.html
+    thermodraw solve    diagram.json -o placed.json
 
     python -m thermodraw check diagram.json      # from a checkout, no install
 
@@ -36,6 +37,7 @@ from ._describe import describe
 from ._layout import layout
 from ._page import page
 from ._render import render
+from ._solve import solve
 from .io import DECLARATION, save
 from .model import Diagram, DiagramError
 
@@ -155,6 +157,25 @@ def do_render(args):
     return 0
 
 
+def do_solve(args):
+    """The same diagram with every node placed, as JSON to edit from.
+
+    The workflow this exists for: write the network without coordinates,
+    solve it, then move what the solver put somewhere you would not have.
+    Everything the author set is kept; only the `at` that were missing are
+    added, and the `via` a parallel pair needed.
+    """
+    diagram = _load(args.diagram)
+    out = solve(diagram).to_json() + "\n"
+    if args.out == "-":
+        _soften(sys.stdout).write(out)
+        return 0
+    path = save(out, args.out or pathlib.Path(args.diagram).with_name(
+        pathlib.Path(args.diagram).stem + ".solved.json"))
+    print(f"{path} ({len(out):,} bytes)")
+    return 0
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="thermodraw",
                                  description=__doc__.split("\n\n")[0])
@@ -198,6 +219,12 @@ def main(argv=None):
                    help="bake the palette, for Word, slides and rasterisers")
     size(r)
     r.set_defaults(fn=do_render)
+
+    s = subs.add_parser("solve", help="write the diagram back with every "
+                                      "node placed, to edit from")
+    s.add_argument("diagram")
+    s.add_argument("-o", "--out", help='output path, or "-" for stdout')
+    s.set_defaults(fn=do_solve)
 
     args = ap.parse_args(argv)
     try:

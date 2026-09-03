@@ -51,6 +51,28 @@ for _kind in ("fixed", "break"):
     for _facing in ("up", "left", "right"):
         SCENES[f"wall-{_kind}-{_facing}"] = _wall_scene(_kind, _facing)
 
+
+def _solved_hero():
+    """The hero with every coordinate removed and solved. Pins the solver's
+    geometry — its pitch, its pair routing, where it puts a source — the
+    way the other goldens pin the label solver's."""
+    import json
+    from thermodraw import Diagram, layout, render
+    data = json.loads(_HERO.read_text(encoding="utf-8"))
+    for n in data["nodes"]:
+        n.pop("at", None)
+    for b in data["branches"]:
+        b.pop("at", None)
+        b.pop("via", None)
+    for s in data["sources"]:
+        s.pop("at", None)
+    return render(layout(Diagram.from_dict(data)))
+
+
+_HERO = pathlib.Path(__file__).resolve().parents[1] / "examples" / "hero.json"
+if _HERO.exists():
+    SCENES["solved-hero"] = _solved_hero
+
 # From a checkout the demo scenes must be here. If the file exists and the
 # import still failed, that is an error and not a reason to go quiet: a bare
 # try/except used to drop the three most complex scenes in the suite silently,
