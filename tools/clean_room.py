@@ -43,11 +43,16 @@ REMOVE = [
     "examples/render_demo.py", "examples/render_reference.py",
     "examples/gallery/README.md", "examples/gallery/RERUN.md",
     "examples/gallery/FINDINGS.md", "examples/gallery/FINDINGS-first-run.md",
-    "examples/gallery/01-spacecraft", "examples/gallery/02-building",
-    "examples/gallery/03-cryogenic", "examples/gallery/04-immersion",
-    "examples/gallery/05-laser-diode",
+    "examples/gallery/FINDINGS-run-3.md",
     "examples/gallery/run-3",
 ]
+
+# Everything under a gallery folder except the brief. Naming the folders of
+# past runs instead was wrong within one run: run 3's five diagrams landed in
+# the repository, the list still spoke of run 2's, and the next room would
+# have handed five finished answers to five agents told there were none. The
+# builder's own check caught it, which is the argument for having one.
+KEEP_IN_A_GALLERY_FOLDER = {"brief.md"}
 
 # The trivial diagram that replaces the hero in the room's schema. Its own
 # numbers close -- 65 K over 0.5 K/W is 130 W -- so the page cannot teach a
@@ -217,6 +222,13 @@ def main(argv=None):
             shutil.rmtree(path)
         elif path.exists():
             path.unlink()
+
+    gallery = target / "examples" / "gallery"
+    for folder in sorted(p for p in gallery.iterdir() if p.is_dir()):
+        for item in sorted(folder.iterdir()):
+            if item.name in KEEP_IN_A_GALLERY_FOLDER:
+                continue
+            shutil.rmtree(item) if item.is_dir() else item.unlink()
 
     strip_hero(target)
     briefs = sorted(target.glob("examples/gallery/*/brief.md"))
