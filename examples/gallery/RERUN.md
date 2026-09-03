@@ -234,3 +234,75 @@ would have handed them to five agents told there were none.
 Then one fresh session per brief, started **in that directory**, each given
 one line naming its brief. `START-HERE.txt` in the room carries the five
 lines and the recording instructions.
+
+# Run 4
+
+Prepared 2026-09-03, after the ladder solver landed at `2ec1962`. The same
+five briefs as run 3, in five new folders, with one change: no node may carry
+`at`. Everything run 3 tested is retested by the accident of being the same
+brief; what run 4 tests is the solver.
+
+## What is different, and why
+
+**The same briefs, in new folders.** `11-battery` to `15-pv` are `06` to `10`
+with the paths changed and two paragraphs added. Run 3's five folders are
+evidence and stay as their agents drew them. The numbers are the same, so
+the reference solutions in `run-3/reference/` are the references here too:
+they differ from a run-4 answer only in coordinates, and coordinates are what
+the solver chooses. Same briefs also make the round counts comparable, which
+a new set would not.
+
+**`at` is forbidden.** Each brief says: leave `at` off every node, and leave
+`via`, and `at` on a branch or a source, off as well; if the library refuses
+the file, it names one node — give that node `at` and `via` to the branches
+that leave it sideways, and nothing else. What an agent does when refused is
+part of the test.
+
+**Two fields the vocabulary gained since run 3, unnamed.** A boundary node
+takes `wall`, and `units.T` takes a `scale`. The briefs do not mention
+either. 13's brief already says the magnet hangs from a mount and that its
+temperatures are absolute rather than a rise; whether an agent finds the two
+fields from the schema alone is the test. `corner` is gone; 14's brief still
+says the vapour chamber turns a corner, and with no `via` allowed that is an
+expressibility finding by construction — a bend is not a property of the
+hardware, which is what run 3 said.
+
+**Sequential sessions.** Run 3's five agents shared one working tree and
+two commits swept up another agent's files. One session at a time, each
+committing its own folder before the next starts.
+
+## Pre-registered outcomes
+
+Written before the run, and committed before the room is built.
+
+1. **The solver claim.** 11, 12, 13 and 14 are chains. Each reaches exit 0
+   with no errors and no warnings, with no node carrying `at` in the final
+   file. Fails if any of the four needs `at` on any node, or cannot reach
+   exit 0 without one.
+2. **The routing claim.** On a diagram whose nodes are all solved, no
+   round reports `wire-through-wall`, `symbols-overlap`, `nodes-too-close`
+   or `symbol-off-its-run`. Fails on one such finding in any round.
+3. **The refusal claim.** 15 is a star: the cell layer joins three others.
+   The library refuses it naming `cell`, says what to do, and the agent
+   reaches exit 0 with `at` on that node and no other. Fails if the refusal
+   names another node or does not say what to do, or if the agent ends with
+   `at` on more than one node.
+4. **Rounds.** No brief takes more `check` rounds than in run 3: 2, 3, 1, 1
+   and 1 for 06 to 10. Fails on any increase. A refusal is not a round.
+5. **The two fields.** 13's final file has `wall` on the mount and a `scale`
+   on `units.T`. Fails if either is absent, or if its findings say either
+   could not be expressed.
+6. **The physics claim, inherited.** No final diagram reports a
+   `node-does-not-balance` or `rate-does-not-match`; the references report
+   none.
+7. **The run is clean** if no transcript shows a removed file being read,
+   and each folder has its own commit.
+
+## Running it
+
+```bash
+python tools/clean_room.py ../ThermoDraw-cleanroom-run4 \
+    --briefs 11-battery 12-furnace 13-cryostat 14-subsea 15-pv
+```
+
+Then one session per brief, in that directory, one after another.

@@ -470,7 +470,7 @@ def write_start_here(target, briefs, sha, profile):
             b.relative_to(target).as_posix())
         for b in briefs)
     (target / "START-HERE.txt").write_text(
-        "Clean room for gallery run 3, from commit {}.\n\n"
+        "Clean room for a gallery run, from commit {}.\n\n"
         "Start a NEW session in THIS directory for each brief, and give it\n"
         "one line:\n\n{}\n\n"
         "Then, still in that session:\n\n"
@@ -481,9 +481,9 @@ def write_start_here(target, briefs, sha, profile):
         "  python -m thermodraw check --physics` on the final diagram and\n"
         "  paste its output at the end of rounds.md, and commit everything\n"
         "  under that folder as one commit.\n\n"
-        "When all five are done, copy examples/gallery/*/ back into the main\n"
+        "When all are done, copy examples/gallery/*/ back into the main\n"
         "repo on a branch, and read RERUN.md's pre-registered outcomes for\n"
-        "run 3 BEFORE reading any findings.\n".format(sha, lines),
+        "this run BEFORE reading any findings.\n".format(sha, lines),
         encoding="utf-8")
 
 
