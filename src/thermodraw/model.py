@@ -200,6 +200,21 @@ def _value(value, where, name="value"):
 # it, so a diagram written as data could not say where its own label goes.
 SIDES = ("auto", "up", "down", "left", "right")
 
+# Which way a boundary node's wall faces. `down` is what every diagram
+# before 1.0 drew, at every orientation, and it could not be turned: a mount
+# that holds a cold mass from above had its hatching between itself and the
+# strut, and the third clean-room run shipped the wrong arrangement because
+# the honest one could not be checked. The two kinds that draw a wall take
+# it; a free or phase node has no wall to turn and is refused.
+WALLS = ("down", "up", "left", "right")
+BOUNDARY_KINDS = {"fixed", "break"}
+
+# What `units.T` may declare about its scale. `K` is byte-identical whether
+# the author means absolute kelvin or a rise above ambient, and nothing in
+# the drawing tells them apart; the declaration is the only place the
+# difference can be stated, and `--physics` is the only reader that cares.
+SCALES = ("absolute", "rise")
+
 
 def _count(value, where):
     if isinstance(value, bool) or not isinstance(value, int):
@@ -215,6 +230,18 @@ def _side(value, where):
         raise DiagramError(
             f"{where}: side must be one of " + ", ".join(map(repr, SIDES))
             + f", got {value!r}")
+    return value
+
+
+def _wall(value, kind, where):
+    if value not in WALLS:
+        raise DiagramError(
+            f"{where}: wall must be one of " + ", ".join(map(repr, WALLS))
+            + f", got {value!r}")
+    if value != "down" and kind not in BOUNDARY_KINDS:
+        raise DiagramError(
+            f"{where}: a `{kind}` node has no wall to turn; `wall` is for "
+            + " and ".join(f"`{k}`" for k in sorted(BOUNDARY_KINDS)))
     return value
 
 
@@ -289,6 +316,7 @@ class Node:
     at: Optional[Sequence[float]] = None
     angle: float = 0.0
     side: str = "auto"
+    wall: str = "down"                      # `fixed` and `break` only
 
 
 @dataclass
@@ -382,6 +410,10 @@ class Diagram:
     units: Dict[str, str] = field(default_factory=dict)
     size: Optional[Sequence[float]] = None
     title: Optional[str] = None
+    # What `units.T` is on: "absolute", "rise", or None for undeclared. It
+    # is written in the file as `"T": {"unit": "K", "scale": "rise"}` and
+    # split out here, so every reader of `units` sees text as it always has.
+    scale: Optional[str] = None
 
     def node(self, node_id):
         for n in self.nodes:
@@ -508,6 +540,15 @@ class Diagram:
                 raise DiagramError(
                     f"the diagram: the unit for {quantity!r} must be text, "
                     f"got {unit!r}")
+        if self.scale is not None:
+            if self.scale not in SCALES:
+                raise DiagramError(
+                    "the diagram: units.T scale must be one of "
+                    + ", ".join(map(repr, SCALES)) + f", got {self.scale!r}")
+            if "T" not in self.units:
+                raise DiagramError(
+                    "the diagram: a temperature scale was declared and "
+                    "units has no entry for 'T' to put it on")
         for name in ("nodes", "branches", "sources"):
             got = getattr(self, name)
             if isinstance(got, (str, bytes)) or not isinstance(got, Sequence):
@@ -552,6 +593,7 @@ class Diagram:
             _text(n.sub, where, "sub")
             _value(n.value, where)
             _side(n.side, where)
+            _wall(n.wall, n.kind, where)
         if self.rail:
             if self.rail.reference not in seen:
                 raise DiagramError(
@@ -738,6 +780,9 @@ class Diagram:
             out["title"] = self.title
         if self.units:
             out["units"] = dict(self.units)
+            if self.scale:
+                out["units"]["T"] = {"unit": self.units["T"],
+                                     "scale": self.scale}
         if self.size:
             out["size"] = list(self.size)
         out["nodes"] = [_node_dict(n) for n in self.nodes]
@@ -779,6 +824,19 @@ class Diagram:
             raise DiagramError(
                 "the diagram: units must be an object of quantity to unit, "
                 f"got {data['units']!r}")
+        units = dict(data.get("units", {}))
+        scale = None
+        # `"T": {"unit": "K", "scale": "rise"}` is the one unit that may
+        # say more than its name. It is split here so the rest of the
+        # library reads `units["T"]` as the text it always was.
+        if isinstance(units.get("T"), dict):
+            said = units["T"]
+            extra = sorted(set(said) - {"unit", "scale"})
+            if extra or "unit" not in said:
+                raise DiagramError(
+                    "the diagram: units.T as an object takes `unit` and "
+                    f"`scale`, got {said!r}")
+            units["T"], scale = said["unit"], said.get("scale")
         if "rail" in data and data["rail"] is not None                 and not isinstance(data["rail"], dict):
             raise DiagramError(
                 f"the diagram: rail must be an object, got {data['rail']!r}")
@@ -792,7 +850,7 @@ class Diagram:
                    for i, s in enumerate(data.get("sources", []))]
         rail = _build(Rail, data["rail"], "rail") if data.get("rail") else None
         return cls(nodes=nodes, branches=branches, sources=sources, rail=rail,
-                   units=dict(data.get("units", {})),
+                   units=units, scale=scale,
                    size=data.get("size"), title=data.get("title")).validate()
 
     def to_json(self, **kw):
@@ -846,7 +904,8 @@ def _node_dict(n):
     out = {"id": n.id}
     if n.kind != "free":
         out["kind"] = n.kind
-    return _keep(out, n, ("label", "sub", "value", "at", "angle", "side"))
+    return _keep(out, n, ("label", "sub", "value", "at", "angle", "side",
+                          "wall"))
 
 
 def _branch_dict(b):

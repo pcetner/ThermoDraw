@@ -35,6 +35,15 @@ STUB = 12
 BREAK_GAP = 24
 BREAK_WALL = (22, 13)
 
+# Which way the wall faces: the unit step from the node to where the wall
+# stands, and the angle `render.ground` lays the hatch at so that it hangs
+# off the far side. `down` is the drawing every diagram before 1.0 had. The
+# other three exist because a mount that holds a cold mass from above has
+# its wall above, and the third clean-room run could not draw that: with the
+# wall always below, the strut left through the mount's own hatching.
+WALL = {"down": ((0, 1), 90), "up": ((0, -1), 270),
+        "left": ((-1, 0), 180), "right": ((1, 0), 0)}
+
 
 @dataclass
 class Label:
@@ -439,9 +448,15 @@ def layout(diagram) -> List[Placement]:
         # A fixed node reaches down to its boundary wall, so the label has to
         # clear the wall and not just the circle. The extents live on the
         # Symbol, which is what they are for.
-        wall = BY_KEY.get(n.kind)
-        half = wall.half if wall else 5.5
-        half_len = wall.half_len if wall else 5.5
+        glyph = BY_KEY.get(n.kind)
+        half = glyph.half if glyph else 5.5
+        half_len = glyph.half_len if glyph else 5.5
+        (dx, dy), wall_angle = WALL[n.wall]
+        if dx:
+            # The Symbol's extents are for a wall below: `half` is what
+            # clears it, across the label frame. Turned sideways the wall
+            # is along the frame instead, so the two clearances swap.
+            half, half_len = half_len, half
         # `T` with no number after it is not a statement about anything, and
         # interior junctions between series layers routinely have no
         # temperature of their own. It rendered as a lone italic T and the
@@ -451,22 +466,32 @@ def layout(diagram) -> List[Placement]:
         # is not.
         names = n.value is not None or bool(n.sub)
         who = {"role": "node", "ends": (n.id,)}
+        # The automatic side is above, and with the wall below that is
+        # away from it. With the wall above, away is below: a label that
+        # took the automatic side would sit beyond the hatching, which is
+        # what `side` toward the wall asks for and the default should not.
+        # Preferred, not forced — the branch that made the wall face up is
+        # usually the one arriving from below, and then the label steps
+        # back above, beyond the wall, as the fallback.
+        side = n.side
+        if side == "auto" and n.wall == "up" and n.angle % 180 == 0:
+            side = "auto:down"
         out.append(Placement(
             "node", at=at, angle=n.angle, ref=ref,
             label=Label(user=n.label,
                         name=S.S_("T", n.sub) if names else None,
                         value=diagram.value_text(n.kind, n.value),
                         half=half, half_len=half_len,
-                        side=n.side), **who))
+                        side=side), **who))
         # Both boundary kinds draw a wall; only one draws the stub reaching
         # it. That gap is the entire distinction between them, and it is
         # topological rather than decorative — which is why `break` having
         # quietly emitted nothing but a bare circle was a bug and not a
         # missing flourish. `g_break` was unreachable from the data pipeline.
         if n.kind == "fixed":
-            out.append(Placement("wire", points=[at, (at[0], at[1] + STUB)],
-                                 ref=ref, **who))
-            out.append(Placement("ground", at=(at[0], at[1] + STUB), angle=90,
+            foot = (at[0] + dx * STUB, at[1] + dy * STUB)
+            out.append(Placement("wire", points=[at, foot], ref=ref, **who))
+            out.append(Placement("ground", at=foot, angle=wall_angle,
                                  ref=ref, **who))
         elif n.kind == "phase":
             out.append(Placement("phase", at=at, ref=ref, **who))
@@ -474,8 +499,9 @@ def layout(diagram) -> List[Placement]:
             # Set further out than a fixed node's wall, so the clear space
             # reads as longer than a stub. At the stub's own distance the
             # reader is left wondering whether the stub failed to draw.
-            out.append(Placement("ground", at=(at[0], at[1] + BREAK_GAP),
-                                 angle=90, ref=ref, wall=BREAK_WALL, **who))
+            out.append(Placement(
+                "ground", at=(at[0] + dx * BREAK_GAP, at[1] + dy * BREAK_GAP),
+                angle=wall_angle, ref=ref, wall=BREAK_WALL, **who))
     return out
 
 

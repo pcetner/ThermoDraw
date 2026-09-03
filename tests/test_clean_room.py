@@ -527,15 +527,15 @@ class TestAWireThroughABoundaryWall:
     could verify instead of the one it wanted."""
 
     @staticmethod
-    def hung(mount_y):
+    def hung(mount_y, wall="down"):
         """A body on a strut to a mount. `mount_y` above the body is the
-        arrangement that puts the wall in the way."""
+        arrangement that puts the wall in the way, unless `wall` turns it."""
         return diagram({
             "units": {"R": "K/W", "T": "K"},
             "nodes": [{"id": "body", "label": "Cold mass", "value": "4",
                        "at": [400, 300]},
                       {"id": "mount", "kind": "fixed", "label": "Mount",
-                       "value": "300", "at": [400, mount_y]}],
+                       "value": "300", "at": [400, mount_y], "wall": wall}],
             "branches": [{"from": "body", "to": "mount", "kind": "cond",
                           "label": "Strut", "value": "50"}]})
 
@@ -545,12 +545,40 @@ class TestAWireThroughABoundaryWall:
         assert found.where == "node 'mount'"
         assert "runs through the boundary wall of node 'mount'" in found.message
 
-    def test_the_remedy_names_at_and_not_angle(self):
+    def test_the_remedy_names_the_wall_that_faces_away_then_at(self):
         found = one(check(self.hung(mount_y=80)), "wire-through-wall")
+        assert "turn the wall of node 'mount' with `wall: \"up\"`" \
+            in found.remedy
         assert "move node 'mount' with `at`" in found.remedy
-        # `angle` on a node moves its label and nothing else; the wall does
-        # not turn, so offering it would be the advice that appears to work.
+        # `angle` on a node moves its label and nothing else; offering it
+        # would be the advice that appears to work.
         assert "`angle`" not in found.remedy
+
+    def test_turning_the_wall_clears_it(self):
+        """The remedy, applied. This is 08's honest arrangement — the mount
+        above the magnet it holds — drawn without the strut leaving through
+        the mount's own hatching, which until 1.0 could not be drawn."""
+        report = check(self.hung(mount_y=80, wall="up"))
+        assert "wire-through-wall" not in codes(report), report.text()
+        assert not codes(report), report.text()
+
+    @pytest.mark.parametrize("wall,body,away", [
+        ("down", (400, 500), "up"), ("up", (400, 100), "down"),
+        ("left", (100, 300), "right"), ("right", (700, 300), "left")])
+    def test_each_direction_names_its_opposite(self, wall, body, away):
+        d = diagram({
+            "units": {"R": "K/W", "T": "K"},
+            "nodes": [{"id": "body", "label": "Body", "value": "4",
+                       "at": list(body)},
+                      {"id": "m", "kind": "fixed", "label": "Mount",
+                       "value": "300", "at": [400, 300], "wall": wall}],
+            "branches": [{"from": "body", "to": "m", "kind": "cond",
+                          "label": "Strut", "value": "50"}]})
+        found = one(check(d), "wire-through-wall")
+        assert f"`wall: \"{away}\"`" in found.remedy
+        turned = d.to_dict()
+        turned["nodes"][1]["wall"] = away
+        assert "wire-through-wall" not in codes(check(diagram(turned)))
 
     def test_putting_the_boundary_below_clears_it(self):
         report = check(self.hung(mount_y=560))

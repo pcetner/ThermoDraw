@@ -151,3 +151,48 @@ def test_the_cli_exposes_it(capsys, tmp_path):
     assert main(["check", str(path)]) == 0
     assert main(["check", "--physics", str(path)]) == 1
     assert "node-does-not-balance" in capsys.readouterr().out
+
+
+class TestARadiationValueOnARise:
+    """A radiation resistance is linearised at a pair of absolute
+    temperatures. A diagram that declares its temperatures as a rise above
+    ambient has no absolute temperature on the page to have taken it at, so
+    a `rad` value there gets one note — and only there: an undeclared scale
+    is undeclared, and a note on every `rad` would be a footnote wearing a
+    severity."""
+
+    @staticmethod
+    def sink(scale=None, kind="rad"):
+        b = (DiagramBuilder(R="K/W", T="K", P="W", scale=scale)
+             .node("s", "Sink", "60", at=(0, 0), sub="s")
+             .node("amb", "Ambient", "20", kind="fixed", at=(300, 0), sub="a")
+             .branch("s", "amb", kind, "Path", "4.0")
+             .source("s", "diss", "Load", "10", sub="d"))
+        return b
+
+    def test_a_rise_with_a_rad_value_is_noted(self):
+        found = [f for f in check(self.sink("rise"), physics=True).findings
+                 if f.code == "rad-needs-absolute-scale"]
+        assert len(found) == 1
+        assert found[0].severity == "note"
+        assert found[0].where == "branch 0 s->amb"
+        assert "absolute" in found[0].remedy
+
+    def test_absolute_is_quiet(self):
+        assert "rad-needs-absolute-scale" not in codes(
+            check(self.sink("absolute"), physics=True))
+
+    def test_undeclared_is_quiet(self):
+        assert "rad-needs-absolute-scale" not in codes(
+            check(self.sink(), physics=True))
+
+    def test_a_rise_with_no_radiation_is_quiet(self):
+        assert "rad-needs-absolute-scale" not in codes(
+            check(self.sink("rise", "conv"), physics=True))
+
+    def test_the_balance_itself_does_not_care(self):
+        """Differences only: 10 W over 4 K/W is the 40 K drop on either
+        scale, and neither declaration changes the answer."""
+        for scale in (None, "absolute", "rise"):
+            assert "node-does-not-balance" not in codes(
+                check(self.sink(scale), physics=True))

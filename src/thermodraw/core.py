@@ -387,7 +387,15 @@ def _sides(a, side):
 
     Auto keeps the original choice and adds its opposite as a fallback, so a
     blocked label steps across the branch rather than drifting away from it.
+    `auto:down` and its three siblings are auto with the first choice named:
+    the same two candidates, the stated one first. A boundary whose wall
+    faces up wants its label below by default, the way one whose wall faces
+    down gets it above — but a forced `down` would have no fallback, and the
+    branch that made the wall face up is the one arriving from below.
     """
+    if side and side.startswith("auto:"):
+        first = PAGE_SIDES[side[5:]]
+        return [first, (-first[0], -first[1])]
     if side and side != "auto":
         return [PAGE_SIDES[side]]
     n1, n2 = normals(a)

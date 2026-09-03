@@ -149,6 +149,15 @@ class Description:
     lines: List[Line] = field(default_factory=list)
     nodes: List[Tuple[str, str, Tuple[float, float]]] = field(
         default_factory=list)
+    # A boundary node whose wall was turned, by id. Only the turned ones:
+    # printing `wall down` on every fixed node would bury the one that is
+    # not, the same reason `a0` is not printed on every row.
+    walls: Dict[str, str] = field(default_factory=dict)
+    # What `units.T` declared, if anything, and the unit it is on. Where a
+    # wall landed was the one thing nothing could report; whether `K` meant
+    # absolute or a rise was the other.
+    scale: Optional[str] = None
+    temperature_unit: str = ""
     # The rail is a wire like any other in the placements, so it vanished into
     # the count. `rail.reference` is documented as inert — it records which
     # node the rail *is* and does nothing — which makes this the only place it
@@ -209,9 +218,14 @@ class Description:
                 out.append(f"  {', '.join(group)} -- nothing")
             if len(self.pieces) > 1:
                 out.append(f"  {len(self.pieces)} pieces, not one network")
+        if self.scale:
+            what = "absolute" if self.scale == "absolute" \
+                else "rise above ambient"
+            out += ["", f"temperatures: {what}, in {self.temperature_unit}"]
         if self.nodes:
             out += ["", "nodes:"]
             out += [f"  {i:<14.14s} {k:<8s} at ({x:.0f}, {y:.0f})"
+                    + (f" wall {self.walls[i]}" if i in self.walls else "")
                     for i, k, (x, y) in self.nodes]
         if self.lines:
             out += ["", "elements:"]
@@ -223,8 +237,11 @@ class Description:
             "source": self.source,
             "canvas": list(self.canvas),
             "counts": dict(self.counts),
-            "nodes": [{"id": i, "kind": k, "at": list(a)}
+            "nodes": [dict({"id": i, "kind": k, "at": list(a)},
+                           **({"wall": self.walls[i]} if i in self.walls
+                              else {}))
                       for i, k, a in self.nodes],
+            "scale": self.scale,
             "edges": [{"from": a, "to": b, "kind": k, "count": count,
                        "arrangement": arrangement, "directed": arrow}
                       for (a, b, k), (count, arrangement, arrow) in zip(
@@ -365,6 +382,9 @@ def describe(diagram, size: Optional[Sequence[float]] = None,
         counts=dict(Counter(_kind(p) for p in placements)),
         lines=lines,
         nodes=[(n.id, n.kind, tuple(n.at)) for n in diagram.nodes if n.at],
+        walls={n.id: n.wall for n in diagram.nodes if n.wall != "down"},
+        scale=diagram.scale,
+        temperature_unit=diagram.units.get("T", ""),
         edges=edges,
         detail=detail,
         sources=sources,

@@ -243,4 +243,27 @@ def balance(diagram) -> List[Finding]:
             + _grouped(skipped),
             remedy="give the node, or its neighbour, a `value`, or read "
                    "those nodes as unchecked"))
+
+    # The balance above uses differences, so it is the same on either
+    # scale. A radiation resistance is not: it is linearised at a pair of
+    # absolute temperatures, and a diagram that declares its temperatures
+    # as a rise above ambient has no absolute temperature anywhere on the
+    # page to have taken it at. Only a declared rise fires it; an
+    # undeclared scale is exactly that, and a note on every `rad` would be
+    # a footnote wearing a severity.
+    if diagram.scale == "rise":
+        for i, b in enumerate(diagram.branches):
+            if b.kind == "rad" and _num(b.value) is not None:
+                out.append(Finding(
+                    "rad-needs-absolute-scale", "note",
+                    f"branch {i} {b.source}->{b.target}",
+                    f"branch {i} {b.source}->{b.target} is a radiation "
+                    "path with a value, and the temperatures are declared "
+                    "as a rise above ambient: a radiation resistance holds "
+                    "at a pair of absolute temperatures this diagram "
+                    "cannot state",
+                    remedy="declare `units.T` as absolute and give absolute "
+                           "temperatures, or read the value as linearised "
+                           "at an operating point the page does not show",
+                    at=tuple(b.at) if b.at else None))
     return out

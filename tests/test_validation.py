@@ -219,3 +219,41 @@ def test_a_retired_kind_names_its_replacement():
                                       "at": [420, 260]}]})
     assert "`via`" in str(caught.value)
     assert "`free`" in str(caught.value)
+
+
+# ------------------------------------------------------------- 1.0 fields
+def test_a_wall_is_for_the_kinds_that_draw_one():
+    for kind in ("free", "phase"):
+        with pytest.raises(DiagramError, match="no wall to turn"):
+            Diagram.from_dict({"nodes": [{"id": "a", "kind": kind,
+                                          "at": [0, 0], "wall": "up"}]})
+    for kind in ("fixed", "break"):
+        Diagram.from_dict({"nodes": [{"id": "a", "kind": kind,
+                                      "at": [0, 0], "wall": "left"}]})
+
+
+def test_a_wall_faces_one_of_four_ways():
+    with pytest.raises(DiagramError, match="wall must be one of"):
+        Diagram.from_dict({"nodes": [{"id": "a", "kind": "fixed",
+                                      "at": [0, 0], "wall": "north"}]})
+
+
+def test_the_temperature_scale_is_one_of_two():
+    with pytest.raises(DiagramError, match="scale must be one of"):
+        Diagram.from_dict({"units": {"T": {"unit": "K", "scale": "kelvin"}},
+                           "nodes": [{"id": "a", "at": [0, 0]}]})
+
+
+def test_a_temperature_object_takes_unit_and_scale_only():
+    with pytest.raises(DiagramError, match="takes `unit` and `scale`"):
+        Diagram.from_dict({"units": {"T": {"scale": "rise"}},
+                           "nodes": [{"id": "a", "at": [0, 0]}]})
+    with pytest.raises(DiagramError, match="takes `unit` and `scale`"):
+        Diagram.from_dict({"units": {"T": {"unit": "K", "zero": 273}},
+                           "nodes": [{"id": "a", "at": [0, 0]}]})
+
+
+def test_a_scale_needs_a_temperature_unit_to_sit_on():
+    from thermodraw import DiagramBuilder
+    with pytest.raises(DiagramError, match="no entry for 'T'"):
+        DiagramBuilder(R="K/W", scale="rise").node("a", at=(0, 0)).build()

@@ -91,6 +91,10 @@ sentence after it says what would overturn it.
   `flux` may point away.
 - A fixed node connects to its wall; a break does not. The gap is the whole
   distinction. `break` is also a branch kind: an open circuit, no value.
+- The wall faces `wall`: `down` by default, or `up`, `left`, `right`. A
+  mount that holds something from above has its wall above, and run 3 could
+  not draw that. `angle` still turns only the label; an automatic label goes
+  away from the wall whichever way it faces.
 - Boxes resist, arrows carry: `flow` is chevrons in the line. It is the one
   directed branch and refuses `angle`.
 - `mixed` is an empty box, and that is a statement. Flux is several arrows.
@@ -161,10 +165,12 @@ sentence after it says what would overturn it.
   to it and back. Measured from the run's line, not from the wire, which is
   `half_len` away either way.
 - A branch may not join a place to itself.
-- A wire through a boundary node's hatching is a warning. The wall is always
-  drawn below its node, so a branch arriving from below crosses it; nothing
-  looked, because a ground carries no `Symbol`. It fires twice on run 2's
-  `house.json`, correctly, and that diagram is evidence and stays as drawn.
+- A wire through a boundary node's hatching is a warning. The wall faces
+  `wall`, `down` unless turned, so a branch arriving from that side crosses
+  it; nothing looked, because a ground carries no `Symbol`. The remedy names
+  the `wall` that faces away from the branch first, then `at`. It fires twice
+  on run 2's `house.json`, correctly, and that diagram is evidence and stays
+  as drawn.
 - A placement carries `role`, `ends`, `via`, `count`, `arrangement` and
   `outward` as data; `ref` is for people. Ids are non-empty and not `rail`,
   and nothing else is required of them.
@@ -175,6 +181,12 @@ sentence after it says what would overturn it.
   which free nodes it did not check, in one note: a silent skip on the
   neighbour of a node with no temperature hid the worst-balanced node in
   a diagram from the only tool that looks for that.
+- `units.T` may declare its scale, `absolute` or `rise`, written as
+  `{"unit": "K", "scale": "rise"}`; plain `"K"` declares nothing. The
+  drawing does not change; `describe` says it, and `--physics` notes a `rad`
+  value on a declared rise, the one reader that cares. It stays a
+  declaration, not an inference: a sharp check was tried and fired on a wall
+  at −10 °C radiating to sky, which is correct.
 - What survives the solver: four constraints, two objectives, four unchanged,
   three scaffolding. The table is in the record.
 
@@ -235,9 +247,9 @@ sentence after it says what would overturn it.
   path embedding nothing made a clean report a claim about a rendering the
   reader would not see. It costs about 78 KB a file. The
   embedded faces are renamed "ThermoDraw Sans" (OFL clause 3).
-- Three limits that are not checks: a `rad` value's operating point is not
-  representable; the temperature scale (absolute or rise) is not
-  representable; `phase` draws the plateau, not the latent-heat budget.
+- Two limits that are not checks: a `rad` value's operating point is not
+  representable; `phase` draws the plateau, not the latent-heat budget. The
+  temperature scale was the third, and is a declaration since 1.0.
 - Every public entry point is annotated and CI runs
   `mypy --check-untyped-defs`, which is clean. The `**who` keyword spreads
   in `_layout.py` are `Dict[str, Any]` because a heterogeneous `**` spread
