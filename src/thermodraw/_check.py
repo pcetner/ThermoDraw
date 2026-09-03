@@ -280,7 +280,25 @@ def _move(p, past="this label"):
         where = "further from its node" if kind == "source" else \
             "along its branch"
         return f"move {ref} {where} with `at`"
+    if p.element == "ground":
+        return f"turn the wall of {ref} with `wall`, or move {ref} with `at`"
     return f"move {ref} with `at`"
+
+
+def _away_from(centre, points):
+    """The `wall` value that faces away from where this wire comes from.
+
+    The far end of the offending run, seen from the wall, says which side
+    the branch arrives on; the wall should face the other way. Quantised to
+    the axis with the larger component, which is the only kind of answer
+    the field can take.
+    """
+    far = max(points, key=lambda q: (q[0] - centre[0]) ** 2
+              + (q[1] - centre[1]) ** 2)
+    dx, dy = far[0] - centre[0], far[1] - centre[1]
+    if abs(dx) > abs(dy):
+        return "left" if dx > 0 else "right"
+    return "up" if dy > 0 else "down"
 
 
 def _remedy(culprit, owner=None, free=(), pair=False):
@@ -873,18 +891,20 @@ def _symbol_off_its_run(placements, out):
 def _wire_through_wall(placements, out):
     """A wire running through a boundary node's hatching.
 
-    The wall is always drawn flat below its node — `angle` does not turn it
-    and neither does anything else — so a branch that arrives from *below*
-    passes straight through it. Nothing caught that: `_symbols_overlap`
-    counts a ground as a box, but `_wire_through_symbol` only considers
-    placements that carry a `Symbol`, and a ground carries none.
+    The wall faces `wall` — `down` unless the author turned it; `angle` does
+    not turn it — so a branch that arrives from the wall's own side passes
+    straight through it. Nothing caught that: `_symbols_overlap` counts a
+    ground as a box, but `_wire_through_symbol` only considers placements
+    that carry a `Symbol`, and a ground carries none.
 
     A clean-room reader hit the consequence from the other side. It wanted a
     mount *above* the magnet that hangs from it, built exactly that, and
     `check` passed it with nothing to say — so it could not tell whether the
     strut left through the mount's own hatching. It shipped the arrangement
     it could verify instead, and said so. Two of run 2's diagrams have the
-    real thing in them, undetected until this rule was written.
+    real thing in them, undetected until this rule was written. Until 1.0
+    the wall could not be turned at all, and the remedy was to move the node;
+    now it names the direction that faces away from the branch first.
 
     The node's own stub is excluded by `ref`, which is the one wire that is
     supposed to reach the wall.
@@ -899,19 +919,22 @@ def _wire_through_wall(placements, out):
             if p.element != "wire" or p.ref == ground.ref:
                 continue
             pts = [tuple(q) for q in p.points]
-            if any(core.segment_box(pts[i], pts[i + 1], centre, shaved, angle)
-                   for i in range(len(pts) - 1)):
-                hits.setdefault((str(ground.ref), str(p.ref)), (ground, centre))
-    for (_, offender), (ground, centre) in sorted(hits.items()):
+            for i in range(len(pts) - 1):
+                if core.segment_box(pts[i], pts[i + 1], centre, shaved, angle):
+                    hits.setdefault((str(ground.ref), str(p.ref)),
+                                    (ground, centre, pts[i:i + 2]))
+                    break
+    for (_, offender), (ground, centre, run) in sorted(hits.items()):
+        away = _away_from(centre, run)
         out.append(Finding(
             "wire-through-wall", "warning", ground.ref or "a boundary",
             f"{offender} runs through {_name(ground)}",
-            # Not `angle`: on a node that moves the label and nothing else,
-            # and the wall does not turn. The node has to go where the
-            # branch can reach it without crossing underneath.
-            remedy=f"move {ground.ref} with `at` so {offender} arrives from "
-                   "the side or from above: the wall is always drawn below "
-                   "its node and cannot be turned",
+            # Not `angle`: on a node that moves the label and nothing else.
+            # `wall` is the field that turns the wall, and the side named is
+            # the one that faces away from where the branch comes from.
+            remedy=f"turn the wall of {ground.ref} with `wall: \"{away}\"` "
+                   f"so it faces away from {offender}, or move {ground.ref} "
+                   "with `at`",
             at=tuple(centre)))
 
 

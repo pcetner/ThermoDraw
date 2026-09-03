@@ -46,6 +46,20 @@ The quantities are `R`, `C`, `T`, `P`, `q` and `q″`. `radin` and `flow` are
 both powers and share `q`; a heat **flux** is per unit area, so it is measured
 in something else and reads `q″`.
 
+`T` may also say which scale its temperatures are on, because `K` is
+byte-identical whether you mean absolute kelvin or a rise above ambient:
+
+```jsonc
+"units": {"T": {"unit": "K", "scale": "absolute"}}
+```
+
+`scale` is `absolute` or `rise`. Plain `"T": "K"` stays valid and declares
+nothing. The drawing does not change; `describe` prints the declaration, and
+under `--physics` a `rad` branch carrying a value on a diagram declared as a
+rise gets a note, because a radiation resistance is only meaningful at
+absolute temperatures. The balance check itself works on differences and
+does not care.
+
 That last key is the letter `q` followed by **U+2033 DOUBLE PRIME** (″). It is
 one character, and it is not two apostrophes, not two quote marks, and not
 `"`. Getting it wrong is a JSON syntax error at best and an unknown-quantity
@@ -83,6 +97,7 @@ A place with a temperature.
 | `at` | `[x, y]`. **Required** until the network layer lands |
 | `angle` | turns the node's label frame, in degrees. It moves the label and nothing else |
 | `side` | `auto` (default), `up`, `down`, `left`, `right` — where the label goes |
+| `wall` | `down` (default), `up`, `left`, `right` — which way a `fixed` or `break` node's wall faces. Refused on a node that has no wall |
 
 `phase` is a node whose temperature a phase change holds rather than a
 boundary: the constant-temperature marking, two short rules beneath, and
@@ -105,14 +120,22 @@ off and the label alone is drawn. To tie one to the thing it is bolted to,
 use a `break` **branch** — the same word for the same thing in the other
 position.
 
-The wall is always drawn flat below the node, at every orientation. `angle`
-does not turn it, and neither does anything else; it decides which way the
-label goes and nothing more. `"side": "down"` on a boundary node aims the
-label at that node's own wall, and never prints on it: on a `fixed` node the
-clearance already covers the wall, and on a `break`, whose wall stands
-further off, the solver pushes the label the rest of the way. The `break`
-case ends up snug against the wall, so prefer `up` or an `angle` there if you
-want air around the text.
+The wall faces `wall`: `down` unless you say otherwise, and `angle` does not
+turn it — `angle` decides which way the label goes and nothing more. Turn the
+wall when the boundary holds something from above or beside it. A mount that
+a cold mass hangs from has its wall above, `"wall": "up"`, so the strut
+arrives from below through clear space instead of through the hatching;
+drawn with the wall still below, `check` reports `wire-through-wall` and
+names the direction that faces away from the branch. With the wall above, an
+automatic label goes below, the way it goes above when the wall is below.
+
+`side` aimed at the wall — `down` on a wall that faces down, `up` on one
+that faces up — puts the label beyond that node's own wall, and never prints
+on it: on a `fixed` node the clearance already covers the wall, and on a
+`break`, whose wall stands further off, the solver pushes the label the rest
+of the way. The `break` case ends up snug against the wall, and above an
+upward wall the push is far enough to be reported, so prefer another side or
+an `angle` there if you want air around the text.
 
 Reach for `angle` when a label wants to be somewhere `side` alone cannot put
 it — the hero's `"angle": 90` on its ambient node sends that label out to the
@@ -387,7 +410,7 @@ label is never set upside down. And `side` overrides `angle` entirely.
 Notice what the table does not contain. Symmetry about 180° means a node's
 label reaches above, left and right and **never below**; no `angle` sends it
 down. `side: "down"` is the only thing that gets there, and it is safe even on
-a boundary node, whose wall is below it.
+a boundary node whose wall is below it.
 
 Reach for `angle` when `side` runs out. `side` offers four directions, and a
 node fanning three ways with a capacitance below it and a source coming in has
@@ -522,7 +545,10 @@ resistances at `(T_here − T_there) / R`, with `count` folding a group the way
 this page says a count folds.
 Two codes, both warnings: `node-does-not-balance`, which lists every term so
 you can see which one is off, and `rate-does-not-match`, for a branch whose
-`rate` disagrees with what its ends imply. A fixed node is a reservoir and is
+`rate` disagrees with what its ends imply. One note beside them:
+`rad-needs-absolute-scale`, when `units.T` declares a rise and a `rad` branch
+carries a value, since a radiation resistance holds at a pair of absolute
+temperatures the page then cannot state. A fixed node is a reservoir and is
 not asked; a `phase` node is holding latent heat this cannot see. A `free`
 node is skipped when it has no temperature, when a **neighbour** has none —
 which is what an interior junction drawn the way this page recommends does

@@ -9,6 +9,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **A boundary's wall can be turned.** `fixed` and `break` nodes take
+  `wall`: `down`, which is what every diagram drew before, or `up`, `left`,
+  `right`. A mount that a cold mass hangs from has its wall above, and the
+  third clean-room run could not draw that: with the wall always below,
+  the strut left through the mount's own hatching, so the agent shipped
+  the arrangement it could verify and said so. The renderer's `ground` and
+  the occupancy box already took an angle; two literals in `_layout` were
+  the whole of "always below". The `wire-through-wall` remedy now names
+  the direction that faces away from the offending branch first and `at`
+  second, applied and tested in all four directions; with the wall above,
+  an automatic label goes below; `describe` says `wall up` on the node's
+  row when it is turned. A `free` or `phase` node has no wall and refuses
+  the field. Six goldens added, none moved.
+- **`units.T` can say which scale it is on.** `K` is byte-identical
+  whether the author means absolute kelvin or a rise above ambient, and
+  the record listed that among three limits that were not checks. It is a
+  declaration now: `"T": {"unit": "K", "scale": "absolute"}` or `"rise"`,
+  split on the way in so every reader of `units` still sees text, and
+  written back nested. Plain `"T": "K"` stays valid and declares nothing.
+  The drawing does not change; `describe` prints
+  `temperatures: rise above ambient, in K`; and `--physics` adds one
+  note, `rad-needs-absolute-scale`, for a `rad` branch carrying a value
+  on a diagram declared as a rise, because a radiation resistance holds at
+  a pair of absolute temperatures the page then cannot state. An
+  undeclared scale fires nothing. `DiagramBuilder` takes `scale=` as a
+  keyword of its own.
 - **`symbol-off-its-run`: a branch symbol placed away from the line its own
   wire takes is a warning.** `at` is "where the box sits" and `layout` splits
   the route around it, so an `at` beside the route drew a diagonal jog out to

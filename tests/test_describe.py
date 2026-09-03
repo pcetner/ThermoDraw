@@ -215,3 +215,45 @@ class TestItSaysHowTheLabelLanded:
         for line in describe(ladder()).lines:
             assert line.text().rstrip() == line.text()
             assert "pushed" not in line.text()
+
+
+class TestWhatOnePointZeroAdded:
+    """Where a wall landed was the one thing nothing could report, and
+    whether `K` meant absolute or a rise was the other."""
+
+    @staticmethod
+    def mount(wall="down", scale=None):
+        units = {"R": "K/W", "T": "K" if scale is None
+                 else {"unit": "K", "scale": scale}}
+        return Diagram.from_dict({
+            "units": units,
+            "nodes": [{"id": "body", "label": "Cold mass", "value": "4",
+                       "at": [400, 300]},
+                      {"id": "mount", "kind": "fixed", "label": "Mount",
+                       "value": "300", "at": [400, 80], "wall": wall}],
+            "branches": [{"from": "body", "to": "mount", "kind": "cond",
+                          "label": "Strut", "value": "50"}]})
+
+    def test_a_turned_wall_is_said_on_the_node_row(self):
+        text = describe(self.mount("up")).text()
+        assert "  mount          fixed    at (400, 80) wall up" in text
+        assert "wall of node 'mount'   ground          (400, 68) a270" in text
+
+    def test_a_wall_facing_down_is_not_remarked_on(self):
+        assert "wall" not in [w for l in describe(self.mount()).text()
+                              .splitlines() if l.startswith("  mount")
+                              for w in l.split()]
+
+    def test_the_scale_is_said_when_declared(self):
+        text = describe(self.mount(scale="rise")).text()
+        assert "\ntemperatures: rise above ambient, in K\n" in text
+        text = describe(self.mount(scale="absolute")).text()
+        assert "\ntemperatures: absolute, in K\n" in text
+
+    def test_and_not_when_it_is_not(self):
+        assert "temperatures:" not in describe(self.mount()).text()
+
+    def test_both_reach_the_json(self):
+        out = describe(self.mount("left", "absolute")).to_dict()
+        assert out["scale"] == "absolute"
+        assert [n.get("wall") for n in out["nodes"]] == [None, "left"]

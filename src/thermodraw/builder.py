@@ -24,16 +24,20 @@ from . import theme as T
 class DiagramBuilder:
     """Builds a `Diagram`. Every method returns self so calls chain."""
 
-    def __init__(self, title=None, size=None, **units):
+    def __init__(self, title=None, size=None, scale=None, **units):
+        """`scale` says what `T` is on, "absolute" or "rise"; it is a
+        keyword of its own so `**units` cannot mistake it for a quantity."""
         self.diagram = M.Diagram(units={k: v for k, v in units.items() if v},
-                                 size=size, title=title)
+                                 size=size, title=title, scale=scale)
 
     # ------------------------------------------------------------- the parts
     def node(self, node_id, label=None, value=None, at=None, kind="free",
-             sub="", angle=0.0, side="auto"):
+             sub="", angle=0.0, side="auto", wall="down"):
+        """`wall` turns a `fixed` or `break` node's wall: `down` (default),
+        `up`, `left` or `right`."""
         self.diagram.nodes.append(M.Node(
             id=node_id, kind=kind, label=label, sub=sub, value=value,
-            at=at, angle=angle, side=side))
+            at=at, angle=angle, side=side, wall=wall))
         return self
 
     def branch(self, source, target, kind="cond", label=None, value=None,

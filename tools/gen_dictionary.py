@@ -88,7 +88,10 @@ ENTRIES = {
         what="A temperature imposed from outside, which nothing the network "
              "does can change. The wire runs down into a hatched wall, the "
              "drafting mark for a boundary: heat may cross it in either "
-             "direction, at any rate, without changing its temperature.",
+             "direction, at any rate, without changing its temperature. The "
+             "wall faces down unless <code>wall</code> turns it up, left or "
+             "right, for a boundary that holds the thing from above or "
+             "beside it.",
         use="The air in the room. One mug of tea cannot warm it up, so its "
             "temperature is a given rather than an answer.",
         code={"id": "room", "kind": "fixed", "label": "Room air",
@@ -100,7 +103,8 @@ ENTRIES = {
              "away, and that gap is what tells the two apart: nothing "
              "crosses here. With no heat path there is usually no "
              "temperature worth stating, so most break nodes carry a label "
-             "and no value.",
+             "and no value. Like a fixed node, its wall faces down unless "
+             "<code>wall</code> turns it.",
         use="The rubber feet under a laptop. They hold it to the desk without "
             "letting heat into it.",
         code={"id": "desk", "kind": "break", "label": "Rubber feet"}),

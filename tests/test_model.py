@@ -172,3 +172,36 @@ def test_a_value_without_a_unit_is_refused():
 def test_unknown_quantity_in_units_is_refused():
     with pytest.raises(DiagramError, match="not a quantity"):
         Diagram.from_dict({"units": {"Z": "m"}, "nodes": []})
+
+
+# ---------------------------------------------------------- the 1.0 fields
+def test_a_turned_wall_survives_the_round_trip():
+    d = Diagram.from_dict({
+        "units": {"R": "K/W", "T": "K"},
+        "nodes": [{"id": "a", "at": [0, 0], "value": "4"},
+                  {"id": "m", "kind": "fixed", "at": [0, -200],
+                   "value": "300", "wall": "up"}],
+        "branches": [{"from": "a", "to": "m", "kind": "cond", "value": "1"}]})
+    out = d.to_dict()
+    assert out["nodes"][1]["wall"] == "up"
+    assert "wall" not in out["nodes"][0], "the default is not written"
+    assert Diagram.from_dict(out).to_dict() == out
+
+
+def test_the_temperature_scale_survives_the_round_trip():
+    """Written as `"T": {"unit": ..., "scale": ...}`; read into `units["T"]`
+    as the text it always was, plus `scale`; written back nested."""
+    d = Diagram.from_dict({
+        "units": {"R": "K/W", "T": {"unit": "K", "scale": "rise"}},
+        "nodes": [{"id": "a", "at": [0, 0], "value": "20"}]})
+    assert d.units["T"] == "K" and d.scale == "rise"
+    out = d.to_dict()
+    assert out["units"]["T"] == {"unit": "K", "scale": "rise"}
+    assert Diagram.from_dict(out).to_dict() == out
+
+
+def test_a_plain_temperature_unit_declares_nothing():
+    d = Diagram.from_dict({"units": {"T": "K"},
+                           "nodes": [{"id": "a", "at": [0, 0], "value": "20"}]})
+    assert d.scale is None
+    assert d.to_dict()["units"] == {"T": "K"}

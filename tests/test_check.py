@@ -800,16 +800,23 @@ class TestABoundaryNodesOwnLabel:
     """
 
     @staticmethod
-    def wall_and_label(kind, side):
-        b = (DiagramBuilder(T="C", R="K/W")
-             .node("a", "Hot", "120", at=(0, 0))
-             .node("b", "Cold", "40", kind=kind, at=(300, 0), side=side)
-             .branch("a", "b", "cond", "Slab", "0.35"))
-        placements = layout(b.build())
+    def diagram(kind, side, wall="down"):
+        # The branch arrives from the side opposite the wall, which is the
+        # arrangement `wall` exists for.
+        far = (600, 0) if wall == "left" else (0, 0)
+        return (DiagramBuilder(T="C", R="K/W")
+                .node("a", "Hot", "120", at=far)
+                .node("b", "Cold", "40", kind=kind, at=(300, 0), side=side,
+                      wall=wall)
+                .branch("a", "b", "cond", "Slab", "0.35"))
+
+    @classmethod
+    def wall_and_label(cls, kind, side, wall="down"):
+        placements = layout(cls.diagram(kind, side, wall).build())
         scene = compose(placements)
         rect = [r for r in scene.rects if r.ref == "node 'b'"][0]
-        wall = [p for p in placements if p.element == "ground"][0]
-        return rect, wall
+        ground = [p for p in placements if p.element == "ground"][0]
+        return rect, ground
 
     # The two kinds differ, and the difference is worth pinning. A `fixed`
     # node's half of 22 already covers a wall that ends at 25, so the label is
@@ -821,25 +828,60 @@ class TestABoundaryNodesOwnLabel:
     # the right answer — it is legible, and a rule that fired here would fire
     # on every break node anyone draws — but it is an accident of two
     # constants, so it is written down rather than left to be rediscovered.
-    @pytest.mark.parametrize("kind,gap,push",
-                             [("fixed", 4.0, 0.0), ("break", 0.0, 8.0)])
-    def test_the_label_lands_below_the_wall_not_on_it(self, kind, gap, push):
-        from thermodraw._check import ADRIFT
+    #
+    # Turned, the wall keeps those numbers on three sides. Above is the
+    # exception: the push loop steps by 4, and a block placed above a box
+    # touches it at a floating-point epsilon the one below does not, so the
+    # break's label takes one step more, 12, and that one is reported.
+    # Sideways the label frame's two clearances swap, which is why a fixed
+    # wall to the side clears by 5 and a break's by 1: the along-frame
+    # number was 19 and 22 where the across-frame one was 22 and 22.
+    @pytest.mark.parametrize("kind,wall,gap,push", [
+        ("fixed", "down", 4.0, 0.0), ("break", "down", 0.0, 8.0),
+        ("fixed", "up", 4.0, 0.0), ("break", "up", 4.0, 12.0),
+        ("fixed", "left", 5.0, 0.0), ("break", "left", 1.0, 8.0),
+        ("fixed", "right", 5.0, 0.0), ("break", "right", 1.0, 8.0)])
+    def test_the_label_lands_beyond_the_wall_not_on_it(self, kind, wall,
+                                                       gap, push):
         from thermodraw._render import bounds
-        rect, wall = self.wall_and_label(kind, "down")
-        _, top, _, _ = rect
-        assert top - bounds(wall)[3] == pytest.approx(gap, abs=0.2)
+        rect, ground = self.wall_and_label(kind, wall, wall)
+        x, y, w, h = rect
+        wx0, wy0, wx1, wy1 = bounds(ground)
+        between = {"down": y - wy1, "up": wy0 - (y + h),
+                   "left": wx0 - (x + w), "right": x - wx1}[wall]
+        assert between == pytest.approx(gap, abs=0.2)
         assert rect.clear, "printed over the wall"
         assert rect.used - rect.solved == pytest.approx(push, abs=0.2)
-        assert rect.used - rect.solved <= ADRIFT, "now reported, so document it"
+
+    @pytest.mark.parametrize("kind,wall", [
+        (k, w) for k in ("fixed", "break")
+        for w in ("down", "up", "left", "right")])
+    def test_and_the_checker_agrees(self, kind, wall):
+        """Aimed at its own wall, the label is reported by nothing — except a
+        break's label aimed above, which is the one case the push loop's
+        step size carries past ADRIFT."""
+        found = codes(check(self.diagram(kind, wall, wall)))
+        if (kind, wall) == ("break", "up"):
+            assert found == ["label-adrift"]
+        else:
+            assert not found
 
     @pytest.mark.parametrize("kind", ["fixed", "break"])
-    def test_and_the_checker_agrees(self, kind):
-        b = (DiagramBuilder(T="C", R="K/W")
-             .node("a", "Hot", "120", at=(0, 0))
-             .node("b", "Cold", "40", kind=kind, at=(300, 0), side="down")
-             .branch("a", "b", "cond", "Slab", "0.35"))
+    def test_an_automatic_label_goes_away_from_an_upward_wall(self, kind):
+        """With the wall below, the automatic side is above, away from it.
+        With the wall above, away is below; a default that sat beyond the
+        hatching would be the aimed-at-the-wall case nobody asked for."""
+        from thermodraw import describe
+        b = self.diagram(kind, "auto", "up")
         assert not codes(check(b))
+        row = [l for l in describe(b).lines if l.ref == "node 'b'"][0]
+        assert row.side == "below"
+
+    def test_the_wall_is_a_stub_away_in_the_direction_it_faces(self):
+        for wall, step in (("down", (0, 12)), ("up", (0, -12)),
+                           ("left", (-12, 0)), ("right", (12, 0))):
+            _, ground = self.wall_and_label("fixed", "auto", wall)
+            assert ground.at == (300 + step[0], 0 + step[1]), wall
 
 
 class TestRepeatedBranches:

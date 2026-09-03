@@ -19,6 +19,38 @@ SCENES = {f"symbol-{s.key}": _strip(s) for s in symbols.SYMBOLS}
 SCENES["region-grid"] = symbols.region_grid
 SCENES["diagonal-demo"] = symbols.diagonal_demo
 
+
+def _wall_scene(kind, wall):
+    """A boundary with its wall turned, and a branch arriving from the far
+    side — the arrangement `wall` exists for. Through the pipeline, because
+    a wall's direction is a layout fact and the symbol sheets do not have it.
+    `down` is the drawing every diagram before 1.0 had and needs no scene.
+
+    The upward scenes put the label to the right: on a vertical run a break
+    node's label has the wire on one side and the wall on the other, and
+    the solver pushes it up the wire into a collision. That is true of a
+    strut arriving from above onto a wall that faces down too, and it is
+    what `side` is for; a golden is a drawing, not a finding."""
+    def scene():
+        from thermodraw import Diagram, layout, render
+        far = {"up": (300, 220), "left": (520, 0), "right": (80, 0)}[wall]
+        return render(layout(Diagram.from_dict({
+            "units": {"R": "K/W", "T": "K"},
+            "nodes": [{"id": "a", "label": "Cold mass", "value": "4",
+                       "sub": "m", "at": list(far)},
+                      {"id": "b", "kind": kind, "label": "Mount",
+                       "value": "300", "sub": "b", "at": [300, 0],
+                       "wall": wall,
+                       "side": "right" if wall == "up" else "auto"}],
+            "branches": [{"from": "a", "to": "b", "kind": "cond",
+                          "label": "Strut", "value": "50"}]})))
+    return scene
+
+
+for _kind in ("fixed", "break"):
+    for _facing in ("up", "left", "right"):
+        SCENES[f"wall-{_kind}-{_facing}"] = _wall_scene(_kind, _facing)
+
 # From a checkout the demo scenes must be here. If the file exists and the
 # import still failed, that is an error and not a reason to go quiet: a bare
 # try/except used to drop the three most complex scenes in the suite silently,

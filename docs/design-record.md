@@ -719,6 +719,22 @@ balance, at both ends. `model.FOLD` is the single table now and the checker
 reads it, so the number on the drawing and the number in the report cannot
 disagree.
 
+**A boundary can sit above what it holds, since 1.0.** 08's finding was
+one design limit and two tool gaps. The tool gaps closed first: `describe`
+names every wall, and `wire-through-wall` fires. The limit closes with a
+field. A `fixed` or `break` node takes `wall` — `down` by default, or `up`,
+`left`, `right` — and layout turns the ground placement to match. The
+renderer's `ground` and the occupancy box it feeds already took an angle;
+nothing on the node reached them, and two literals in `_layout` were the
+whole of "always below". The remedy for `wire-through-wall` now names the
+direction that faces away from the offending branch first, `at` second, and
+is tested by applying it in all four directions. With the wall above, the
+automatic label goes below, for the reason it goes above when the wall is
+below: the default should not be the aimed-at-the-wall case. The three
+unreconciled wall sizes are untouched — this turns a wall, it does not
+redesign one — and no existing golden or gallery render moves, because
+`down` is the drawing they all had.
+
 ## Describing a diagram (`_describe.py`)
 
 **`check` grades; `describe` reports.** Both acceptance agents asked for the
@@ -782,20 +798,33 @@ and all five tripped on the same paragraph — so wherever this record says
 alone, with a transcript. The first run is kept as
 `examples/gallery/FINDINGS-first-run.md`.
 
-## Three things that are limits, not checks
+## Two things that are limits, not checks
+
+There were three. The temperature scale was the third, and it is a
+declaration since 1.0; its paragraph is kept below, marked, because the
+argument for a declaration over a check is the same one the other two rest
+on.
 
 **A `rad` value is linearised, and the diagram cannot say at what.** See the
 dash, above. Stating the operating point wants a per-element validity
 condition, which is a schema field. A check that fired on every `rad` branch
 carrying a value would be a footnote wearing a severity.
 
-**The temperature scale is not representable, so it cannot be checked.**
-`units["T"]` is a free string, and `K` is byte-identical whether the author
-means absolute kelvin or a rise above ambient. This is a missing declaration,
-not a missing check. The library is nevertheless safe, because it never
-evaluates the radiation law; the hazard is downstream. A sharp version was
-tried — a `rad` branch plus a negative node temperature — and a wall at
-−10 °C radiating to sky is a correct diagram that fires on it.
+**The temperature scale was not representable, so it could not be checked.**
+`units["T"]` was a free string, and `K` is byte-identical whether the author
+means absolute kelvin or a rise above ambient. This was a missing
+declaration, not a missing check. The library was nevertheless safe, because
+it never evaluates the radiation law; the hazard is downstream. A sharp
+version was tried — a `rad` branch plus a negative node temperature — and a
+wall at −10 °C radiating to sky is a correct diagram that fires on it.
+*Resolved at 1.0, as the declaration this paragraph asked for:* `units.T`
+may be `{"unit": "K", "scale": "absolute" | "rise"}`, split on the way in so
+every reader of `units` still sees text. The drawing does not change.
+`describe` prints it. `--physics` is the one reader that cares, and only in
+the one case a declaration makes sharp: a `rad` branch carrying a value on a
+diagram declared as a rise has no absolute temperature anywhere on the page
+to have been linearised at, and gets a note. An undeclared scale is exactly
+that and fires nothing — the footnote-wearing-a-severity argument, kept.
 
 **`phase` draws the plateau, not the budget.** A PCM buffer pins until its
 latent energy is spent and then knees hard, and the time to that knee is
