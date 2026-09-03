@@ -84,7 +84,7 @@ note: [parallel-pair-same-side] branch 2 s->amb and branch 3 s->amb run
       -> set `side` to "down" on the lower of the two
 ```
 
-Ten checks on how the drawing reads — text over text, a label shoved out
+Twelve checks on how the drawing reads — text over text, a label shoved out
 past the thing it names, a wire through a symbol, ink off the page. Exit 0
 clean, 1 on a warning or an error, 2 when the file could not be read. A note
 is advice and does not fail the run — the report above exits 0 — unless you
@@ -138,7 +138,7 @@ So the parts that are ThermoDraw's own are the eighteen-symbol vocabulary and
 the rule behind it, the label solver, `check`, `describe` and `--physics`.
 The part that is not yet built — solving for node coordinates — is the part
 most likely to be someone else's solved problem, and the design record says
-which of the ten checks a solver must satisfy, which it minimises, and which
+which of the twelve checks a solver must satisfy, which it minimises, and which
 it makes redundant.
 
 If you want circuit notation, use schemdraw. If you want a graph laid out and

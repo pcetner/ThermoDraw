@@ -9,6 +9,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`symbol-off-its-run`: a branch symbol placed away from the line its own
+  wire takes is a warning.** `at` is "where the box sits" and `layout` splits
+  the route around it, so an `at` beside the route drew a diagonal jog out to
+  the box and back — a path no thermal network has — and nothing looked,
+  because every rule asked about labels and crossings rather than about a
+  symbol's relationship to its own wire. Measured from the run's line, not
+  from the wire, which is `half_len` away either way. The remedy is `at` on
+  the route, or a `via` waypoint where the box is.
+- **`theme.with_variables` embeds the faces**, as `bake` always did. Every
+  clearance `check` certifies is measured in Plex, and the documented path
+  for an SVG on the web embedded nothing and fell through to Arial, in which
+  the hero's widest label is about five units wider than the solver cleared —
+  so a clean report was a claim about a rendering the reader did not get.
+  About 78 KB a file, and every gallery render moves by that one block.
+  Goldens are unmoved; they are measured before the theme is applied.
+- **A branch may not join a place to itself**, and a `corner` refuses
+  `label`, `value` and `sub` rather than discarding them.
+- **`docs/schema.md` says a finding's `where` is positional**, and so are
+  the `td-…` element ids a page builds from it: insert a branch above and
+  every later name shifts.
 - **The gallery, re-run in a clean room.** `examples/gallery/RERUN.md` was
   run on 2026-09-01: five `claude-opus-5` agents in a copy of the repository
   outside this checkout, with `CLAUDE.md`, the design record, the tests, the
@@ -99,6 +119,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **A counted `flow` states its group value.** `model.FOLD` gains a row for
+  a rate: in parallel the group carries the sum, `4 in parallel = 40 W`;
+  in series every link passes the same heat, so the group carries one
+  item's worth. The count line drew nothing for a `flow` before, and the
+  schema, `CLAUDE.md` and the record all said that was deliberate; it was
+  a missing row. `--physics` reads the same table (see Fixed).
+- **Two checks join the solver table.** `wire-through-wall` is a constraint
+  on the router and `symbol-off-its-run` is scaffolding — it fires only on
+  an explicit branch `at`, which a solver never sets — so the partition
+  reads four, two, four, three. The sentence under the table had said
+  "delete three" over two rows since it was written; it is right now and
+  says that it was not.
 - **The hero's temperatures agree with its own power and resistances.**
   112, 78 and 61 °C were not what 45 W through 0.35, 0.15 and 1.80 ∥ 6.40 K/W
   from 40 °C gives; 126, 110 and 103 are. The inputs are untouched — the
@@ -128,6 +160,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   unchanged by it, and three exist only because a human places coordinates
   and are unreachable once one does not. The table is in the record, and it
   is the thing the checker-first order was for.
+
+### Fixed
+
+Everything a blind code review found — `tools/clean_room.py --profile
+review` hands a reader the code and the tests with no argument for either.
+Nine findings, seven of them defects, each reproduced before it was fixed
+and each guarded in `tests/test_clean_room.py`. Across the eleven diagrams
+no finding changed and no golden moved.
+
+- **`to_dict` was lossy**, on a library whose thesis is that the data is the
+  representation. The keep lists named some fields and not others, and
+  `_keep` skipped anything falsy, so `count`, `arrangement`, `rate` and
+  `side` vanished and so did a node at 0 °C and a branch at `angle: 0`.
+  What "the author did not set this" looks like is the field still holding
+  its dataclass default, which is why `Branch.angle` defaults to None. The
+  one round-trip test used the hero, which uses none of the lost fields.
+- **Exit 1 has to mean findings.** `validate` checked everything inside a
+  node, a branch, a source and the rail, and nothing above them: `"size":
+  "big"` reached the renderer and exited 1 through Python's own handler,
+  the code the command line documents as *findings*, so a script gating
+  on the status read a crash as a diagram with warnings. `"units": "K/W"`
+  was reported as "is not valid JSON" about a file whose JSON was fine. The
+  top level is validated — `size`, `units`, `nodes`, `branches`, `sources`,
+  `rail` — NaN and Infinity are refused, and `__main__` keeps a net under
+  whatever is left that answers 2, because a crash is no answer.
+- **The canvas is sized for the larger form, and a form is its text too.**
+  The hidden label of a repeated group was solved against nothing and
+  measured by nothing, so an eight-way group's expanded label sat above the
+  canvas top and the root `<svg>` clipped it the moment a reader pressed
+  the control that exists to show it. It is solved against the page and
+  measured into the canvas, and it does not claim a place in the occupancy:
+  an invisible label must not push a visible one. The test that should have
+  caught it skipped anchors, which is the placement carrying the label.
+- **`--physics` kept a second copy of the fold** that knew about resistances
+  and not rates, so four correct 10 W loops in parallel into a 40 W sink
+  were reported as a node that does not balance, at both ends. `model.FOLD`
+  is the one table and the checker reads it.
+- **`describe` unescapes a subscript** where `sym_text` had escaped it, so
+  an ampersand in a `sub` reads as typed.
+- **`py.typed` is honest.** Every public entry point is annotated, which
+  made mypy check those bodies and surfaced 112 errors at
+  `--check-untyped-defs`; 87 were one cause, the `**who` spreads, which are
+  `Dict[str, Any]` because a heterogeneous spread into a dataclass is not
+  checkable. Both levels are clean and CI runs the stricter one. Stale
+  claims corrected on the way: `symbols.py` said six of twelve symbols, two
+  comments asserted a shared footprint `_layout` had given up, and
+  `CLAUDE.md` and `ci.yml` both said 91 mypy errors when there were 112.
 
 ## [0.3.0] - 2026-09-01
 

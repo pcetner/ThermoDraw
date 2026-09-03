@@ -322,8 +322,15 @@ series multiply; a capacitance is the exact dual, adding in parallel and
 dividing in series. Writing that as one expression with a sign flip is how it
 comes to be got backwards later, and a confidently wrong number on a drawing
 is worse than no number — which is the true part of the argument the old
-decision was making. `flow` carries a rate and `break` carries nothing, so
-neither states one, and a non-numeric value is left alone.
+decision was making. A rate has its own row: four loops in parallel carry
+four times the heat, and four in series pass the same heat through every
+link, so the group carries one loop's worth. This paragraph said a `flow`
+states no group value, and the table had no row for it, until the blind code
+review found `--physics` keeping a second copy of the fold that knew
+resistances and not rates — and reporting four correct 10 W loops into a
+40 W sink as a node that does not balance. One table, read by the drawing and
+the checker both, is the fix for that class of bug. `break` carries nothing
+and states none, and a non-numeric value is left alone.
 
 The cost was measured rather than assumed. A wider label pushes its
 neighbours, and the first version wrote `each of 8 = 3200 W total` on a
@@ -474,7 +481,7 @@ not mark.
 
 ### The numbers were never checked
 
-Ten checks say how the drawing reads. None said what it says, while `model`
+Ten checks said how the drawing reads. None said what it says, while `model`
 held every number a thermal network needs. `_physics.balance` is Kirchhoff at
 a free node from stated values only: a resistance between two stated
 temperatures implies `ΔT/R`, sources and flows are what they say, `count`
@@ -522,6 +529,7 @@ coordinates by hand. Asked of each check, *does this survive a solver?*:
 | `label-collision` | **constraint** — any placer must avoid it; stays a finding for hand placement |
 | `symbols-overlap` | **constraint** |
 | `wire-through-symbol` | **constraint** on the router |
+| `wire-through-wall` | **constraint** on the router — a boundary's wall is a box the route must not cross |
 | `network-in-pieces` | **survives unchanged** — about the network, not the drawing |
 | `node-does-not-balance` | **survives unchanged** — about the numbers |
 | `off-canvas`, `frame-off-centre` | **survive unchanged** — only fire on an explicit `size`, which is the author's |
@@ -529,9 +537,13 @@ coordinates by hand. Asked of each check, *does this survive a solver?*:
 | `label-in-a-corridor` | **objective** |
 | `nodes-too-close` | **scaffolding** — the solver chooses spacing from the labels; unreachable when `at` is omitted |
 | `parallel-pair-same-side` | **scaffolding** — the solver chooses sides |
+| `symbol-off-its-run` | **scaffolding** — fires only on an explicit branch `at`, which a solver never sets |
 
-So the solver may delete three, must satisfy three, minimises two, and leaves
-four alone. That partition is the useful thing the checker-first order
+So the solver may delete three, must satisfy four, minimises two, and leaves
+four alone. (This sentence said "delete three" over a table that listed two,
+and "satisfy three" — both written before `wire-through-wall` and
+`symbol-off-its-run` existed. The counts are right now; they were not then.)
+That partition is the useful thing the checker-first order
 produced, and it is more useful for having been written before the solver
 than it would have been after.
 

@@ -196,9 +196,13 @@ arithmetic on the page divides the wrong way round, or not at all.
 
 The fold follows the quantity, not the word. Resistances in parallel divide
 and in series multiply; a capacitance is the dual, adding in parallel and
-dividing in series. A `flow` carries a rate rather than a resistance and a
-`break` carries nothing, so neither states a group value, and a `value` that
-is not a number is left as you wrote it. A counted **source** shows its total
+dividing in series. A `flow` carries a rate rather than a resistance, and a
+rate folds like one: four loops side by side carry four times the heat, `4 in
+parallel = 40 W`, and four in a chain pass the same heat through every link,
+so the group carries one loop's worth. A `break` carries nothing and states
+no group value, and a `value` that is not a number is left as you wrote it.
+`--physics` reads the same table, so the number on the page and the number
+in the report cannot disagree. A counted **source** shows its total
 the same way — `each of 8 = 3200 W` — since sources simply add.
 
 A parallel group is drawn as a comb: a trunk out of each node, a riser square
@@ -429,7 +433,7 @@ read the whole report each round rather than the finding you were fixing.
 
 ## Checking a diagram
 
-The two habits above are no longer advice. They are checks, and so are eight
+The two habits above are no longer advice. They are checks, and so are ten
 other things that used to need a browser:
 
 ```bash
@@ -476,6 +480,8 @@ something of its own.
 | `label-adrift` | warning | a label shoved out past its own clearance to get around something, and now reads as belonging to that instead |
 | `label-in-a-corridor` | warning | a label inside a loop of the network, close enough to both paths to belong to either |
 | `wire-through-symbol` | warning | a route crossing a symbol on another branch |
+| `wire-through-wall` | warning | a route passing through a boundary node's hatching, which is drawn below the node and cannot be turned |
+| `symbol-off-its-run` | warning | a branch's box placed with `at` off the line its own wire takes, so the run jogs out to it and back |
 | `frame-off-centre` | warning | the `size` you fixed leaves lopsided margins |
 | `parallel-pair-same-side` | note | two branches between the same two nodes, both labelled on the same side |
 
