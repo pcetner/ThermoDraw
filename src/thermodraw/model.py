@@ -91,6 +91,34 @@ def _fmt(value):
     return f"{value:g}"
 
 
+# How a group of `count` identical paths folds into one number.
+#
+# It is deliberately a table and not a formula, because it is not one rule.
+# Resistances in parallel divide and in series multiply; a capacitance is the
+# exact dual, adding in parallel and dividing in series. Writing this as one
+# expression with a sign flip is how it gets got backwards later, and a
+# confidently wrong number on a drawing is worse than no number at all --
+# which is the argument the original "the library does no arithmetic"
+# decision was making. `q` is absent on purpose: `flow` already carries a
+# rate, and what several of them come to depends on what they are.
+FOLD = {
+    "R": {"parallel": lambda v, n: v / n, "series": lambda v, n: v * n},
+    "C": {"parallel": lambda v, n: v * n, "series": lambda v, n: v / n},
+}
+
+
+def _sig(x, digits=4):
+    """A derived number, to a fixed number of significant figures.
+
+    `_fmt` exists to avoid inventing precision for a value the author typed.
+    This is the opposite case: nobody typed 0.0034375, the library divided it
+    out, and printing every digit of a float would say more than the input
+    supports.
+    """
+    text = f"{x:.{digits}g}"
+    return text
+
+
 # ------------------------------------------------------------------ typing
 # The point of validate() is that a diagram which cannot be drawn says so
 # before anything tries to draw it. Checking ids and kinds but not the shape
@@ -355,24 +383,68 @@ class Diagram:
             return None
         return f"{text} {self.units.get(RATE, '')}".strip()
 
-    def count_text(self, count, arrangement):
-        """How many, and how they combine, as one readable line."""
+    def fold(self, kind, value, count, arrangement):
+        """What a group of `count` of these comes to, as a number.
+
+        None where the group has no single number: a `flow` carries a rate
+        and a `break` carries nothing, and a value that is not numeric stays
+        as the author typed it.
+        """
+        rule = FOLD.get(QUANTITY.get(kind, ""), {}).get(arrangement)
+        if rule is None or count is None or count <= 1:
+            return None
+        try:
+            number = float(str(value).strip())
+        except (TypeError, ValueError, AttributeError):
+            return None
+        return rule(number, count)
+
+    def effective_text(self, kind, value, count, arrangement):
+        """The group's own value with its unit, or None."""
+        folded = self.fold(kind, value, count, arrangement)
+        if folded is None:
+            return None
+        return f"{_sig(folded)} {self.unit(kind)}".strip()
+
+    def count_text(self, count, arrangement, kind=None, value=None):
+        """How many, how they combine, and what they come to together.
+
+        The last part is new, and it overturns "the library does no
+        arithmetic". A group used to render `R_cond = 1.6 K/W | 4 in
+        parallel` and never show the 0.4 K/W it actually presents, so a
+        reader checking the page got 6.25 W where the answer was 25 W. The
+        stored value stays exactly the digits the author typed; this is a
+        second, derived number, and it is labelled as one by sitting after
+        the arrangement rather than replacing the per-item value.
+        """
         if not count or count <= 1:
             return None
-        return (f"{count} in series" if arrangement == "series"
+        base = (f"{count} in series" if arrangement == "series"
                 else f"{count} in parallel")
+        effective = self.effective_text(kind, value, count, arrangement)
+        return f"{base} = {effective}" if effective else base
 
-    def source_count_text(self, count):
+    def source_count_text(self, count, kind=None, value=None):
         """How many of a source there are. They add; there is no arrangement.
 
         It borrowed the branch wording and said "8 in parallel" of eight
         processors, which is a statement about circuits, not about eight
         things that each dissipate 400 W. The value is per item, as it is on
-        a branch, and this says so.
+        a branch, and this says so — and now says what they come to, since
+        adding eight of them is the arithmetic a reader was left to do.
         """
         if not count or count <= 1:
             return None
-        return f"each of {count}"
+        base = f"each of {count}"
+        try:
+            total = float(str(value).strip()) * count
+        except (TypeError, ValueError, AttributeError):
+            return base
+        # No trailing "total": it says nothing the `=` has not, and the four
+        # characters were the difference between the immersion rack checking
+        # clean and its junction label being pushed 96 past its clearance.
+        # The shape now matches a branch group's, `8 in parallel = 0.4 K/W`.
+        return f"{base} = {_sig(total)} {self.unit(kind)}".strip()
 
     def value_text(self, kind, value):
         text = _fmt(value)

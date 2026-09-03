@@ -106,6 +106,11 @@ sentence after it says what would overturn it.
 
 ### Repeated paths (`count`)
 - `arrangement` is never inferred; it is refused when missing.
+- The group's own value is drawn beside the count — `4 in parallel =
+  0.4 K/W` — and the per-item value stays exactly as typed. The fold is a
+  table, not a formula: a capacitance is the dual of a resistance, `flow`
+  and `break` state none. This overturns "the library does no arithmetic",
+  which `--physics` had already made half false.
 - Each form is a complete drawing; the canvas is sized for the larger.
 - A comb, not a fan; the ellipsis runs along the branch; motion is a fade.
 - One label per group, on an `anchor` placement that draws nothing.
@@ -125,11 +130,16 @@ sentence after it says what would overturn it.
   *this* case, never a direction the occupancy says is blocked, and never
   a field the element cannot take: a source and a repeated branch are not
   told to use `via`, and the pair note names the branch and the side from
-  where the labels landed. Seven of the clean room's thirty-one remedies
+  where the labels landed. Two symbols on one run are told to use `via`,
+  not `at`, which cannot clear them. Seven of the clean room's thirty-one remedies
   could not be applied as written; `tests/test_clean_room.py` replays the
   five diagrams and would fail on each.
 - Connectivity is over nodes joined by branches, not over ink. A `break`
   counts as joined.
+- A wire through a boundary node's hatching is a warning. The wall is always
+  drawn below its node, so a branch arriving from below crosses it; nothing
+  looked, because a ground carries no `Symbol`. It fires twice on run 2's
+  `house.json`, correctly, and that diagram is evidence and stays as drawn.
 - A placement carries `role`, `ends`, `via`, `count`, `arrangement` and
   `outward` as data; `ref` is for people. Ids are non-empty and not `rail`,
   and nothing else is required of them.
@@ -145,7 +155,9 @@ sentence after it says what would overturn it.
 
 ### Describing
 - `check` grades; `describe` reports, always exits 0, reads the same `Scene`,
-  keys rows on placements, prints what each label reads.
+  keys rows on placements, prints what each label reads. A ground gets a row
+  too, named `wall of node 'x'`: where a boundary wall landed was the one
+  thing on the page nothing could report.
 
 ### Goldens
 - No `--update-goldens` commit without `tools/golden_diff.py` output in its

@@ -17,7 +17,7 @@ import pathlib
 
 import pytest
 
-from thermodraw import Diagram, DiagramBuilder, check
+from thermodraw import Diagram, DiagramBuilder, check, describe
 from thermodraw._check import _remedy
 from thermodraw._layout import Placement
 
@@ -184,9 +184,25 @@ class TestTheFiveDiagramsAsTheirAgentsLeftThem:
              ("04-immersion", "rack.json"),
              ("05-laser-diode", "diode.json")]
 
+    # `house.json` stopped exiting clean when `wire-through-wall` was
+    # written, and it is right to: two of its branches arrive at a boundary
+    # node from below and run through that node's hatching. The diagram is
+    # evidence and is not retouched, so the expectation is named here rather
+    # than the assertion weakened. Anything beyond these two still fails.
+    KNOWN = {("02-building", "house.json"): [
+        ("wire-through-wall", "node 'out'"),
+        ("wire-through-wall", "node 'sky'"),
+    ]}
+
     @pytest.mark.parametrize("folder,name", FILES)
     def test_it_still_exits_clean(self, folder, name):
-        assert check(diagram(gallery(folder, name))).ok
+        report = check(diagram(gallery(folder, name)))
+        expected = self.KNOWN.get((folder, name), [])
+        got = sorted((f.code, f.where) for f in report.findings
+                     if f.severity != "note")
+        assert got == sorted(expected), report.text()
+        if not expected:
+            assert report.ok
 
     @pytest.mark.parametrize("folder,name", FILES)
     def test_no_remedy_names_a_via_the_branch_cannot_have(self, folder, name):
@@ -315,7 +331,8 @@ class TestACountedSourceSaysEachOf:
         b.branch("j", "s", "cond", "Path", "0.5")
         b.source("j", "diss", "Processor dissipation", "400", sub="p", count=8)
         says = [l.says for l in describe(b).lines if l.ref.startswith("source")]
-        assert says == ["Processor dissipation | P_p = 400 W | each of 8"]
+        assert says == ["Processor dissipation | P_p = 400 W "
+                        "| each of 8 = 3200 W"]
         assert not any("in parallel" in s for s in says)
 
 
@@ -427,3 +444,239 @@ class TestALabelWiderThanItsRoom:
         found = one(check(diagram(d)), "label-adrift")
         assert "its label is 192 wide and the room between branch 1 " \
                "ihs->sat and branch 2 sat->coil is 176" in found.message
+
+
+# ============================================================ the third run
+# `examples/gallery/FINDINGS-run-3.md`. Same house rule: assert the remedy,
+# apply it literally, assert it worked.
+
+
+# ------------------------------ two symbols on one run are told to use `via`
+class TestTwoSymbolsOnOneRunAreToldToRoute:
+    """07, rounds 1 and 2: `symbols-overlap` said "move one of them with
+    `at`", which cannot clear it. Both boxes sit on the single run between
+    one pair of nodes, so sliding one trades overlap for near-overlap, and
+    the agent's literal application took the overlap from 32 to 4 with the
+    error standing and a `wire-through-symbol` warning added."""
+
+    @staticmethod
+    def pair(via=None):
+        """A shell losing heat to the shop by convection and radiation, the
+        parallel pair every steady-state diagram ends with."""
+        d = {"units": {"R": "K/W", "T": "°C"},
+             "nodes": [{"id": "shell", "label": "Steel shell",
+                        "value": "120", "at": [400, 200]},
+                       {"id": "shop", "kind": "fixed", "label": "Shop air",
+                        "value": "30", "at": [760, 200]}],
+             "branches": [
+                 {"from": "shell", "to": "shop", "kind": "conv",
+                  "label": "Natural convection", "value": "0.05",
+                  "side": "up"},
+                 {"from": "shell", "to": "shop", "kind": "rad",
+                  "label": "Radiation to shop", "value": "0.075",
+                  "side": "down"}]}
+        if via:
+            d["branches"][1]["via"] = via
+        return diagram(d)
+
+    def test_the_remedy_names_via_and_not_at(self):
+        found = one(check(self.pair()), "symbols-overlap")
+        assert "`via`" in found.remedy
+        assert "with `at`" not in found.remedy
+
+    def test_applying_it_literally_clears_it(self):
+        """Routed clear and brought back to the node's own line, which is
+        what the remedy says and what the schema's arrival rule has always
+        said. Dropping straight onto `shop` from underneath instead puts the
+        wire through that node's wall -- see the class below."""
+        report = check(self.pair(via=[[400, 320], [700, 320], [700, 200]]))
+        assert report.ok, report.text()
+
+    def test_dropping_onto_the_boundary_from_below_is_caught(self):
+        """The half-applied version. Worth pinning: it is why the remedy
+        names the arrival and not only the routing."""
+        assert "wire-through-wall" in codes(
+            check(self.pair(via=[[400, 320], [760, 320]])))
+
+    def test_a_symbol_against_a_wall_still_says_at(self):
+        """The fallback is not lost: two things that do *not* share a run
+        have nothing to route around each other, and `at` is the field."""
+        d = {"units": {"R": "K/W", "T": "°C"},
+             "nodes": [{"id": "a", "kind": "fixed", "label": "Hot",
+                        "value": "200", "at": [200, 200]},
+                       {"id": "b", "label": "Mid", "value": "100",
+                        "at": [420, 200]}],
+             "branches": [{"from": "a", "to": "b", "kind": "cond",
+                           "label": "Wall", "value": "0.5", "count": 3,
+                           "arrangement": "series"}]}
+        found = one(check(diagram(d)), "symbols-overlap")
+        assert found.remedy == "move one of them with `at`"
+
+
+# ------------------------------------- a wire through a boundary node's wall
+class TestAWireThroughABoundaryWall:
+    """08: the magnet hangs from its mount, so the honest drawing puts the
+    mount above it. A boundary wall is always drawn *below* its node, so the
+    strut then leaves through its own boundary's hatching -- and `check`
+    passed that in silence, which is why the agent shipped the arrangement it
+    could verify instead of the one it wanted."""
+
+    @staticmethod
+    def hung(mount_y):
+        """A body on a strut to a mount. `mount_y` above the body is the
+        arrangement that puts the wall in the way."""
+        return diagram({
+            "units": {"R": "K/W", "T": "K"},
+            "nodes": [{"id": "body", "label": "Cold mass", "value": "4",
+                       "at": [400, 300]},
+                      {"id": "mount", "kind": "fixed", "label": "Mount",
+                       "value": "300", "at": [400, mount_y]}],
+            "branches": [{"from": "body", "to": "mount", "kind": "cond",
+                          "label": "Strut", "value": "50"}]})
+
+    def test_a_branch_arriving_from_below_is_reported(self):
+        found = one(check(self.hung(mount_y=80)), "wire-through-wall")
+        assert found.severity == "warning"
+        assert found.where == "node 'mount'"
+        assert "runs through the boundary wall of node 'mount'" in found.message
+
+    def test_the_remedy_names_at_and_not_angle(self):
+        found = one(check(self.hung(mount_y=80)), "wire-through-wall")
+        assert "move node 'mount' with `at`" in found.remedy
+        # `angle` on a node moves its label and nothing else; the wall does
+        # not turn, so offering it would be the advice that appears to work.
+        assert "`angle`" not in found.remedy
+
+    def test_putting_the_boundary_below_clears_it(self):
+        report = check(self.hung(mount_y=560))
+        assert "wire-through-wall" not in codes(report), report.text()
+
+    def test_a_nodes_own_stub_is_not_reported(self):
+        """Every `fixed` node has a stub running into its own wall. That is
+        the one wire that is supposed to be there."""
+        d = diagram({
+            "units": {"R": "K/W", "T": "°C"},
+            "nodes": [{"id": "a", "label": "Body", "value": "90",
+                       "at": [200, 150]},
+                      {"id": "amb", "kind": "fixed", "label": "Air",
+                       "value": "25", "at": [520, 150]}],
+            "branches": [{"from": "a", "to": "amb", "kind": "cond",
+                          "label": "Foot", "value": "0.5"}]})
+        assert "wire-through-wall" not in codes(check(d))
+
+    @needs_gallery
+    def test_it_finds_the_two_in_the_house(self):
+        """Run 2's `house.json` has the real thing in it, twice, undetected
+        until this rule was written. The diagram is evidence and is not
+        retouched."""
+        found = [f for f in check(diagram(gallery("02-building", "house.json"))
+                                  ).findings if f.code == "wire-through-wall"]
+        assert sorted(f.where for f in found) == ["node 'out'", "node 'sky'"]
+
+
+# --------------------------------------------- a boundary wall gets a row
+class TestDescribeGivesTheWallARow:
+    """08 again, the other half: `describe` counted grounds on the
+    `placements:` line and gave them no row, so the tool whose question is
+    "is this the drawing you meant" could not answer it for the one element
+    whose position was in doubt."""
+
+    @staticmethod
+    def one_wall():
+        return diagram({
+            "units": {"R": "K/W", "T": "°C"},
+            "nodes": [{"id": "a", "label": "Body", "value": "90",
+                       "at": [200, 150]},
+                      {"id": "amb", "kind": "fixed", "label": "Air",
+                       "value": "25", "at": [520, 150]}],
+            "branches": [{"from": "a", "to": "amb", "kind": "cond",
+                          "label": "Foot", "value": "0.5"}]})
+
+    def test_the_wall_has_its_own_row(self):
+        rows = [l for l in describe(self.one_wall()).lines
+                if l.kind == "ground"]
+        assert len(rows) == 1
+        assert rows[0].label_at is None, "a wall carries no text of its own"
+
+    def test_it_is_not_keyed_the_same_as_its_node(self):
+        """A ground carries its node's `ref`, so two rows under one key lose
+        one of the two -- and the one lost was the node's."""
+        lines = describe(self.one_wall()).lines
+        refs = [l.ref for l in lines]
+        assert len(refs) == len(set(refs)), refs
+        assert "wall of node 'amb'" in refs
+
+    def test_it_says_which_side_of_the_node_the_wall_landed(self):
+        rows = {l.ref: l for l in describe(self.one_wall()).lines}
+        node, wall = rows["node 'amb'"], rows["wall of node 'amb'"]
+        assert wall.at[1] > node.at[1], "the wall is drawn below its node"
+        assert "wall of node 'amb'" in describe(self.one_wall()).text()
+
+
+# ------------------------------------- a group says what it comes to
+class TestAGroupSaysWhatItComesTo:
+    """10: the clip group rendered `R_cond = 1.6 K/W | 4 in parallel` and
+    never showed the 0.4 K/W it presents, so a reader checking the page got
+    6.25 W where the answer was 25 W."""
+
+    @staticmethod
+    def units():
+        return diagram({"units": {"R": "K/W", "C": "J/K", "T": "°C",
+                                  "P": "W", "q": "W"},
+                        "nodes": [{"id": "a", "at": [0, 0]}]})
+
+    def test_resistances_divide_in_parallel(self):
+        assert self.units().count_text(4, "parallel", "cond", "1.6") == \
+            "4 in parallel = 0.4 K/W"
+
+    def test_resistances_multiply_in_series(self):
+        assert self.units().count_text(3, "series", "cond", "0.06") == \
+            "3 in series = 0.18 K/W"
+
+    def test_a_capacitance_is_the_dual(self):
+        """The case most likely to be got backwards later. Capacitances add
+        in parallel and divide in series, which is the opposite of a
+        resistance, and one expression with a sign flip is how that comes to
+        be written the wrong way round."""
+        d = self.units()
+        assert d.count_text(4, "parallel", "cap", "50") == \
+            "4 in parallel = 200 J/K"
+        assert d.count_text(2, "series", "cap", "50") == \
+            "2 in series = 25 J/K"
+
+    def test_changing_the_count_changes_the_value(self):
+        d = self.units()
+        assert d.count_text(2, "parallel", "cond", "1.6").endswith("0.8 K/W")
+        assert d.count_text(8, "parallel", "cond", "1.6").endswith("0.2 K/W")
+
+    def test_a_rate_and_a_break_state_no_group_value(self):
+        """`flow` carries a rate rather than a resistance, and `break`
+        carries nothing. Neither has a single number to fold."""
+        d = self.units()
+        assert d.count_text(4, "parallel", "flow", "12") == "4 in parallel"
+        assert d.count_text(4, "parallel", "break", None) == "4 in parallel"
+
+    def test_a_value_that_is_not_a_number_is_left_alone(self):
+        assert self.units().count_text(4, "parallel", "cond", "about 2") == \
+            "4 in parallel"
+
+    def test_the_per_item_value_is_untouched(self):
+        """The stored value is still exactly the digits that were typed; the
+        group value is a second, derived number sitting after the
+        arrangement."""
+        d = self.units()
+        assert d.value_text("cond", "2.10") == "2.10 K/W"
+        assert "= 4 in parallel" not in d.count_text(4, "parallel", "cond",
+                                                     "2.10")
+
+    def test_a_counted_source_says_its_total(self):
+        assert self.units().source_count_text(8, "diss", "400") == \
+            "each of 8 = 3200 W"
+
+    @needs_gallery
+    def test_the_clips_say_nought_point_four(self):
+        d = gallery("10-pv", "array.json")
+        says = [l.says for l in describe(diagram(d)).lines
+                if "Mounting clips" in l.says]
+        assert says == ["Mounting clips | R_cond = 1.6 K/W "
+                        "| 4 in parallel = 0.4 K/W"]

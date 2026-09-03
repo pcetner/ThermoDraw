@@ -40,6 +40,32 @@ class TestTheSchema:
     TEXT = (ROOT / "docs" / "schema.md").read_text(encoding="utf-8")
     TOKENS = set(re.findall(r"`([^`\n]+)`", TEXT))
 
+    def test_the_quoted_describe_output_is_the_real_thing(self):
+        """The page says so about itself, and nothing checked it.
+
+        "That is the real output for `examples/hero.json`, not an
+        abridgement" -- a claim the schema makes and could not keep.
+        Anything that changes what `describe` prints silently falsifies a
+        worked example the page tells a reader to trust, and the clean-room
+        builder regenerates this block precisely because it cannot assume it
+        is current.
+        """
+        from thermodraw import Diagram, describe
+        hero = (ROOT / "examples" / "hero.json").read_text(encoding="utf-8")
+        fresh = describe(Diagram.from_json(hero), source="diagram.json").text()
+
+        # The block after the ```bash fence that holds the command: the
+        # first fence following the anchor closes that one.
+        i = self.TEXT.index("thermodraw describe diagram.json")
+        first = self.TEXT.index("```", i)
+        opened = self.TEXT.index("```", first + 3)
+        closed = self.TEXT.index(chr(10) + "```", opened + 3)
+        quoted = self.TEXT[opened + 3:closed].strip(chr(10))
+        assert quoted == fresh.rstrip(), (
+            "docs/schema.md quotes stale `describe` output; regenerate the "
+            "block under 'Seeing what got drawn'")
+
+
     def test_every_field_is_named(self):
         from dataclasses import fields
 
