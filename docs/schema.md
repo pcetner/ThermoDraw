@@ -188,9 +188,18 @@ fanned out in `parallel`, or end to end in `series`.
 count on its own is a wrong answer waiting to be read.
 
 The `value` is **per item**. `R_cond = 0.0275 K/W` with `8 in parallel` under
-it means eight of that, not eight sharing it. The library does no arithmetic:
-values are strings so `"2.10"` stays `2.10`, and folding a count would mean
-parsing them as numbers.
+it means eight of that, not eight sharing it. The stored value is still
+exactly the digits you typed — values are strings, so `"2.10"` stays `2.10` —
+and the group's own value is drawn beside the count as a second, derived
+number: `8 in parallel = 0.003438 K/W`. Without it a reader checking the
+arithmetic on the page divides the wrong way round, or not at all.
+
+The fold follows the quantity, not the word. Resistances in parallel divide
+and in series multiply; a capacitance is the dual, adding in parallel and
+dividing in series. A `flow` carries a rate rather than a resistance and a
+`break` carries nothing, so neither states a group value, and a `value` that
+is not a number is left as you wrote it. A counted **source** shows its total
+the same way — `each of 8 = 3200 W` — since sources simply add.
 
 A parallel group is drawn as a comb: a trunk out of each node, a riser square
 across it, then one lane per copy. Right angles throughout.
@@ -252,6 +261,12 @@ which is the thing that actually carries it.
 `sub` names the source, as it does on a node; it is yours to choose. `radin`
 and `flow` share `units.q` because both are powers. `flux` has its own, so a
 diagram can carry a heat rate in `W` and a heat flux in `W/cm²` at once.
+
+The hatched face belongs to the **source**, not to the node, and it sits at
+the source's own `at` whichever direction the arrows go: with `from` they
+leave that face and travel away, and with `to` they leave it and travel to
+the node. `{"to": "furn", "kind": "flux", "at": [60, 200], "angle": 0}` puts
+the face to the left of the node with its arrows arriving.
 
 `at` is the **centre of the symbol**, not its head or its tail, exactly as it
 is on a branch. `angle` is the direction the arrow points, `0` being to the
@@ -386,9 +401,15 @@ Two more details are worth copying rather than rediscovering:
   ambient node and gets away with it only because that node has `angle: 90`
   and no other traffic. A node with three branches and a source on it does
   not, and one reader traced four findings to copying the hero's arrival.
-- **A parallel pair needs `side`.** Both branches are horizontal, so both
-  labels choose "up" and the lower one lands inside the loop. Set
+- **A parallel pair needs `via` first, and then `side`.** Two branches
+  between one pair of nodes share a single straight run, and both their
+  symbols are drawn at the same point on it — which is a `symbols-overlap`
+  error, not a label problem. `side` moves labels; it does not make the
+  second wire. So give one of the pair a `via` that carries it clear —
+  `[[x0, y], [x1, y]]` at 80 or so off the main line — and *then* set
   `"side": "up"` on the upper branch and `"side": "down"` on the lower one.
+  Setting `side` alone is a recipe for the error it looks like it prevents,
+  and one reader lost two rounds to it.
   Three branches between one pair of nodes cannot all be satisfied: a run
   has two useful sides, so two of three share one. Put the narrowest label
   on the shared side and leave the note.
@@ -548,12 +569,15 @@ elements:
   node 'c'               node            (424, 150)        above          72x33   Case | T_c = 110 °C
   node 's'               node            (648, 150)        above          72x33   Sink base | T_s = 103 °C
   node 'amb'             node            (936, 372) a90    right          78x33   Still air | T_amb = 40 °C
+  wall of node 'amb'     ground          (936, 384) a90    (no label)
 ```
 
 That is the real output for `examples/hero.json`, not an abridgement. Element
 counts against what you wrote, the canvas you will get, where each symbol
 sits and which way it is turned, what each label reads, and which way it
-went. Three marks say where the solver had to work: `flipped` means the label
+went. The turn is printed as `a90` after the position and **only when there
+is one**: a row with no `a` marker is at angle 0, not unreported. Printing
+`a0` on every row of a flat ladder would bury the one source that is turned. Three marks say where the solver had to work: `flipped` means the label
 tried its automatic side, found it blocked, and took the opposite one;
 `pushed N` means it was moved `N` units out along its side to get clear of
 something, and `check` reports it as adrift past 8; `OVERLAPS` means the push

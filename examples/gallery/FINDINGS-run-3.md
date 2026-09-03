@@ -192,3 +192,31 @@ In the order the evidence supports.
 
 Four of the five are the same shape as run 2's list: the tools describe the
 drawing accurately and stop just short of the one thing the reader needed.
+
+## What happened when they were fixed
+
+All five are done, and two of them changed what the rest of the repository
+says about itself.
+
+**`wire-through-wall` found three real defects nobody had seen.** Two are in
+run 2's `house.json` — `branch 6 gf->out` and `branch 12 roof->sky` both
+arrive at a boundary node from below and pass through its hatching — and the
+third is in this run's own `07-furnace` reference solution, a diagram written
+during preparation, checked clean at the time, and used to prove the brief was
+satisfiable. All three have the same cause, and it is the idiom the schema
+recommends: route a parallel pair clear with `via`, then bring it back to the
+node. Brought back *at the node* rather than before it, the branch arrives
+vertically from underneath and crosses the wall that is always drawn there.
+
+None of the three is retouched. `house.json` and the reference are evidence,
+and the expectation is recorded in `tests/test_clean_room.py` instead. The
+remedy for `symbols-overlap` now names the arrival as well as the routing,
+because the short version of the advice is what produced all three.
+
+**A counted source's total had to be trimmed to fit.** The first version wrote
+`each of 8 = 3200 W total` and pushed the immersion rack's junction label 96
+past its clearance, turning a clean diagram into a `label-adrift` warning. The
+word "total" says nothing the `=` has not; without it every counted diagram
+stays as clean as it was. Worth recording because it is the general shape of
+the risk: adding a true statement to a label is not free, and the diagrams
+that would pay for it are the ones nobody may edit.

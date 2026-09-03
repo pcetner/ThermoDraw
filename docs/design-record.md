@@ -303,6 +303,35 @@ centre that draws nothing, with `half`/`half_len` covering the whole fan, so
 the solver clears the group rather than one lane of it. `radius=0` keeps it
 out of the canvas measurement, which the copies already account for.
 
+**The group's own value is drawn, and this overturns "no arithmetic".** The
+original decision was that values are strings so `"2.10"` stays `2.10`, and
+folding a count would mean parsing them as numbers. It was already half
+false: `_physics._effective` has parsed and folded since `--physics` shipped.
+What made it wrong rather than merely inconsistent is what a reader does with
+`R_cond = 1.6 K/W | 4 in parallel`. They check the arithmetic on the page,
+divide ten degrees by 1.6, and get 6.25 W where the answer is 25 W. The
+library knew 0.4 K/W and declined to say it.
+
+So the count line carries it: `4 in parallel = 0.4 K/W`. The per-item value
+is untouched and still exactly the digits that were typed; this is a second,
+derived number, and it is marked as derived by sitting after the arrangement
+rather than replacing anything.
+
+**The fold is a table, not a formula.** Resistances in parallel divide and in
+series multiply; a capacitance is the exact dual, adding in parallel and
+dividing in series. Writing that as one expression with a sign flip is how it
+comes to be got backwards later, and a confidently wrong number on a drawing
+is worse than no number — which is the true part of the argument the old
+decision was making. `flow` carries a rate and `break` carries nothing, so
+neither states one, and a non-numeric value is left alone.
+
+The cost was measured rather than assumed. A wider label pushes its
+neighbours, and the first version wrote `each of 8 = 3200 W total` on a
+counted source, which pushed the immersion rack's junction label 96 past its
+clearance and made a diagram that had been clean report `label-adrift`. The
+word "total" says nothing the `=` has not. Dropping it fits, and the
+remaining four diagrams with counts are unchanged.
+
 ## A page instead of a picture (`_page.py`)
 
 **SVG stays canonical.** Word, PowerPoint, the README and every rasteriser
@@ -548,6 +577,48 @@ was absent from the only report that could have found it. A skip that is
 not visible from the file has to be visible in the output. One note per
 diagram, `checked 2 of 6 free nodes; not checked: ...`, with the reason
 for each, and nothing on a diagram whose nodes were all asked.
+
+### What the third clean room taught it
+
+The third run (`examples/gallery/FINDINGS-run-3.md`) found the same defect
+class in a rule the second run's fix had not reached. `symbols-overlap`
+named `at`, as a fixed string, for two branches drawn between one pair of
+nodes. Both symbols sit on the single run between those nodes, so sliding
+one along it trades overlap for near-overlap, and at any separation wide
+enough to clear, each symbol stands on the other's wire — which is
+`wire-through-symbol`, arriving on the next round. A reader applied the
+remedy literally, watched the overlap go 32 to 4 with the error standing,
+and collected the warning as well. The remedy that works was in the *other*
+finding all along, naming `via`, and it cleared both at once. So the same
+treatment: ask whether the two symbols share a run, and whether the branch
+can take a `via` at all, before naming a field.
+
+The schema's own advice had the identical bug, one layer up. "A parallel
+pair needs `side`" presupposed two wires with space between them, which do
+not exist until one branch is routed away — and it sat in the passage headed
+"worth copying rather than rediscovering". Advice that produces the error it
+prevents is worse than no advice, because the reader trusts it first.
+
+**A wire through a boundary wall is now a warning.** The wall is drawn flat
+below its node at every orientation, so a branch arriving from *below* runs
+through its hatching, and nothing caught it: `_symbols_overlap` counts a
+ground as a box, but `_wire_through_symbol` only looks at placements
+carrying a `Symbol`, and a ground carries none. The run found it from the
+other side — a reader wanted a mount *above* the magnet that hangs from it,
+built exactly that, and `check` passed it in silence, so it could not tell
+whether the strut left through the mount's own hatching and shipped the
+arrangement it could verify instead. This is the bar a new rule is supposed
+to clear: it caught something a browser was needed for. It also fires twice
+on run 2's `house.json`, and both are real. Those diagrams are evidence and
+are not retouched; the finding is recorded instead.
+
+**A ground gets a row in `describe`.** Same reader, same round. The wall was
+counted on the `placements:` line and given no row, so the tool whose
+question is "is this the drawing you meant" could not answer it for the one
+element whose position was in doubt. It carries no text, so the row reads
+`(no label)` — the shape a `break` branch with no label already takes — and
+it is named `wall of node 'amb'`, because a ground carries its node's `ref`
+and two rows under one key lose one of the two.
 
 ## Describing a diagram (`_describe.py`)
 

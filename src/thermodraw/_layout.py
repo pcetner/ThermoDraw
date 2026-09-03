@@ -363,7 +363,8 @@ def layout(diagram):
                       value=diagram.value_text(b.kind, b.value),
                       extra=[x for x in (
                           (S.S_(M.RATE), rate) if rate else None,
-                          diagram.count_text(b.count, b.arrangement)) if x],
+                          diagram.count_text(b.count, b.arrangement,
+                                             b.kind, b.value)) if x],
                       half=sym.half, half_len=sym.half_len,
                       side=b.side)
         if b.repeated:
@@ -410,7 +411,8 @@ def layout(diagram):
                         name=S.S_(M.SOURCE_SYMBOL[s.kind], s.sub),
                         value=diagram.value_text(s.kind, s.value),
                         extra=[x for x in
-                               (diagram.source_count_text(s.count),) if x],
+                               (diagram.source_count_text(
+                                   s.count, s.kind, s.value),) if x],
                         half=sym.half, half_len=sym.half_len,
                         side=s.side), **who))
         reach = -sym.half_len if s.outward else sym.half_len

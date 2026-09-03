@@ -104,7 +104,13 @@ approximated to get there — is in `rounds.md` and `findings.md`. A diagram tha
 checks clean while quietly drawing a heat pipe as a conduction resistance has
 told you something about the vocabulary, not about the drawing.
 
-All ten exit 0. Two of run 2's carry a `parallel-pair-same-side` note that
+Nine of the ten exit 0. `house.json` stopped doing so when
+`wire-through-wall` was written after run 3: two of its branches arrive at a
+boundary node from below and run through that node's hatching, which is real
+and was invisible to every tool until the rule existed. It is left as its
+agent drew it, and the expectation is written down in
+`tests/test_clean_room.py` instead. Two of run 2's carry a
+`parallel-pair-same-side` note that
 cannot be cleared: three branches in parallel on a horizontal run have two
 usable label sides, and both agents proved the remedy only rotates which pair
 is reported. And all five of run 2's fail `thermodraw check --physics`: those

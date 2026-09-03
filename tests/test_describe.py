@@ -49,7 +49,15 @@ class TestItSaysWhatIsThere:
 
     def test_it_lists_every_label_the_render_placed(self):
         d = hero()
-        assert len(describe(d).lines) == len(compose(layout(d)).rects) == 11
+        lines = describe(d).lines
+        assert len([l for l in lines if l.label_at]) ==             len(compose(layout(d)).rects) == 11
+        # Twelve rows for eleven labels: the boundary wall carries no text of
+        # its own and still gets one, because where it landed is the thing
+        # nothing else could report.
+        assert len(lines) == 12
+        wall = [l for l in lines if l.kind == "ground"]
+        assert [l.ref for l in wall] == ["wall of node 'amb'"]
+        assert wall[0].at == (936.0, 384.0) and wall[0].label_at is None
 
     def test_it_says_where_each_element_sits(self):
         """The label's position is not the element's, and for a source which

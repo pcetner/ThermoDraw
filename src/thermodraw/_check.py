@@ -740,6 +740,52 @@ def _corridor(scene, edges, rings, out):
             break
 
 
+def _routable(p):
+    """Whether this branch can be given a `via` at all.
+
+    A source's lead has none, and the validator refuses one on a repeated
+    branch. Same rule `_wire_through_symbol` applies, asked of the symbol
+    rather than of the wire.
+    """
+    return (p.role == "branch"
+            and not (p.count and p.count > 1))
+
+
+def _same_run(pa, pb):
+    """Two symbols on one wire, because their branches join the same nodes.
+
+    This is the case `at` cannot fix. Both boxes sit on the single run
+    between one pair of nodes, so sliding one along it trades overlap for
+    near-overlap, and at any separation wide enough to clear, each symbol
+    stands on the other's wire — which is `wire-through-symbol`, arriving on
+    the next round. A clean-room reader applied "move one of them with `at`"
+    literally, watched the overlap go 32 to 4 with the error standing, and
+    got the warning as well.
+    """
+    return (pa.role == "branch" and pb.role == "branch"
+            and pa.ends and pb.ends
+            and frozenset(pa.ends) == frozenset(pb.ends))
+
+
+def _overlap_remedy(pa, pb):
+    """`via` where the two share a run, `at` where they do not."""
+    if not _same_run(pa, pb):
+        return "move one of them with `at`"
+    routable = [p for p in (pa, pb) if _routable(p)]
+    if len(routable) == 2:
+        # The same words `wire-through-symbol` uses for the same geometry,
+        # and it is true here for the same reason: one route away from the
+        # shared run and there is nothing left to overlap.
+        return ("route either of them around with `via`, which gives them "
+                "separate runs; bring it back to the node's own line before "
+                "it arrives")
+    if routable:
+        return (f"route {routable[0].ref} around with `via`, which gives "
+                "them separate runs; bring it back to the node's own line "
+                "before it arrives")
+    return "move one of them with `at`"
+
+
 def _symbols_overlap(placements, out):
     """Two symbols sharing the same page space.
 
@@ -762,8 +808,53 @@ def _symbols_overlap(placements, out):
                 out.append(Finding(
                     "symbols-overlap", "error", pa.ref or "a symbol",
                     f"{_name(pa)} and {_name(pb)} overlap by "
-                    f"{-clear:.0f}", remedy="move one of them with `at`",
+                    f"{-clear:.0f}", remedy=_overlap_remedy(pa, pb),
                     at=tuple(ca)))
+
+
+def _wire_through_wall(placements, out):
+    """A wire running through a boundary node's hatching.
+
+    The wall is always drawn flat below its node — `angle` does not turn it
+    and neither does anything else — so a branch that arrives from *below*
+    passes straight through it. Nothing caught that: `_symbols_overlap`
+    counts a ground as a box, but `_wire_through_symbol` only considers
+    placements that carry a `Symbol`, and a ground carries none.
+
+    A clean-room reader hit the consequence from the other side. It wanted a
+    mount *above* the magnet that hangs from it, built exactly that, and
+    `check` passed it with nothing to say — so it could not tell whether the
+    strut left through the mount's own hatching. It shipped the arrangement
+    it could verify instead, and said so. Two of run 2's diagrams have the
+    real thing in them, undetected until this rule was written.
+
+    The node's own stub is excluded by `ref`, which is the one wire that is
+    supposed to reach the wall.
+    """
+    walls = [(p, _wall_box(p)) for p in placements if p.element == "ground"]
+    if not walls:
+        return
+    hits = {}
+    for ground, (centre, half, angle) in walls:
+        shaved = (max(0.0, half[0] - SHAVE), max(0.0, half[1] - SHAVE))
+        for p in placements:
+            if p.element != "wire" or p.ref == ground.ref:
+                continue
+            pts = [tuple(q) for q in p.points]
+            if any(core.segment_box(pts[i], pts[i + 1], centre, shaved, angle)
+                   for i in range(len(pts) - 1)):
+                hits.setdefault((str(ground.ref), str(p.ref)), (ground, centre))
+    for (_, offender), (ground, centre) in sorted(hits.items()):
+        out.append(Finding(
+            "wire-through-wall", "warning", ground.ref or "a boundary",
+            f"{offender} runs through {_name(ground)}",
+            # Not `angle`: on a node that moves the label and nothing else,
+            # and the wall does not turn. The node has to go where the
+            # branch can reach it without crossing underneath.
+            remedy=f"move {ground.ref} with `at` so {offender} arrives from "
+                   "the side or from above: the wall is always drawn below "
+                   "its node and cannot be turned",
+            at=tuple(centre)))
 
 
 def _wire_through_symbol(placements, out):
@@ -991,6 +1082,7 @@ def check(diagram, size=None, padding=PADDING, source="diagram",
     _corridor(scene, edges, cycles(edges), findings)
     _symbols_overlap(placements, findings)
     _wire_through_symbol(placements, findings)
+    _wire_through_wall(placements, findings)
     _frame(scene, padding, findings)
     _parallel_pairs(placements, scene, findings)
     if physics:

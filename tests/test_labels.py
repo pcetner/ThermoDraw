@@ -205,14 +205,20 @@ class TestARateStatesItsQuantity:
         assert self.says() == "Base plate | R_cond = 0.35 K/W"
 
     def test_prose_extras_stay_prose(self):
-        """`count` names itself, so it is not dressed as a quantity."""
+        """`count` names itself, so it is not dressed as a quantity.
+
+        It now carries what the group comes to, which is a second number and
+        not a second quantity: `4 in parallel = 0.0875 K/W`, never
+        `R_cond = 4 in parallel`.
+        """
         said = self.says(count=4, arrangement="parallel")
-        assert said.endswith("4 in parallel")
+        assert said.endswith("4 in parallel = 0.0875 K/W")
         assert "= 4 in parallel" not in said
 
     def test_a_rate_and_a_count_are_both_kept_and_ordered(self):
         said = self.says(rate="12", count=4, arrangement="parallel")
-        assert said.split(" | ")[-2:] == ["q = 12 W", "4 in parallel"]
+        assert said.split(" | ")[-2:] == ["q = 12 W",
+                                          "4 in parallel = 0.0875 K/W"]
 
     def test_the_rate_uses_the_q_unit_whatever_the_path_is(self):
         """A resistance is in K/W and what it carries is in W. That is the

@@ -292,7 +292,16 @@ def describe(diagram, size=None, padding=PADDING, source="diagram"):
         # A repeated group's copies say nothing individually: the anchor
         # carries the one label that speaks for all of them, so it stands in
         # the table and they stay out of it.
-        if p.element not in ("symbol", "node", "anchor") or not p.shown:
+        # `ground` is here because a boundary wall is the one thing on the
+        # page whose position nothing could report. It was counted on the
+        # `placements:` line and given no row, so a reader asking "did that
+        # wall land between the mount and its strut?" had only a rendered
+        # picture to ask — and one clean-room reader, forbidden to render,
+        # shipped the arrangement it could verify instead of the one it
+        # wanted. The wall carries no text of its own, so the row comes out
+        # `(no label)`, which is the same shape a `break` branch with no
+        # label already takes.
+        if p.element not in ("symbol", "node", "anchor", "ground")                 or not p.shown:
             continue
         if p.element == "symbol" and p.copy is not None:
             continue
@@ -302,7 +311,12 @@ def describe(diagram, size=None, padding=PADDING, source="diagram"):
             group = [q for q in placements
                      if q.ref == p.ref and q.symbol is not None]
             kind = (f"{_kind(group[0])} x{len(group)}" if group else "group")
-        line = Line(ref=p.ref or "?", kind=kind, at=tuple(p.at),
+        # A wall carries its node's `ref`, so a row for it would collide with
+        # that node's own row and anything keyed on `ref` would lose one of
+        # the two. It is the node's wall, and saying so is both unique and
+        # what a reader would call it.
+        ref = f"wall of {p.ref}" if p.element == "ground" else (p.ref or "?")
+        line = Line(ref=ref, kind=kind, at=tuple(p.at),
                     angle=p.angle, says=label_text(p.label))
         if rect is not None:
             left, top, bw, bh = rect
