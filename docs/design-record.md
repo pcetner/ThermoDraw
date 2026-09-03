@@ -735,6 +735,94 @@ unreconciled wall sizes are untouched — this turns a wall, it does not
 redesign one — and no existing golden or gallery render moves, because
 `down` is the drawing they all had.
 
+## The ladder solver (`_solve.py`)
+
+**A chain, and nothing else.** Every network drawn in this notation in
+three clean-room runs is a ladder or a ladder with a side branch: six of
+the ten gallery diagrams are chains, each node joined to at most two others.
+A chain can be placed without an objective. Rank along the chain gives `x`,
+one line gives `y`, and the one ambiguity — which end is hot — has a rule:
+the higher stated temperature, or failing numbers the end a source arrives
+at, or failing that the one written first. Temperature picks the end and
+only the end; sorting a whole chain by temperature would interleave a heater
+in the middle of a ladder and cross its wires. Everything that is not a chain
+is refused, naming the node that joins three others and saying to give it
+`at`. That is the same failure mode the library had before — a diagram it
+will not draw is refused by name — and it is chosen over drawing something
+plausible and wrong, which is what a general placer produces when its
+objective is not the reader's. The general placer is still the network layer
+proper, and the table above says what it must satisfy.
+
+**A pre-pass on a copy, not a branch inside `layout`.** `_layout` reads
+`node.at` in three places, `_describe` in two, and `to_dict` writes it.
+Solving on a copy leaves every one of them alone and gives all of them the
+numbers, so `describe` can say `solved` on the row and `thermodraw solve`
+can write the file back placed, for the author to edit from. A diagram with
+every node placed goes through untouched, by identity, so the ordinary path
+costs nothing.
+
+**The pitch is measured, not fixed.** The first version placed at the
+schema's habit, 220, and the immersion rack — the plainest ladder in the
+gallery, seven nodes on a line — reported `nodes-too-close` on three runs
+and `label-adrift` on four nodes, because its labels are long. The checker
+already had the arithmetic: half of each node label and all of the branch
+label, along the run. So the solver places once at the habit, lays the
+result out through `compose` to learn every label's width from the same
+solver and metrics the renderer uses, and places again with each run as
+wide as its labels need, up to the grid, never narrower than the habit.
+The branch label is centred on the run, so the wider node label sets the
+room on both sides: sized to the sum of two halves, 79 and 138 wide, the
+rack's technical-water label still overlapped by five. A repeated branch's
+boxes count as well as its label; three in series are longer than 220 on
+their own, and the furnace wall's comb ran through both of its nodes.
+
+**A pair goes above and below, with leads.** Two branches between one pair
+of nodes on one straight run is `symbols-overlap`, and the remedy is `via`;
+the solver applies it, 80 off the line, leaving and arriving 48 sideways of
+each node. The leads are run 3's finding: a pair brought back to the node
+rather than before it arrived vertically through a boundary's wall, in
+three diagrams. A third branch between the same pair keeps the straight run,
+a repeated branch always does, and `side` is set to the outer side where the
+author left it automatic. Vias the author wrote are kept, and a file that
+drops its node `at` should drop those too, since they are absolute.
+
+**Sources are placed, and an interior one is turned.** The solver's first
+draft left sources to `layout`'s default, 37.5 out from the node, and the
+hero — clean in every other respect — reported its junction label pushed 36:
+the source's label sat where the junction's needed to be. The hero's authors
+had put their source 104 out. So a source without `at` goes half a run out
+along its angle, and `angle` 0 on any node but the hot end is turned to
+arrive from above, because on the line "from the left" is the branch. That
+last rule reads an author's 0 as unset, which it also is; a source wanted
+from the left on an interior node would sit on the wire in any case.
+
+**What the gallery says.** With every coordinate removed: the hero and four
+of the six chains check clean; the four diagrams that are not chains are
+refused by name. The rack reports one `label-adrift`, on a junction whose
+authored `angle: 135` aims its label at the spot the solver put the source;
+the cryostat one, on the second of two sources on one node whose angles were
+chosen for a different placement. Both are the author's fields, kept, and
+both are what `check` is for. The dewar has three branches between each pair
+of its nodes and three sources on its middle one, and reports labels and a
+diagonal source's lead across a routed leg — never a wire through a wall,
+two symbols on one run, or a run too narrow. `tests/test_solve.py` pins all
+ten. One more rule came from the tests rather than the gallery: a node with
+a source above it and a capacitance below it has nowhere on the line for its
+label — the lead above, the wire below, the run either side — and every
+`side` and every axis-aligned `angle` was measured to collide. A diagonal
+clears it. Since it is the solver that puts the source above, it is the
+solver that turns the frame to 45, where the author left it at 0.
+
+**What survives it, in practice.** Of the table above: the three routing
+constraints hold by construction on a chain — every run is straight or a
+routed pair with leads, and a wall is never crossed because nothing arrives
+at a node from below; the two objectives are the label solver's, unchanged;
+of the three scaffolding checks, `nodes-too-close` is unreachable because the
+pitch is measured, `parallel-pair-same-side` because sides are set, and
+`symbol-off-its-run` because no branch `at` is written. `network-in-pieces`
+becomes a refusal rather than a warning, since a solver cannot place two
+pieces relative to each other.
+
 ## Describing a diagram (`_describe.py`)
 
 **`check` grades; `describe` reports.** Both acceptance agents asked for the

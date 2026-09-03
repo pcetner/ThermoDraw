@@ -29,6 +29,7 @@ from collections import Counter
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Sequence, Tuple
 
+from . import _solve
 from ._layout import layout as _layout, network, pieces as _pieces
 from ._render import PADDING, compose
 
@@ -153,6 +154,10 @@ class Description:
     # printing `wall down` on every fixed node would bury the one that is
     # not, the same reason `a0` is not printed on every row.
     walls: Dict[str, str] = field(default_factory=dict)
+    # Nodes the solver placed, because the file left `at` out. The row says
+    # `solved` so an author knows which numbers are the library's to start
+    # from and which are theirs.
+    solved: List[str] = field(default_factory=list)
     # What `units.T` declared, if anything, and the unit it is on. Where a
     # wall landed was the one thing nothing could report; whether `K` meant
     # absolute or a rise was the other.
@@ -225,6 +230,7 @@ class Description:
         if self.nodes:
             out += ["", "nodes:"]
             out += [f"  {i:<14.14s} {k:<8s} at ({x:.0f}, {y:.0f})"
+                    + (" solved" if i in self.solved else "")
                     + (f" wall {self.walls[i]}" if i in self.walls else "")
                     for i, k, (x, y) in self.nodes]
         if self.lines:
@@ -237,7 +243,8 @@ class Description:
             "source": self.source,
             "canvas": list(self.canvas),
             "counts": dict(self.counts),
-            "nodes": [dict({"id": i, "kind": k, "at": list(a)},
+            "nodes": [dict({"id": i, "kind": k, "at": list(a),
+                            "solved": i in self.solved},
                            **({"wall": self.walls[i]} if i in self.walls
                               else {}))
                       for i, k, a in self.nodes],
@@ -309,6 +316,10 @@ def describe(diagram, size: Optional[Sequence[float]] = None,
     diagram = diagram.build() if hasattr(diagram, "build") else diagram
     if size is None:
         size = diagram.size
+    # Solved here as well as inside `layout`, so the nodes block reports
+    # the coordinates that were drawn and says which ones it chose.
+    solved = [n.id for n in diagram.nodes if n.at is None]
+    diagram = _solve.solve(diagram)
     placements = _layout(diagram)
     scene = compose(placements, size=size, padding=padding)
     bx0, by0, bx1, by1 = scene.box
@@ -383,6 +394,7 @@ def describe(diagram, size: Optional[Sequence[float]] = None,
         lines=lines,
         nodes=[(n.id, n.kind, tuple(n.at)) for n in diagram.nodes if n.at],
         walls={n.id: n.wall for n in diagram.nodes if n.wall != "down"},
+        solved=solved,
         scale=diagram.scale,
         temperature_unit=diagram.units.get("T", ""),
         edges=edges,

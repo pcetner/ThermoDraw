@@ -28,11 +28,17 @@ def build(**parts):
     ([0, 0, 0], "exactly two"),
     ([0], "exactly two"),
     ("0,0", "pair of numbers"),
-    (None, "network layer"),
 ])
 def test_bad_coordinates_are_caught_before_drawing(at, expected):
     with pytest.raises(DiagramError, match=expected):
         Diagram.from_dict({"nodes": [{"id": "a", "at": at}]})
+
+
+def test_no_coordinates_is_not_bad_coordinates():
+    """`at` left out, or null, is a node for the solver. It used to be
+    refused with a promise about the network layer."""
+    for node in ({"id": "a"}, {"id": "a", "at": None}):
+        render(layout(Diagram.from_dict({"nodes": [node]})))
 
 
 def test_the_node_and_the_field_are_named():

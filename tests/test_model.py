@@ -40,11 +40,14 @@ def test_builder_and_dict_agree():
 
 
 # ---------------------------------------------------------------- validation
-def test_missing_coordinates_say_what_to_do():
-    """Name the feature, not a version number: "0.3" was promised and 0.3.0
-    shipped without it, which would have made this message a lie."""
-    with pytest.raises(DiagramError, match="network layer"):
-        Diagram.from_dict({"nodes": [{"id": "a"}]})
+def test_missing_coordinates_are_solved_not_refused():
+    """This used to refuse with "the network layer, which is not built
+    yet", and the test pinned that the message named the feature rather
+    than a version number. The ladder solver is that feature: a node with
+    no `at` is placed, and the file is accepted."""
+    d = Diagram.from_dict({"nodes": [{"id": "a"}]})
+    assert d.nodes[0].at is None, "the input is not touched"
+    assert render(layout(d))
 
 
 def test_dangling_branch_names_the_node():

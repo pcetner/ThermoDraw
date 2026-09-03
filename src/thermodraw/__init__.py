@@ -5,6 +5,7 @@ turn it into a document:
 
     dict / JSON  ->  Diagram  ->  placements  ->  SVG
                       model      layout        render
+                             (solve fills in the `at` you left out)
 
     from thermodraw import Diagram, layout, render, save, theme
 
@@ -27,6 +28,7 @@ from ._describe import Description, describe
 from ._layout import Placement, layout
 from ._page import page
 from ._render import render
+from ._solve import solve
 from .builder import DiagramBuilder
 from .io import save
 from .model import Branch, Diagram, DiagramError, Node, Rail, Source
@@ -37,7 +39,7 @@ __all__ = [
     # the data
     "Diagram", "Node", "Branch", "Source", "Rail", "DiagramError",
     # the pipeline
-    "layout", "render", "Placement", "DiagramBuilder",
+    "solve", "layout", "render", "Placement", "DiagramBuilder",
     # is it any good?
     "check", "Report", "Finding",
     # is it the one you meant?
