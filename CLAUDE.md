@@ -38,6 +38,7 @@ tools/
   gen_docs.py        regenerates the symbol reference
   gen_dictionary.py  regenerates Dictionary.html — the prose lives here
   golden_diff.py     what actually changed in a golden, element by element
+  clean_room.py      a sibling room, --profile gallery or review
 examples/
   hero.json              the README diagram, as data
   render_demo.py         the three README images
@@ -165,6 +166,12 @@ sentence after it says what would overturn it.
   diffs; CI re-renders the gallery and README images and diffs.
 
 ### Evidence
+- A clean room is built by `tools/clean_room.py`, never by hand, and it
+  verifies its own work. `--profile gallery` strips everything that shows an
+  answer and keeps the briefs; `--profile review` strips everything that
+  argues — the decisions, the record, the changelog, every prior finding —
+  and keeps the tests and tools, which are the subject. `git archive` drops
+  the commit messages either way. Neither room can sit inside the checkout.
 - The gallery has been run twice. The first run was five subagents in this
   checkout with this file injected (`FINDINGS-first-run.md`). The second,
   2026-09-01, was five agents in a clean room outside the checkout, from the

@@ -7,13 +7,33 @@ built by pasting a block of shell into a terminal, which is fine until the
 next person wants to know exactly what the agents could see. This does the
 same thing as a script, and then checks its own work.
 
-    python tools/clean_room.py ../ThermoDraw-cleanroom-run3
+    python tools/clean_room.py ../room --profile gallery --briefs 06-battery ...
+    python tools/clean_room.py ../room --profile review
 
-What it removes is everything that shows an answer: the tests, the goldens,
-the README images, the notation thumbnails, `tools/` (whose
-`gen_dictionary.py` carries every symbol's meaning in prose), every finished
-diagram, and the whole of run 2. What it leaves is the library, five briefs,
-and `docs/schema.md`.
+There are two rooms, because there are two questions and they want opposite
+things kept.
+
+**`gallery`** asks whether the vocabulary is sufficient and the schema is
+enough to draw from. It removes everything that shows an answer: the tests,
+the goldens, the README images, the notation thumbnails, `tools/` (whose
+`gen_dictionary.py` carries every symbol's meaning in prose), and every
+finished diagram. What it leaves is the library, the named briefs, and
+`docs/schema.md`.
+
+**`review`** asks whether the code is any good, and wants the opposite: the
+tests and `tools/` are the point, and what goes is everything that argues.
+`CLAUDE.md` states forty-odd decisions as settled, `docs/design-record.md`
+argues each one for seven hundred lines, the changelog narrates why every
+change was made, and the three `FINDINGS` files are prior reviews with their
+conclusions attached. A reader who has absorbed those grades the code against
+its own stated intentions instead of independently. `git archive` throws away
+the sixty-seven commit messages for free, which is the largest single piece
+of it.
+
+One residue is deliberate and disclosed rather than removed:
+`tests/test_clean_room.py` narrates past findings in its docstrings, because
+that is what the guards are for. A review that cannot see the tests is worse
+than one that reads why a guard exists.
 
 It also does one thing run 2's recipe did not. `docs/schema.md` quotes
 `examples/hero.json` in full, along with its `describe` output, so every agent
@@ -28,12 +48,13 @@ import argparse
 import json
 import os
 import pathlib
+import re
 import shutil
 import subprocess
 import sys
 
-# Everything that would show an agent an answer.
-REMOVE = [
+# Everything that would show a gallery agent an answer.
+GALLERY_REMOVE = [
     "CLAUDE.md", "README.md", "CHANGELOG.md", "Dictionary.html",
     "docs/design-record.md", "docs/symbol-reference.html",
     "docs/dictionary.template.html", "docs/symbol-reference.template.html",
@@ -47,6 +68,20 @@ REMOVE = [
     "examples/gallery/run-3",
 ]
 
+# Everything that argues, concludes, or narrates. The code, the tests, the
+# generated pages and the CI definition all stay: they are the subject.
+REVIEW_REMOVE = [
+    "CLAUDE.md", "CHANGELOG.md", ".claude",
+    "docs/design-record.md",
+    # The notation thumbnails exist to settle a bet, and their README argues
+    # for one side of it.
+    "docs/notation-test",
+    "examples/gallery/README.md", "examples/gallery/RERUN.md",
+    "examples/gallery/FINDINGS.md", "examples/gallery/FINDINGS-first-run.md",
+    "examples/gallery/FINDINGS-run-3.md",
+    "examples/gallery/run-3",
+]
+
 # Everything a gallery folder keeps. Naming the folders of *past* runs
 # instead was wrong within one run of being written: run 3's five diagrams
 # landed in the repository, the list still spoke of run 2's, and the next
@@ -54,6 +89,50 @@ REMOVE = [
 # were none. The builder's own check caught it, which is the argument for
 # having one.
 KEEP_IN_A_GALLERY_FOLDER = {"brief.md"}
+
+
+def _gallery_keeps_brief(name):
+    return name == "brief.md"
+
+
+def _review_keeps_the_drawing(name):
+    """A reviewer keeps the diagrams and loses the write-ups.
+
+    The JSON and the SVG are input and output -- real data to run the
+    checker over. `findings.md`, `rounds.md` and `transcript.md` are five
+    agents' opinions of this library, which is the most anchoring material
+    in the repository. `brief.md` goes too: it tells the reader the library
+    is being tested and exactly which of its claims are under test.
+    """
+    return name.endswith(".json") or name.endswith(".svg")
+
+
+PROFILES = {
+    "gallery": {
+        "remove": GALLERY_REMOVE,
+        "keeps": _gallery_keeps_brief,
+        "needs_briefs": True,
+        "strip_schema": True,
+        "forbidden": ("CLAUDE.md", ".claude", "tests", "tools",
+                      "docs/design-record.md", "examples/hero.json"),
+        "wanted": (),
+    },
+    "review": {
+        "remove": REVIEW_REMOVE,
+        "keeps": _review_keeps_the_drawing,
+        "needs_briefs": False,
+        "strip_schema": False,
+        "forbidden": ("CLAUDE.md", ".claude", "CHANGELOG.md",
+                      "docs/design-record.md", "docs/notation-test",
+                      "examples/gallery/FINDINGS.md",
+                      "examples/gallery/FINDINGS-run-3.md",
+                      "examples/gallery/RERUN.md"),
+        # A review of a library with no tests in front of it is not a review
+        # of this library.
+        "wanted": ("src/thermodraw", "tests", "tools", "pyproject.toml",
+                   "README.md", "docs/schema.md"),
+    },
+}
 
 # The trivial diagram that replaces the hero in the room's schema. Its own
 # numbers close -- 65 K over 0.5 K/W is 130 W -- so the page cannot teach a
@@ -192,16 +271,23 @@ def room_env():
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(description="build a gallery clean room")
+    ap = argparse.ArgumentParser(description="build a clean room")
     ap.add_argument("target", help="the room, a SIBLING of this checkout")
     ap.add_argument("--ref", default="HEAD", help="commit to archive")
+    ap.add_argument("--profile", choices=sorted(PROFILES), default="gallery",
+                    help="gallery: can it be drawn? review: is it any good?")
     # Which briefs are in this run is a decision, not something to infer from
     # what happens to be on disk. Naming them also puts the run's membership
     # in the shell history and in START-HERE.txt.
-    ap.add_argument("--briefs", nargs="+", required=True,
-                    metavar="FOLDER",
+    ap.add_argument("--briefs", nargs="+", metavar="FOLDER",
                     help="gallery folders this run uses, e.g. 06-battery")
     args = ap.parse_args(argv)
+    profile = PROFILES[args.profile]
+    if profile["needs_briefs"] and not args.briefs:
+        ap.error("--briefs is required for the gallery profile")
+    if not profile["needs_briefs"] and args.briefs:
+        ap.error("--briefs means nothing to the {} profile".format(
+            args.profile))
 
     root = pathlib.Path(subprocess.run(
         ["git", "rev-parse", "--show-toplevel"], check=True, text=True,
@@ -223,7 +309,7 @@ def main(argv=None):
                              check=True, stdout=subprocess.PIPE).stdout
     subprocess.run(["tar", "-x", "-C", str(target)], input=archive, check=True)
 
-    for name in REMOVE:
+    for name in profile["remove"]:
         path = target / name
         if path.is_dir():
             shutil.rmtree(path)
@@ -231,30 +317,35 @@ def main(argv=None):
             path.unlink()
 
     gallery = target / "examples" / "gallery"
-    wanted = set(args.briefs)
-    missing = sorted(w for w in wanted if not (gallery / w / "brief.md").is_file())
-    if missing:
-        sys.exit("error: no brief for " + ", ".join(missing))
+    wanted = set(args.briefs or ())
+    if wanted:
+        missing = sorted(w for w in wanted
+                         if not (gallery / w / "brief.md").is_file())
+        if missing:
+            sys.exit("error: no brief for " + ", ".join(missing))
+    keeps = profile["keeps"]
     for folder in sorted(p for p in gallery.iterdir() if p.is_dir()):
-        if folder.name not in wanted:
+        if wanted and folder.name not in wanted:
             shutil.rmtree(folder)
             continue
         for item in sorted(folder.iterdir()):
-            if item.name in KEEP_IN_A_GALLERY_FOLDER:
+            if keeps(item.name):
                 continue
             shutil.rmtree(item) if item.is_dir() else item.unlink()
 
-    strip_hero(target)
+    if profile["strip_schema"]:
+        strip_hero(target)
     briefs = sorted(target.glob("examples/gallery/*/brief.md"))
-    write_start_here(target, briefs, sha)
+    write_start_here(target, briefs, sha, args.profile)
 
     git(["init", "-q"], target)
     git(["add", "-A"], target)
     git(["-c", "user.name=clean room", "-c", "user.email=clean@room.invalid",
          "commit", "-qm", "clean room, from " + sha], target)
-    verify(target, briefs, len(args.briefs))
-    print("clean room at {}, from {}, {} briefs".format(
-        target, sha, len(briefs)))
+    verify(target, briefs, len(wanted), profile)
+    tail = ("{} briefs".format(len(briefs)) if profile["needs_briefs"]
+            else "for review")
+    print("clean room at {}, from {}, {}".format(target, sha, tail))
 
 
 def swap_block(text, after, new, skip=0):
@@ -309,7 +400,71 @@ def strip_hero(target):
     schema.write_text(text, encoding="utf-8")
 
 
-def write_start_here(target, briefs, sha):
+REVIEW_START_HERE = """Clean room for a blind code review, from commit {sha}.
+
+You are the first reader. Nothing here tells you what the author thinks: the
+decisions file, the design record, the changelog and every previous review
+have been removed, and the archive carries no commit history, so sixty-seven
+commit messages of reasoning are gone with it. What is left is the code, its
+tests, its tools, the README and the format documentation.
+
+Start ONE session in THIS directory and give it this:
+
+  Review this library as if you were considering depending on it. Read the
+  code and the tests. Report what you find, worst first, with a file and a
+  line for each. Say what you would not depend on, and why. Do not fix
+  anything.
+
+Two things worth knowing before you start.
+
+  Run the suite with `python -m pip install -e ".[dev]"` and then
+  `python -m pytest -q`. The library itself has no runtime dependencies.
+
+  `tests/test_clean_room.py` narrates findings from earlier reviews in its
+  docstrings. That is deliberate, and it is the one piece of prior opinion
+  left in the room: the guards do not make sense without it, and a review
+  that cannot see the tests is worse than one that reads why a guard exists.
+  Treat it as evidence about the past, not as a verdict on the present.
+
+{dangling}Write the review to REVIEW.md in this directory and commit it. Then copy
+that one file back to the main repository, and nothing else: the room is a
+snapshot, and its tree is not the branch you are reviewing.
+"""
+
+
+
+def dangling(target):
+    """README links to files this room removed.
+
+    Worth naming rather than leaving to be found. A reviewer who follows
+    `docs/design-record.md` and finds nothing has discovered a property of
+    the room, not of the library, and reporting it is wasted effort in both
+    directions. Computed rather than written down, so it stays true as the
+    removal list changes.
+    """
+    readme = target / "README.md"
+    if not readme.is_file():
+        return []
+    links = re.findall(r"\]\(([^)]+)\)", readme.read_text(encoding="utf-8"))
+    return sorted({link for link in links
+                   if not link.startswith(("http", "#"))
+                   and not (target / link).exists()})
+
+
+def write_start_here(target, briefs, sha, profile):
+    if profile == "review":
+        gone = dangling(target)
+        note = ""
+        if gone:
+            nl = chr(10)
+            note = ("  The README links these, and this room removed"
+                    " them. A dead link" + nl
+                    + "  here is a property of the room, not of the"
+                    " library:" + nl + nl
+                    + "".join("    " + g + nl for g in gone) + nl)
+        (target / "START-HERE.txt").write_text(
+            REVIEW_START_HERE.format(sha=sha, dangling=note), encoding="utf-8")
+        return
     lines = "\n".join(
         "  Read {} and do exactly what it says.".format(
             b.relative_to(target).as_posix())
@@ -332,36 +487,50 @@ def write_start_here(target, briefs, sha):
         encoding="utf-8")
 
 
-def verify(target, briefs, expected):
+def verify(target, briefs, expected, profile):
     """The room is only worth running if it is actually clean."""
     problems = []
-    for forbidden in ("CLAUDE.md", ".claude", "tests", "tools",
-                      "docs/design-record.md", "examples/hero.json"):
+    for forbidden in profile["forbidden"]:
         if (target / forbidden).exists():
             problems.append(forbidden + " survived")
-    if len(briefs) != expected:
+    # A review room can fail the other way round, by removing the thing
+    # under review. Nothing checked that until the review profile existed.
+    for needed in profile["wanted"]:
+        if not (target / needed).exists():
+            problems.append(needed + " is missing, and is the subject")
+    if profile["needs_briefs"] and len(briefs) != expected:
         problems.append("{} briefs, expected {}".format(len(briefs), expected))
-    leftover = sorted(p.as_posix() for p in (target / "examples").rglob("*.json"))
-    if leftover:
-        problems.append("finished diagrams left: " + ", ".join(leftover))
-    schema = (target / "docs" / "schema.md").read_text(encoding="utf-8")
-    if "hero" in schema:
-        problems.append("schema.md still names the hero")
-    # Naming it is one leak; showing it is the other. A bad fence swap
-    # replaced the wrong span once and left the whole worked example behind.
-    # Markers that appear *only* inside the two replaced blocks. "Die attach"
-    # and "Switching loss" are not on the list: they are also the one-line
-    # snippets that introduce Branches and Sources, which every schema needs
-    # and which show one element rather than a diagram to copy.
-    for shown in ("j --cond-- c", "canvas 1042 x 431", "Sink base"):
-        if shown in schema:
-            problems.append("schema.md still shows the hero: " + shown)
-    if "Â" in schema:
-        problems.append("schema.md has mojibake: something was decoded twice")
+    # Gallery-only: a review room keeps the gallery diagrams as data
+    # to run the checker over, and reads the schema as it ships,
+    # hero and all.
+    if profile["strip_schema"]:
+        leftover = sorted(p.as_posix() for p in (target / "examples").rglob("*.json"))
+        if leftover:
+            problems.append("finished diagrams left: " + ", ".join(leftover))
+        schema = (target / "docs" / "schema.md").read_text(encoding="utf-8")
+        if "hero" in schema:
+            problems.append("schema.md still names the hero")
+        # Naming it is one leak; showing it is the other. A bad fence swap
+        # replaced the wrong span once and left the whole worked example behind.
+        # Markers that appear *only* inside the two replaced blocks. "Die attach"
+        # and "Switching loss" are not on the list: they are also the one-line
+        # snippets that introduce Branches and Sources, which every schema needs
+        # and which show one element rather than a diagram to copy.
+        for shown in ("j --cond-- c", "canvas 1042 x 431", "Sink base"):
+            if shown in schema:
+                problems.append("schema.md still shows the hero: " + shown)
+        if "Â" in schema:
+            problems.append("schema.md has mojibake: something was decoded twice")
     # Anything else at the top level was put there by accident, and the
     # accident worth catching is a subprocess writing into the room.
-    expected = {".git", ".gitattributes", ".gitignore", "LICENSE", "NOTICE",
-                "START-HERE.txt", "docs", "examples", "pyproject.toml", "src"}
+    expected = {".git", ".gitattributes", ".gitignore", "LICENSE",
+                "NOTICE", "START-HERE.txt", "docs", "examples",
+                "pyproject.toml", "src"}
+    if not profile["strip_schema"]:
+        # A review reads the CI definition, the generated pages and the
+        # public README; only the arguing is gone.
+        expected |= {".github", "Dictionary.html", "README.md", "tests",
+                     "tools"}
     strays = sorted(p.name for p in target.iterdir() if p.name not in expected)
     if strays:
         problems.append("unexpected at the top level: " + ", ".join(strays))
