@@ -47,11 +47,12 @@ REMOVE = [
     "examples/gallery/run-3",
 ]
 
-# Everything under a gallery folder except the brief. Naming the folders of
-# past runs instead was wrong within one run: run 3's five diagrams landed in
-# the repository, the list still spoke of run 2's, and the next room would
-# have handed five finished answers to five agents told there were none. The
-# builder's own check caught it, which is the argument for having one.
+# Everything a gallery folder keeps. Naming the folders of *past* runs
+# instead was wrong within one run of being written: run 3's five diagrams
+# landed in the repository, the list still spoke of run 2's, and the next
+# room would have handed five finished answers to five agents told there
+# were none. The builder's own check caught it, which is the argument for
+# having one.
 KEEP_IN_A_GALLERY_FOLDER = {"brief.md"}
 
 # The trivial diagram that replaces the hero in the room's schema. Its own
@@ -194,6 +195,12 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description="build a gallery clean room")
     ap.add_argument("target", help="the room, a SIBLING of this checkout")
     ap.add_argument("--ref", default="HEAD", help="commit to archive")
+    # Which briefs are in this run is a decision, not something to infer from
+    # what happens to be on disk. Naming them also puts the run's membership
+    # in the shell history and in START-HERE.txt.
+    ap.add_argument("--briefs", nargs="+", required=True,
+                    metavar="FOLDER",
+                    help="gallery folders this run uses, e.g. 06-battery")
     args = ap.parse_args(argv)
 
     root = pathlib.Path(subprocess.run(
@@ -224,7 +231,14 @@ def main(argv=None):
             path.unlink()
 
     gallery = target / "examples" / "gallery"
+    wanted = set(args.briefs)
+    missing = sorted(w for w in wanted if not (gallery / w / "brief.md").is_file())
+    if missing:
+        sys.exit("error: no brief for " + ", ".join(missing))
     for folder in sorted(p for p in gallery.iterdir() if p.is_dir()):
+        if folder.name not in wanted:
+            shutil.rmtree(folder)
+            continue
         for item in sorted(folder.iterdir()):
             if item.name in KEEP_IN_A_GALLERY_FOLDER:
                 continue
@@ -238,7 +252,7 @@ def main(argv=None):
     git(["add", "-A"], target)
     git(["-c", "user.name=clean room", "-c", "user.email=clean@room.invalid",
          "commit", "-qm", "clean room, from " + sha], target)
-    verify(target, briefs)
+    verify(target, briefs, len(args.briefs))
     print("clean room at {}, from {}, {} briefs".format(
         target, sha, len(briefs)))
 
@@ -318,15 +332,15 @@ def write_start_here(target, briefs, sha):
         encoding="utf-8")
 
 
-def verify(target, briefs):
+def verify(target, briefs, expected):
     """The room is only worth running if it is actually clean."""
     problems = []
     for forbidden in ("CLAUDE.md", ".claude", "tests", "tools",
                       "docs/design-record.md", "examples/hero.json"):
         if (target / forbidden).exists():
             problems.append(forbidden + " survived")
-    if len(briefs) != 5:
-        problems.append("{} briefs, expected 5".format(len(briefs)))
+    if len(briefs) != expected:
+        problems.append("{} briefs, expected {}".format(len(briefs), expected))
     leftover = sorted(p.as_posix() for p in (target / "examples").rglob("*.json"))
     if leftover:
         problems.append("finished diagrams left: " + ", ".join(leftover))
