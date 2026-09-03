@@ -150,10 +150,9 @@ class TestTheDictionary:
         page = (ROOT / "Dictionary.html").read_text(encoding="utf-8")
         for sym in symbols.SYMBOLS:
             assert f"<h3>{sym.name}</h3>" in page, f"{sym.key} missing"
-        # `corner` draws nothing and so has no Symbol at all. It is still a
-        # node kind, and a reader who cannot find it here will assume it is
-        # not one — which is what two acceptance readers did.
-        assert "<h3>Corner</h3>" in page
+        # `corner` had an entry here with no drawing, because it drew
+        # nothing. The kind is gone, and so is the entry.
+        assert "<h3>Corner</h3>" not in page
 
     def test_a_card_is_one_glyph_at_one_scale(self):
         """Cards share a width, so they share a scale. Heights differ, which
@@ -253,7 +252,7 @@ class TestTheDictionary:
     def test_every_symbol_is_listed_under_exactly_one_category(self):
         from thermodraw import symbols
         page = (ROOT / "Dictionary.html").read_text(encoding="utf-8")
-        keys = [s.key for s in symbols.SYMBOLS] + ["corner"]
+        keys = [s.key for s in symbols.SYMBOLS]
         for key in keys:
             assert page.count(f'<a href="#sym-{key}">') == 1, key
 

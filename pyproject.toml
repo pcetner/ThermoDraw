@@ -8,7 +8,7 @@ name = "thermodraw"
 version = "0.3.0"
 description = "Thermal network diagrams for Python"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 license = "MIT"
 # The code is MIT. The three bundled font faces are subsets of IBM Plex Sans
 # under OFL-1.1, which requires its licence to travel with them: NOTICE says
@@ -20,6 +20,10 @@ classifiers = [
   "Development Status :: 3 - Alpha",
   "Intended Audience :: Science/Research",
   "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
   "Topic :: Scientific/Engineering",
 ]
 dependencies = []

@@ -95,6 +95,11 @@ sentence after it says what would overturn it.
   directed branch and refuses `angle`.
 - `mixed` is an empty box, and that is a statement. Flux is several arrows.
   `q″` is its own quantity. No colour in the symbol set.
+- `corner` is gone. It was a node kind that drew nothing so a wire could
+  bend, never drawn in three clean-room runs including the brief written to
+  force it. `via` bends a wire; a junction between two paths is a `free`
+  node with a `sub`, which says what it is; a 0.3 file naming it is refused
+  with that advice. It was the one kind the physics check had to fold away.
 
 ### Rotation and text
 - Text is never rotated. Textures rotate with their box. Boundary symbols
@@ -155,8 +160,7 @@ sentence after it says what would overturn it.
   route around the box, so an `at` beside the route draws a diagonal jog out
   to it and back. Measured from the run's line, not from the wire, which is
   `half_len` away either way.
-- A branch may not join a place to itself, and a `corner` refuses `label`,
-  `value` and `sub` rather than discarding them.
+- A branch may not join a place to itself.
 - A wire through a boundary node's hatching is a warning. The wall is always
   drawn below its node, so a branch arriving from below crosses it; nothing
   looked, because a ground carries no `Symbol`. It fires twice on run 2's

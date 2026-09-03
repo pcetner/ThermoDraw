@@ -174,7 +174,7 @@ def main(argv=None):
                         "is nothing at all to report")
     c.add_argument("--physics", action="store_true",
                    help="also ask whether the stated numbers close at each "
-                        "node (prototype)")
+                        "node")
     size(c)
     c.set_defaults(fn=do_check)
 

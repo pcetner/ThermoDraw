@@ -1,9 +1,9 @@
 """The numbers on the page, asked whether they agree with each other.
 
-A prototype behind `check(physics=True)`. These pin what it must do before
-its fire rate on real diagrams decides whether it ships: fire on a node whose
-stated values do not close, stay quiet on one whose values do, fold `count`
-the way the schema says a count folds, and skip what it cannot know.
+Behind `check(physics=True)`, opt-in by choice. These pin what it must do:
+fire on a node whose stated values do not close, stay quiet on one whose
+values do, fold `count` the way the schema says a count folds, and say what
+it could not know rather than skip it silently.
 """
 import pytest
 
@@ -56,15 +56,25 @@ class TestKirchhoffAtANode:
             check(ladder(value="0.125", count=8, arrangement="series"),
                   physics=True))
 
-    def test_a_corner_is_folded_into_the_path_through_it(self):
+    def test_a_junction_with_no_temperature_is_named_not_folded(self):
+        """`corner` used to fold the two resistances through it into one.
+        The kind is gone: a junction between two paths is a free node, and
+        one that states no temperature is reported by name as unchecked —
+        and so is its neighbour — rather than folded away or skipped
+        without a word."""
         b = (DiagramBuilder(R="K/W", T="°C", P="W")
              .node("a", "Hot", "50", at=(0, 0), sub="a")
-             .node("k", kind="corner", at=(150, 0))
+             .node("k", "Mid", at=(150, 0), sub="k")
              .node("b", "Cold", "40", kind="fixed", at=(300, 0), sub="b")
              .branch("a", "k", "cond", "Half", "0.5")
              .branch("k", "b", "cond", "Other half", "0.5")
              .source("a", "diss", "Load", "10", sub="d"))
-        assert "node-does-not-balance" not in codes(check(b, physics=True))
+        report = check(b, physics=True)
+        assert "node-does-not-balance" not in codes(report)
+        note = [f for f in report.findings if f.code == "physics-not-checked"]
+        assert len(note) == 1
+        assert "k (it has no temperature)" in note[0].message
+        assert "a (neighbour 'k' has no temperature)" in note[0].message
 
     def test_a_flow_branch_carries_its_stated_rate(self):
         b = (DiagramBuilder(R="K/W", T="°C", P="W", q="W")

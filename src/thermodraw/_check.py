@@ -1122,9 +1122,9 @@ def check(diagram, size: Optional[Sequence[float]] = None,
     Takes a `Diagram`, a `DiagramBuilder`, or a list of `Placement`. `size`
     defaults to the diagram's own, so what is checked is what `.svg()` draws.
 
-    `physics` adds the prototype in `_physics`: whether the stated numbers
-    close at each node. Off by default while it is being judged on real
-    diagrams; it needs the diagram, so a list of placements cannot ask for it.
+    `physics` adds `_physics`: whether the stated numbers close at each node.
+    Off by default because a sketch with placeholder numbers is a diagram
+    too; it needs the diagram, so a list of placements cannot ask for it.
     """
     if size is None:
         size = getattr(diagram, "size", None) or \

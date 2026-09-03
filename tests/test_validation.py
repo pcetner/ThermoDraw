@@ -194,14 +194,28 @@ def test_bad_input_is_refused_before_layout_sees_it():
     {"nodes": list(PAIR)},
     {"nodes": list(PAIR),
      "branches": [{"from": "a", "to": "b", "kind": "break"}]},
-    {"nodes": [{"id": "a", "at": [0, 0], "kind": "corner"},
+    {"nodes": [{"id": "a", "at": [0, 0], "sub": "a"},
                {"id": "b", "at": [220, 0]}],
      "branches": [{"from": "a", "to": "b", "kind": "cond"}]},
     {"nodes": list(PAIR), "units": {"P": "W"},
      "sources": [{"to": "a", "kind": "diss", "value": "5"}]},
 ], ids=["empty", "one node", "two nodes, nothing between",
-        "a break with no label", "a corner", "a source and no branch"])
+        "a break with no label", "a node with a sub and no value",
+        "a source and no branch"])
 def test_whatever_validate_accepts_renders(data):
     """The actual promise: an accepted diagram survives layout and render,
     however little is in it."""
     render(layout(Diagram.from_dict(data)))
+
+
+def test_a_retired_kind_names_its_replacement():
+    """`corner` was a node kind until 1.0: a coordinate that drew nothing, so
+    a wire had somewhere to bend. `via` does that, and a junction that has a
+    name and no temperature is a `free` node with a `sub`. A file written
+    before the removal is told so, not handed "unknown kind" beside a list
+    the kind used to be on."""
+    with pytest.raises(DiagramError, match="removed in 1.0") as caught:
+        Diagram.from_dict({"nodes": [{"id": "k", "kind": "corner",
+                                      "at": [420, 260]}]})
+    assert "`via`" in str(caught.value)
+    assert "`free`" in str(caught.value)
