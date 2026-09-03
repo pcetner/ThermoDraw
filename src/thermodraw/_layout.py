@@ -13,7 +13,7 @@ parallel path is expressed until the router can find one for itself.
 """
 import math
 from dataclasses import dataclass, field
-from typing import List, Optional, Sequence, Tuple, Union
+from typing import Any, Dict, List, Optional, Sequence, Set, Tuple, Union
 
 from . import model as M
 from . import symbols as S
@@ -68,7 +68,10 @@ class Placement:
     element: str                       # symbol | wire | node | ground
     at: Tuple[float, float] = (0.0, 0.0)
     angle: float = 0.0
-    symbol: Optional[object] = None
+    # `S.Symbol`, not `object`: it was loose enough that `p.symbol.key`
+    # could not be checked anywhere, and `symbols` imports nothing
+    # from here, so naming the real type costs no cycle.
+    symbol: Optional[S.Symbol] = None
     points: List[Sequence[float]] = field(default_factory=list)
     label: Optional[Label] = None
     radius: float = 5.5
@@ -325,7 +328,7 @@ def _endpoint(diagram, ref, other):
     return tuple(diagram.node(ref).at)
 
 
-def layout(diagram):
+def layout(diagram) -> List[Placement]:
     """Placements for everything in the diagram, back to front."""
     diagram.validate()
     out = []
@@ -370,7 +373,15 @@ def layout(diagram):
         if b.repeated:
             out += _repeat(b, ref, sym, source, target, centre, angle, label)
             continue
-        who = {"role": "branch", "ends": (b.source, b.target),
+        # `Dict[str, Any]`, and it has to be. These are the
+        # provenance fields spread into every `Placement` for
+        # one element, and they are heterogeneous by design:
+        # a role, a tuple of ends, a count, a flag. mypy
+        # cannot check a `**` spread of a heterogeneous dict
+        # against a dataclass, and pretending otherwise cost
+        # 87 of the 91 errors the public annotations
+        # surfaced.
+        who: Dict[str, Any] = {"role": "branch", "ends": (b.source, b.target),
                "via": tuple(tuple(p) for p in b.via)}
         for run in _split(route, index, centre, sym.half_len):
             out.append(Placement("wire", points=run, ref=ref, **who))
@@ -430,9 +441,9 @@ def layout(diagram):
         # A fixed node reaches down to its boundary wall, so the label has to
         # clear the wall and not just the circle. The extents live on the
         # Symbol, which is what they are for.
-        sym = BY_KEY.get(n.kind)
-        half = sym.half if sym else 5.5
-        half_len = sym.half_len if sym else 5.5
+        wall = BY_KEY.get(n.kind)
+        half = wall.half if wall else 5.5
+        half_len = wall.half_len if wall else 5.5
         # `T` with no number after it is not a statement about anything, and
         # interior junctions between series layers routinely have no
         # temperature of their own. It rendered as a lone italic T and the
@@ -500,7 +511,7 @@ def pieces(edges, ids):
     An endpoint that is not in `ids` — the rail — still joins what it
     touches, so two capacitances dropping to one rail are one piece.
     """
-    adj = {i: set() for i in ids}
+    adj: Dict[str, Set[str]] = {i: set() for i in ids}
     for a, b, _ in edges:
         adj.setdefault(a, set()).add(b)
         adj.setdefault(b, set()).add(a)

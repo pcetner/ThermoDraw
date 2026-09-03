@@ -30,7 +30,7 @@ ink off the page. A **warning** is something they would notice and mistrust. A
 import math
 from collections import defaultdict
 from dataclasses import dataclass, field
-from typing import List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 
 from . import core
 from . import model as M
@@ -49,6 +49,11 @@ TOUCH = 0.5
 # A wire is "through" a symbol only if it enters the body, not if it grazes an
 # edge. Every branch's own leads stop exactly on its symbol's boundary.
 SHAVE = 1.0
+
+# How far a branch symbol may sit from its own wire before the run
+# visibly jogs out to meet it. A box placed on the route measures 0;
+# this is slack for rounding, not for a different place.
+OFF_RUN = 1.0
 
 # Opposite margins may differ by this fraction of the padding before the
 # drawing reads as sitting off-centre in its own frame.
@@ -170,6 +175,16 @@ def _point_rect(p, centre, half):
     dx = max(0.0, abs(p[0] - centre[0]) - half[0])
     dy = max(0.0, abs(p[1] - centre[1]) - half[1])
     return math.hypot(dx, dy)
+
+
+def _point_line(p, a, b):
+    """Distance from `p` to the infinite line through `a` and `b`."""
+    (px, py), (ax, ay), (bx, by) = p, a, b
+    dx, dy = bx - ax, by - ay
+    length = math.hypot(dx, dy)
+    if length == 0:
+        return math.hypot(px - ax, py - ay)
+    return abs(dx * (ay - py) - dy * (ax - px)) / length
 
 
 def _point_segment(p, a, b):
@@ -399,7 +414,9 @@ def cycles(edges):
         adj[a].append(b)
         adj[b].append(a)
 
-    parent, seen, tree = {}, set(), set()
+    parent: Dict[Any, Any] = {}
+    seen: Set[Any] = set()
+    tree: Set[Any] = set()
     for root in sorted(adj):
         if root in seen:
             continue
@@ -812,6 +829,47 @@ def _symbols_overlap(placements, out):
                     at=tuple(ca)))
 
 
+def _symbol_off_its_run(placements, out):
+    """A branch symbol placed away from the wire it belongs to.
+
+    `at` is "where the box sits", and `layout` splits the route around it.
+    Put it somewhere the route does not go and the split still happens: the
+    wire leaves the node, jogs diagonally out to wherever the box was put,
+    and jogs back. It validates, it renders, and it drew a path no thermal
+    network has. Nothing looked, because every rule here asks about labels
+    and crossings rather than about a symbol's relationship to its own wire.
+    """
+    runs = defaultdict(list)
+    for p in placements:
+        if p.element == "wire" and p.ref is not None:
+            pts = [tuple(q) for q in p.points]
+            for i in range(len(pts) - 1):
+                runs[str(p.ref)].append((pts[i], pts[i + 1]))
+    for p in placements:
+        if p.symbol is None or p.role != "branch" or not p.shown:
+            continue
+        segs = runs.get(str(p.ref))
+        if not segs:
+            continue
+        # Distance to the wire itself says nothing: `layout` splits the run
+        # around the box, so the nearest wire is always about `half_len`
+        # away whether the box is on the route or off it. What changes is
+        # whether the box is on the *line* the run takes -- collinear with
+        # the segment it sits between, or out to one side of it.
+        at = tuple(p.at)
+        near = min(segs, key=lambda s: _point_segment(at, *s))
+        gap = _point_line(at, *near)
+        if gap <= OFF_RUN:
+            continue
+        out.append(Finding(
+            "symbol-off-its-run", "warning", p.ref or "a symbol",
+            f"{_name(p)} sits {gap:.0f} from its own wire, so the run jogs "
+            "out to meet it and back",
+            remedy=f"put `at` on the route {p.ref} takes, or give it a `via` "
+                   "waypoint there so the route goes where the box is",
+            at=tuple(p.at)))
+
+
 def _wire_through_wall(placements, out):
     """A wire running through a boundary node's hatching.
 
@@ -834,7 +892,7 @@ def _wire_through_wall(placements, out):
     walls = [(p, _wall_box(p)) for p in placements if p.element == "ground"]
     if not walls:
         return
-    hits = {}
+    hits: Dict[Tuple[str, str], Any] = {}
     for ground, (centre, half, angle) in walls:
         shaved = (max(0.0, half[0] - SHAVE), max(0.0, half[1] - SHAVE))
         for p in placements:
@@ -875,7 +933,7 @@ def _wire_through_symbol(placements, out):
     # One finding per (victim, offender), not per segment: a route crossing a
     # box usually does it with two of its segments, and saying so twice reads
     # as two problems.
-    hits = {}
+    hits: Dict[Tuple[str, str], Any] = {}
     for p in placements:
         if p.symbol is None:
             continue
@@ -1009,8 +1067,12 @@ def _parallel_pairs(placements, scene, out):
         pairs[frozenset(p.ends)].append(p)
 
     for group in pairs.values():
-        labelled = [(p, by_rect.get(id(p))) for p in group]
-        labelled = [(p, r) for p, r in labelled if r is not None]
+        # One comprehension rather than two: rebinding the same name with a
+        # filtered copy is not a narrowing a checker can follow, so every
+        # later `r.side` read as possibly-None.
+        labelled = [(p, rect) for p, rect in
+                    ((p, by_rect.get(id(p))) for p in group)
+                    if rect is not None]
         sides = [r.side for _, r in labelled]
         if len(labelled) < 2 or len(set(sides)) == len(sides):
             continue
@@ -1052,8 +1114,9 @@ def _placements(diagram):
     return _layout(diagram)
 
 
-def check(diagram, size=None, padding=PADDING, source="diagram",
-          physics=False):
+def check(diagram, size: Optional[Sequence[float]] = None,
+          padding: float = PADDING, source: str = "diagram",
+          physics: bool = False) -> "Report":
     """Everything wrong with this diagram, as a `Report`.
 
     Takes a `Diagram`, a `DiagramBuilder`, or a list of `Placement`. `size`
@@ -1073,7 +1136,7 @@ def check(diagram, size=None, padding=PADDING, source="diagram",
     placements = _placements(diagram)
     scene = compose(placements, size, padding)
 
-    findings = []
+    findings: List[Finding] = []
     _collisions(scene, findings)
     _adrift(scene, placements, findings)
     _crowded_run(scene, placements, findings)
@@ -1083,6 +1146,7 @@ def check(diagram, size=None, padding=PADDING, source="diagram",
     _symbols_overlap(placements, findings)
     _wire_through_symbol(placements, findings)
     _wire_through_wall(placements, findings)
+    _symbol_off_its_run(placements, findings)
     _frame(scene, padding, findings)
     _parallel_pairs(placements, scene, findings)
     if physics:

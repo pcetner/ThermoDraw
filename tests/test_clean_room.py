@@ -17,11 +17,16 @@ import pathlib
 
 import pytest
 
-from thermodraw import Diagram, DiagramBuilder, check, describe
+import json
+import os
+
+from thermodraw import (Diagram, DiagramBuilder, DiagramError, check,
+                        describe)
 from thermodraw._check import _remedy
 from thermodraw._layout import Placement
 
-GALLERY = pathlib.Path(__file__).resolve().parents[1] / "examples" / "gallery"
+ROOT = pathlib.Path(__file__).resolve().parents[1]
+GALLERY = ROOT / "examples" / "gallery"
 needs_gallery = pytest.mark.skipif(not GALLERY.exists(),
                                    reason="examples/gallery is not here")
 
@@ -649,12 +654,40 @@ class TestAGroupSaysWhatItComesTo:
         assert d.count_text(2, "parallel", "cond", "1.6").endswith("0.8 K/W")
         assert d.count_text(8, "parallel", "cond", "1.6").endswith("0.2 K/W")
 
-    def test_a_rate_and_a_break_state_no_group_value(self):
-        """`flow` carries a rate rather than a resistance, and `break`
-        carries nothing. Neither has a single number to fold."""
+    def test_a_rate_folds_like_a_rate(self):
+        """Not like a resistance and not like a capacitance. Four pumped
+        loops side by side carry four times the heat; four in a chain carry
+        the same heat through each link.
+
+        `--physics` reads the same table, and used to read the per-item rate
+        raw: four correct 10 W loops into a 40 W sink were reported as a node
+        that does not balance, at both ends.
+        """
         d = self.units()
-        assert d.count_text(4, "parallel", "flow", "12") == "4 in parallel"
-        assert d.count_text(4, "parallel", "break", None) == "4 in parallel"
+        assert d.count_text(4, "parallel", "flow", "10") ==             "4 in parallel = 40 W"
+        assert d.count_text(4, "series", "flow", "10") == "4 in series = 10 W"
+
+    def test_a_break_states_no_group_value(self):
+        """It names no quantity, so there is nothing to fold."""
+        assert self.units().count_text(4, "parallel", "break", None) ==             "4 in parallel"
+
+    def test_the_checker_and_the_drawing_read_one_table(self):
+        """The fold lived in two places and they disagreed. This is the
+        diagram that proved it."""
+        d = diagram({
+            "units": {"T": "°C", "q": "W"},
+            "nodes": [{"id": "hot", "label": "Hot", "value": "60",
+                       "at": [200, 150]},
+                      {"id": "cold", "label": "Cold", "value": "20",
+                       "at": [700, 150]}],
+            "branches": [{"from": "hot", "to": "cold", "kind": "flow",
+                          "label": "Loops", "value": "10", "count": 4,
+                          "arrangement": "parallel", "sub": "l"}],
+            "sources": [{"to": "hot", "kind": "flow", "label": "In",
+                         "value": "40", "sub": "i"},
+                        {"from": "cold", "kind": "flow", "label": "Out",
+                         "value": "40", "sub": "o"}]})
+        assert check(d, physics=True).findings == []
 
     def test_a_value_that_is_not_a_number_is_left_alone(self):
         assert self.units().count_text(4, "parallel", "cond", "about 2") == \
@@ -680,3 +713,262 @@ class TestAGroupSaysWhatItComesTo:
                 if "Mounting clips" in l.says]
         assert says == ["Mounting clips | R_cond = 1.6 K/W "
                         "| 4 in parallel = 0.4 K/W"]
+
+
+# ==================================================== the blind code review
+# A reader given the library, its tests and no argument for any of it
+# (`tools/clean_room.py --profile review`) reported nine things. These are
+# the seven that were defects, each reproduced before it was fixed.
+
+
+# ------------------------------------------- to_dict kept only some fields
+class TestTheDataSurvivesARoundTrip:
+    """Finding 1. `to_dict` listed the fields it kept, and `count`,
+    `arrangement`, `rate` and `side` were not on the list; `_keep` then
+    skipped anything falsy, so a node at 0 degrees and a branch at
+    `angle: 0` came back empty. The thesis is that the data is the
+    representation, and `to_json` is how you persist one."""
+
+    @staticmethod
+    def everything():
+        return diagram({
+            "units": {"R": "K/W", "T": "°C", "P": "W", "q": "W"},
+            "nodes": [{"id": "a", "label": "A", "value": "0",
+                       "at": [200, 150], "side": "left"},
+                      {"id": "b", "label": "B", "value": "50",
+                       "at": [600, 150]}],
+            "branches": [{"from": "a", "to": "b", "kind": "cond",
+                          "label": "P", "value": "0.5", "count": 8,
+                          "arrangement": "parallel", "rate": "12",
+                          "side": "down"}],
+            "sources": [{"to": "a", "kind": "diss", "label": "L",
+                         "value": "40", "count": 4, "side": "left"}]})
+
+    def test_every_field_comes_back(self):
+        one = self.everything()
+        two = Diagram.from_dict(one.to_dict())
+        assert one == two
+
+    def test_the_drawing_comes_back(self):
+        """The test that would have caught it. Equality on the dataclasses
+        is the claim; identical bytes out of `render` is the consequence."""
+        from thermodraw import layout, render
+        one = self.everything()
+        two = Diagram.from_dict(one.to_dict())
+        assert render(layout(one)) == render(layout(two))
+
+    def test_a_zero_is_a_value_and_not_an_absence(self):
+        """0 degrees is a temperature. `angle: 0` on a branch means "draw it
+        flat whatever the wire does", which is why `Branch.angle` defaults to
+        None rather than to 0 — a distinction the old rule threw away."""
+        d = (DiagramBuilder(R="K/W", T="°C")
+             .node("a", "A", 0, at=(200, 150))
+             .node("b", "B", 50, at=(600, 150))
+             .branch("a", "b", "cond", "P", "0.5", angle=0)).build()
+        back = Diagram.from_dict(d.to_dict())
+        assert back.nodes[0].value == 0
+        assert back.branches[0].angle == 0
+
+    def test_a_field_left_alone_is_not_written_out(self):
+        """The other half: keeping everything would write `"side": "auto"`
+        on every element of every file."""
+        out = self.everything().to_dict()
+        assert "side" not in out["nodes"][1], out["nodes"][1]
+        assert "sub" not in out["branches"][0]
+
+
+# ---------------------------------------- the top level was never validated
+class TestTheTopLevelIsValidated:
+    """Finding 2. `validate` checked every field on a node, a branch, a
+    source and the rail, and nothing above them. `"size": "big"` reached the
+    renderer and died as `could not convert string to float: 'b'`."""
+
+    @staticmethod
+    def with_top(**over):
+        body = {"units": {"T": "°C"},
+                "nodes": [{"id": "a", "label": "A", "value": "1",
+                           "at": [200, 150]}]}
+        body.update(over)
+        return body
+
+    @pytest.mark.parametrize("over,says", [
+        ({"size": "big"}, "size must be"),
+        ({"size": [100]}, "size must be"),
+        ({"size": [0, 10]}, "size must be positive"),
+        ({"nodes": 5}, "nodes must be a list"),
+        ({"branches": {}}, "branches must be a list"),
+        ({"units": "K/W"}, "units must be an object"),
+        ({"units": {"T": 7}}, "unit for 'T' must be text"),
+        ({"title": 3}, "title must be text"),
+        ({"rail": 7}, "rail must be an object"),
+    ])
+    def test_it_is_refused_and_the_field_is_named(self, over, says):
+        with pytest.raises(DiagramError) as caught:
+            diagram(self.with_top(**over))
+        assert says in str(caught.value), str(caught.value)
+
+    @pytest.mark.parametrize("bad", [float("nan"), float("inf")])
+    def test_a_value_must_be_finite(self, bad):
+        """`json` accepts NaN and Infinity. `_fmt` called `int(nan)` on one
+        and died as a ValueError naming no element."""
+        body = self.with_top()
+        body["nodes"][0]["value"] = bad
+        with pytest.raises(DiagramError) as caught:
+            diagram(body)
+        assert "finite" in str(caught.value)
+
+
+# ------------------------------------------- exit 1 means findings, always
+class TestTheExitCodeMeansWhatItSays:
+    """Finding 2's consequence, and the reason it was the worst of them. The
+    command line documents 0 clean, 1 findings, 2 no answer. A crash reached
+    the shell as 1 through Python's own handler, so a CI step gating on the
+    status read "the library fell over" as "this diagram has warnings"."""
+
+    @staticmethod
+    def run(tmp_path, body):
+        import json as _json
+        import subprocess
+        import sys
+        path = tmp_path / "d.json"
+        path.write_text(_json.dumps(body), encoding="utf-8")
+        env = dict(os.environ, PYTHONPATH="src", PYTHONIOENCODING="utf-8")
+        return subprocess.run(
+            [sys.executable, "-m", "thermodraw", "check", str(path)],
+            capture_output=True, text=True, env=env, cwd=str(ROOT))
+
+    @pytest.mark.parametrize("over", [
+        {"size": "big"}, {"size": [100]}, {"nodes": 5}, {"units": "K/W"}])
+    def test_a_diagram_that_cannot_be_drawn_exits_2(self, tmp_path, over):
+        body = {"units": {"T": "°C"},
+                "nodes": [{"id": "a", "label": "A", "value": "1",
+                           "at": [200, 150]}]}
+        body.update(over)
+        got = self.run(tmp_path, body)
+        assert got.returncode == 2, got.stdout + got.stderr
+        assert "error:" in (got.stdout + got.stderr)
+
+    def test_a_clean_diagram_still_exits_0(self, tmp_path):
+        got = self.run(tmp_path, {
+            "units": {"T": "°C"},
+            "nodes": [{"id": "a", "label": "A", "value": "1",
+                       "at": [200, 150]}]})
+        assert got.returncode == 0, got.stdout + got.stderr
+
+
+# --------------------------------- shapes that drew nonsense and passed
+class TestShapesThatDrawNothingSensibleAreRefused:
+    """Finding 7. All of these validated, laid out, rendered and checked
+    clean. None is likely from a careful author; all are likely from a model
+    writing JSON, which is the stated input."""
+
+    def test_a_branch_cannot_join_a_node_to_itself(self):
+        with pytest.raises(DiagramError) as caught:
+            diagram({"units": {"R": "K/W", "T": "C"},
+                     "nodes": [{"id": "a", "label": "A", "value": "1",
+                                "at": [200, 150]}],
+                     "branches": [{"from": "a", "to": "a", "kind": "cond",
+                                   "label": "L", "value": "1"}]})
+        assert "twice" in str(caught.value)
+
+    def test_the_rail_cannot_join_itself(self):
+        with pytest.raises(DiagramError):
+            diagram({"units": {"R": "K/W", "T": "C"},
+                     "nodes": [{"id": "a", "label": "A", "value": "1",
+                                "at": [200, 150]}],
+                     "branches": [{"from": "rail", "to": "rail",
+                                   "kind": "cond", "label": "L",
+                                   "value": "1"}],
+                     "rail": {"reference": "a", "y": 300}})
+
+    def test_a_corner_says_so_rather_than_dropping_your_words(self):
+        with pytest.raises(DiagramError) as caught:
+            diagram({"units": {"R": "K/W", "T": "C"},
+                     "nodes": [{"id": "a", "label": "A", "value": "1",
+                                "at": [200, 150]},
+                               {"id": "c", "kind": "corner", "label": "gone",
+                                "value": "99", "at": [500, 150]}],
+                     "branches": [{"from": "a", "to": "c", "kind": "cond",
+                                   "label": "L", "value": "1"}]})
+        assert "would not appear" in str(caught.value)
+
+    def test_a_bare_corner_is_still_fine(self):
+        d = diagram({"units": {"R": "K/W", "T": "C"},
+                     "nodes": [{"id": "a", "label": "A", "value": "1",
+                                "at": [200, 150]},
+                               {"id": "c", "kind": "corner", "at": [500, 150]}],
+                     "branches": [{"from": "a", "to": "c", "kind": "cond",
+                                   "label": "L", "value": "1"}]})
+        assert check(d).ok
+
+
+# ------------------------------------------- a symbol away from its own run
+class TestASymbolOffItsRun:
+    """Finding 7's fourth case. `at: [200, 120]` on a flat run from (0,0) to
+    (400,0) drew wires out to the box and back — a diagonal jog to wherever
+    it was put — and nothing said anything."""
+
+    @staticmethod
+    def run_with(at=None):
+        b = {"from": "a", "to": "b", "kind": "cond", "label": "Off",
+             "value": "1"}
+        if at:
+            b["at"] = at
+        return diagram({"units": {"R": "K/W", "T": "C"},
+                        "nodes": [{"id": "a", "label": "A", "value": "9",
+                                   "at": [0, 0]},
+                                  {"id": "b", "label": "B", "value": "4",
+                                   "at": [400, 0]}],
+                        "branches": [b]})
+
+    def test_it_is_reported(self):
+        found = one(check(self.run_with(at=[200, 120])), "symbol-off-its-run")
+        assert "from its own wire" in found.message
+        assert "`at`" in found.remedy and "`via`" in found.remedy
+
+    def test_on_the_run_says_nothing(self):
+        """The measure has to be distance from the run's *line*: `layout`
+        splits the route around the box, so distance to the wire itself is
+        about `half_len` whether the box is on the route or off it."""
+        assert "symbol-off-its-run" not in codes(check(self.run_with([200, 0])))
+
+    def test_no_at_at_all_says_nothing(self):
+        assert "symbol-off-its-run" not in codes(check(self.run_with()))
+
+
+# ------------------------------------ a subscript reported as the reader sees
+class TestDescribeReportsTextAsWritten:
+    """Finding 9. `core.sym_text` escapes a subscript on its way into a
+    `<tspan>`, and `describe` undid the tspan and not the escaping, so one
+    row read `Fins & fans | T_a&amp;b`."""
+
+    def test_an_ampersand_reads_the_same_in_both_halves(self):
+        d = diagram({"units": {"T": "°C"},
+                     "nodes": [{"id": "a", "label": "Fins & fans",
+                                "sub": "a&b", "value": "20",
+                                "at": [200, 150]}]})
+        says = describe(d).lines[0].says
+        assert says == "Fins & fans | T_a&b = 20 °C", says
+
+
+# ------------------------------- the web output carries the measured faces
+class TestTheWebOutputCarriesItsFont:
+    """Finding 4. Every clearance `check` certifies is measured from the
+    Plex advance tables. `bake` embedded the faces and `with_variables` — the
+    documented path for a `.svg` on the web — embedded nothing, so a clean
+    report was a claim about a rendering most readers would not see."""
+
+    @staticmethod
+    def hero_svg():
+        from thermodraw import layout, render
+        return render(layout(diagram(json.loads(
+            (ROOT / "examples" / "hero.json").read_text(encoding="utf-8")))))
+
+    def test_with_variables_embeds_the_faces(self):
+        from thermodraw import theme
+        assert "@font-face" in theme.with_variables(self.hero_svg())
+
+    def test_it_can_be_turned_off_for_a_host_that_serves_them(self):
+        from thermodraw import theme
+        out = theme.with_variables(self.hero_svg(), embed_font=False)
+        assert "@font-face" not in out and "--sym:" in out

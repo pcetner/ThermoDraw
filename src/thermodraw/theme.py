@@ -14,6 +14,7 @@ import pathlib
 import re
 
 from . import symbols
+from typing import List
 
 FONT_DIR = pathlib.Path(__file__).parent / "fonts"
 
@@ -74,7 +75,7 @@ _VARS = (
 
 
 @functools.lru_cache(maxsize=None)
-def font_face(face):
+def font_face(face: str) -> str:
     """One @font-face rule with the subset inlined as a data URI."""
     name, style, weight = next(
         (n, s, w) for f, n, s, w in FACE_FILES if f == face)
@@ -84,7 +85,7 @@ def font_face(face):
             f'src:url(data:font/woff2;base64,{data}) format("woff2")}}')
 
 
-def faces_used(svg):
+def faces_used(svg: str) -> List[str]:
     """Which faces this diagram actually needs.
 
     Embedding all three costs about 79KB. A diagram with no text needs none,
@@ -102,12 +103,29 @@ def faces_used(svg):
     return used
 
 
-def with_variables(svg):
-    """Inject the custom-property block. Use for web embedding."""
-    return svg.replace("<style>", "<style>" + _VARS, 1)
+def with_variables(svg: str, embed_font: bool = True) -> str:
+    """Inject the custom-property block. Use for web embedding.
+
+    The faces are embedded here for the same reason `bake` embeds them, and
+    it took an outside reader to notice this path did not. Every clearance
+    `check` certifies is measured from the Plex advance tables in
+    `_metrics.py`; the stack asks for the real font first and falls through
+    to Helvetica Neue and Arial, in which "Switching loss" is about 82 units
+    wide against the 76.8 the solver cleared. A standalone `.svg` in an
+    `<img>` cannot fetch a stylesheet, so without this a clean report was a
+    claim about a rendering most web readers would never see.
+
+    `embed_font=False` for a host page that serves the face itself, where
+    the bytes would be paid for twice.
+    """
+    svg = svg.replace("<style>", "<style>" + _VARS, 1)
+    if embed_font:
+        css = "".join(font_face(f) for f in faces_used(svg))
+        svg = svg.replace("<style>", "<style>" + css, 1)
+    return svg
 
 
-def bake(svg, theme="light", embed_font=True):
+def bake(svg: str, theme: str = "light", embed_font: bool = True) -> str:
     """Resolve every var() to a literal. Use for Word, slides, rasterisers."""
     pal = PALETTES[theme]
 

@@ -620,6 +620,57 @@ element whose position was in doubt. It carries no text, so the row reads
 it is named `wall of node 'amb'`, because a ground carries its node's `ref`
 and two rows under one key lose one of the two.
 
+### What the blind code review taught it
+
+`tools/clean_room.py --profile review` hands a reader the code, the tests and
+no argument for any of it. Nine findings came back and seven were defects.
+Four are worth the record.
+
+**`to_dict` was lossy, and the thesis is that the data is the
+representation.** The keep lists named some fields and not others, and
+`_keep` then skipped anything falsy — so `count`, `arrangement`, `rate` and
+`side` vanished, and so did a node at 0 °C and a branch at `angle: 0`. The
+rule should never have been about falsiness: what "the author did not set
+this" looks like is the field still holding its dataclass default, and
+`Branch.angle` defaults to None precisely so that 0 remains expressible. The
+one round-trip test used the hero, which happens to use none of the lost
+fields.
+
+**Exit 1 has to mean findings.** `validate` checked every field inside a
+node, a branch, a source and the rail, and nothing above them, so `"size":
+"big"` reached the renderer and died as `could not convert string to float:
+'b'` — exiting 1 through Python's own handler, which the command line
+documents as *findings*. A CI step gating on the status read a crash as a
+diagram with warnings. The top level is validated now, and `__main__` keeps
+a net under the unknown cases that answers 2, because a crash is "no
+answer" and never "some warnings".
+
+**The canvas is sized for the larger form, and a form is its text too.** The
+hidden half of a repeated group had its label solved with `occupied=None` —
+against nothing — and left out of `extent`, so an eight-way group's expanded
+label sat above the canvas top and the root `<svg>` clipped it the moment a
+reader pressed the control that exists to show it. It is now solved against
+the page and measured into the canvas, and it does *not* claim a place in
+the occupancy: an invisible label must not push a visible one. Two comments
+asserted the two forms shared a footprint, a property `_layout` had
+deliberately given up; the reviewer said those comments were what led them
+to the bug.
+
+**A clean report is about a rendering, and the reader has to get that
+rendering.** Every clearance is measured from the Plex advance tables in
+`_metrics.py`. `bake` embedded the faces for exactly that reason and
+`with_variables` — the documented path for a `.svg` on the web — embedded
+nothing, falling through to Arial, in which the hero's widest label is about
+five units wider than the solver cleared. Both paths embed now. It costs
+about 78 KB a file and buys the guarantee the library is for.
+
+One more that is a fix in two places at once: `--physics` kept its own copy
+of the fold and knew about resistances but not rates, so four correct 10 W
+loops in parallel into a 40 W sink were reported as a node that does not
+balance, at both ends. `model.FOLD` is the single table now and the checker
+reads it, so the number on the drawing and the number in the report cannot
+disagree.
+
 ## Describing a diagram (`_describe.py`)
 
 **`check` grades; `describe` reports.** Both acceptance agents asked for the

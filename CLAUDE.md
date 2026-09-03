@@ -63,6 +63,15 @@ sentence after it says what would overturn it.
 ### Pipeline
 - A diagram is data: `dict -> Diagram -> placements -> SVG`, pure stages, a
   builder as sugar. Anything the builder can say is a dict.
+- **The round trip is lossless.** `to_dict` writes every field the author
+  set and none they did not, which is the field differing from its dataclass
+  default — not the field being falsy. `count`, `arrangement`, `rate` and
+  `side` used to be absent from the keep lists, and 0 °C and `angle: 0` were
+  dropped for being falsy.
+- Validation covers the top level too: `size`, `title`, `units` and the
+  container types. **Exit 1 means findings and nothing else** — a diagram
+  that cannot be drawn is refused and exits 2, and `__main__` has a net so
+  an unexpected exception cannot reach the shell as 1.
 - `layout` is the seam the network layer replaces. It is not named after a
   version number, since 0.3.0 shipped without it.
 - Rendering is a pure function of its input; element ids are content-addressed.
@@ -112,7 +121,11 @@ sentence after it says what would overturn it.
   table, not a formula: a capacitance is the dual of a resistance, `flow`
   and `break` state none. This overturns "the library does no arithmetic",
   which `--physics` had already made half false.
-- Each form is a complete drawing; the canvas is sized for the larger.
+- Each form is a complete drawing; the canvas is sized for the larger,
+  **text included**. The hidden form's label was solved against nothing and
+  measured by nothing, so an eight-way group's expanded label sat above the
+  canvas top and was clipped by the control that exists to show it. It is
+  solved against the page and does not claim a place on it.
 - A comb, not a fan; the ellipsis runs along the branch; motion is a fade.
 - One label per group, on an `anchor` placement that draws nothing.
 
@@ -137,6 +150,12 @@ sentence after it says what would overturn it.
   five diagrams and would fail on each.
 - Connectivity is over nodes joined by branches, not over ink. A `break`
   counts as joined.
+- A branch symbol placed off its own run is a warning: `layout` splits the
+  route around the box, so an `at` beside the route draws a diagonal jog out
+  to it and back. Measured from the run's line, not from the wire, which is
+  `half_len` away either way.
+- A branch may not join a place to itself, and a `corner` refuses `label`,
+  `value` and `sub` rather than discarding them.
 - A wire through a boundary node's hatching is a warning. The wall is always
   drawn below its node, so a branch arriving from below crosses it; nothing
   looked, because a ground carries no `Symbol`. It fires twice on run 2's
@@ -205,13 +224,20 @@ sentence after it says what would overturn it.
 - Subscripts are pre-centred by hand (`core.measure`); rasterisers disagree on
   `<tspan>` under `text-anchor="middle"`.
 - CSS custom properties die outside a browser: `theme.bake` for Word,
-  PowerPoint, cairosvg, librsvg. `bake` touches only the stylesheet. The
+  PowerPoint, cairosvg, librsvg. `bake` touches only the stylesheet.
+  **Both theme paths embed the faces**: every clearance `check` certifies is
+  measured in Plex, and a standalone `.svg` cannot fetch a font, so the web
+  path embedding nothing made a clean report a claim about a rendering the
+  reader would not see. It costs about 78 KB a file. The
   embedded faces are renamed "ThermoDraw Sans" (OFL clause 3).
 - Three limits that are not checks: a `rad` value's operating point is not
   representable; the temperature scale (absolute or rise) is not
   representable; `phase` draws the plateau, not the latent-heat budget.
-- `mypy --check-untyped-defs` finds 91 more than the default level CI runs,
-  most of them the `**who` keyword spreads in `_layout.py`.
+- Every public entry point is annotated and CI runs
+  `mypy --check-untyped-defs`, which is clean. The `**who` keyword spreads
+  in `_layout.py` are `Dict[str, Any]` because a heterogeneous `**` spread
+  into a dataclass is not checkable, and they were 87 of the 112 errors that
+  annotating the public surface first surfaced.
 
 ## What is left to build
 

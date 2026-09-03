@@ -11,7 +11,10 @@ reports the rectangle it used, which is what lets the canvas size itself.
 import collections
 import math
 from dataclasses import dataclass, field
-from typing import List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Set, TYPE_CHECKING, Tuple
+
+if TYPE_CHECKING:                      # `_layout` imports nothing
+    from ._layout import Placement     # from here, so this is safe
 
 from . import core as S
 from . import symbols as SY
@@ -34,6 +37,17 @@ class LabelRect(tuple):
     No `__slots__`: tuple is a variable-length built-in, and CPython refuses a
     nonempty `__slots__` on a subtype of one.
     """
+
+    # Declared, because they are set in `__new__` and a checker cannot see
+    # that. Without them every read of `rect.side` was an error at
+    # `--check-untyped-defs`, which is nine of them in this file alone.
+    owner: Any
+    ref: Optional[str]
+    side: Optional[str]
+    solved: float
+    used: float
+    flipped: bool
+    clear: bool
 
     def __new__(cls, rect, owner=None, report=None):
         self = super().__new__(cls, rect)
@@ -166,9 +180,18 @@ def _variant_groups(variants):
 def variant_id(ref, variant):
     """A stable, content-addressed id for one form of a repeated group.
 
-    Stable is the whole point: a page toggling between the two forms holds
-    these in its markup, so they must not move when something unrelated in
-    the diagram does. `core.uid` hashes what it is given and nothing else.
+    Stable is the whole point *within one revision of the file*: a page
+    toggling between the two forms holds these in its markup, so they must
+    not move when something unrelated in the diagram does. `core.uid` hashes
+    what it is given and nothing else.
+
+    Across edits they do move, and the docstring used to say "stable" without
+    that qualification while `Placement.ref` said the opposite two files
+    away. A `ref` is `branch 2 j->c`, derived from position because a branch
+    has no id in the schema, so inserting a branch above renumbers it and
+    every id built from it. Anything holding these across revisions — a
+    script diffing `check --json`, a page saved and re-rendered — needs to
+    know that, and `docs/schema.md` says so under Checking.
     """
     return S.uid("td", ref, variant)
 
@@ -193,7 +216,7 @@ def _wall(p):
     return tuple(p.wall) if p.wall else (WALL_HALF, WALL_DEPTH)
 
 
-def _wall_box(p):
+def _wall_box(p) -> Tuple[Tuple[float, float], Tuple[float, float], float]:
     """A ground as an oriented box: (centre, half, angle).
 
     The wall hangs off its anchor rather than straddling it — the line is at
@@ -245,14 +268,20 @@ def compose(placements, size=None, padding=PADDING):
     everything. Identical segments are drawn once: two branches sharing a
     trunk both route along it, and stroking it twice is waste.
     """
-    wires, glyphs, nodes, labels = [], [], [], []
-    rects, seen = [], set()
+    wires: List[str] = []
+    glyphs: List[str] = []
+    nodes: List[str] = []
+    labels: List[str] = []
+    rects: List[LabelRect] = []
+    seen: Set[Any] = set()
+    unshown: List[LabelRect] = []   # the hidden form's label: measured only
     # Both forms of every repeated group are drawn. The one that is not the
     # default goes into a hidden group with a stable id, so swapping between
-    # them is two attribute flips rather than a rebuild — and because the
-    # condensed form keeps the outermost copies, the two occupy the same
-    # footprint and nothing re-fits.
-    variants = collections.OrderedDict()
+    # them is two attribute flips rather than a rebuild. The two do not
+    # occupy the same footprint — `_layout` gave that property up so a
+    # condensed group could take the room it shows — so `extent` measures
+    # both forms' labels and the canvas holds the larger.
+    variants: Dict[Any, Dict[Any, List[str]]] = collections.OrderedDict()
 
     def emit(p, markup, into):
         if p.variant is None:
@@ -303,9 +332,11 @@ def compose(placements, size=None, padding=PADDING):
         elif p.element == "ground":
             # The boundary wall was the one drawn thing the solver could not
             # see, so a label was free to land on it.
-            occupied.add_box(*_wall_box(p), owner=p)
+            centre, half, angle = _wall_box(p)
+            occupied.add_box(centre, half, angle, owner=p)
         elif p.element == "phase":
-            occupied.add_box(*_phase_box(p), owner=p)
+            centre, half, angle = _phase_box(p)
+            occupied.add_box(centre, half, angle, owner=p)
         elif p.element == "node":
             occupied.add_box(p.at, (p.radius, p.radius), 0.0, owner=p)
 
@@ -320,7 +351,15 @@ def compose(placements, size=None, padding=PADDING):
         # the same occupancy — which holds the visible drawing — but it does
         # not join `rects`, because `check` and `describe` speak about what a
         # reader is actually looking at.
-        report = {}
+        #
+        # Both halves of that were once false. The hidden label was solved
+        # with `occupied=None`, against nothing at all; and it was measured
+        # by nothing, so `extent` sized the canvas to the hidden form's
+        # copies and not to its text. An eight-way group's expanded label had
+        # two of its three lines above `y = 0` on a canvas whose top was 0,
+        # clipped by the root `<svg>` the moment a reader pressed the control
+        # that exists to show it.
+        report: Dict[str, Any] = {}
         # A form's label belongs to that form and fades with it. Putting the
         # visible one in the shared list left it stranded in the middle of the
         # other form when the two were swapped.
@@ -330,18 +369,23 @@ def compose(placements, size=None, padding=PADDING):
                           extra=lab.extra,
                           half=lab.half, half_len=lab.half_len,
                           side=lab.side,
-                          occupied=occupied if p.shown else None, owner=p,
-                          report=report)
+                          occupied=occupied, owner=p,
+                          report=report, claim=p.shown)
         if p.variant is not None:
             bucket = variants.setdefault((p.ref, p.variant, p.shown), {})
             bucket.setdefault(None, []).extend(into)
-        if p.shown and rect:
-            rects.append(LabelRect(rect, owner=p, report=report))
+        if rect:
+            (rects if p.shown else unshown).append(
+                LabelRect(rect, owner=p, report=report))
 
     parts = wires + glyphs + _variant_groups(variants) + nodes + labels
-    ink = extent(placements, rects, 0.0)
+    # "The canvas is sized for the larger form" — and a form is its drawing
+    # and its text, not just its copies. `rects` stays the shown ones,
+    # because that is what `check` grades and `describe` reports.
+    measured = rects + unshown
+    ink = extent(placements, measured, 0.0)
     box = ((0.0, 0.0, float(size[0]), float(size[1])) if size is not None
-           else extent(placements, rects, padding))
+           else extent(placements, measured, padding))
     return Scene(parts=parts, rects=rects, occupancy=occupied, ink=ink, box=box)
 
 
@@ -379,7 +423,9 @@ def extent(placements, rects, padding=PADDING):
             max(xs) + padding, max(ys) + padding)
 
 
-def render(placements, size=None, padding=PADDING):
+def render(placements: Sequence["Placement"],
+           size: Optional[Sequence[float]] = None,
+           padding: float = PADDING) -> str:
     """A complete SVG, sized to its contents unless told otherwise.
 
     `canvas` took dimensions the caller invented, and anything placed outside

@@ -104,6 +104,13 @@ def _fmt(value):
 FOLD = {
     "R": {"parallel": lambda v, n: v / n, "series": lambda v, n: v * n},
     "C": {"parallel": lambda v, n: v * n, "series": lambda v, n: v / n},
+    # A rate is not a resistance and folds like neither. Four pumped loops
+    # side by side carry four times the heat; four in a chain carry the same
+    # heat through each link, so the group carries one loop's worth. This
+    # entry is also what `--physics` reads: the checker used the per-item
+    # rate raw and reported four correct 10 W loops into a 40 W sink as a
+    # node that does not balance, which is a false alarm on a right answer.
+    "q": {"parallel": lambda v, n: v * n, "series": lambda v, n: v},
 }
 
 
@@ -166,10 +173,16 @@ def _text(value, where, name):
     return value
 
 
-def _value(value, where):
+def _value(value, where, name="value"):
     if value is not None and not isinstance(value, (str, int, float)):
         raise DiagramError(
-            f"{where}: value must be a number or text, got {value!r}")
+            f"{where}: {name} must be a number or text, got {value!r}")
+    # `json` accepts NaN and Infinity by default, and `_number` already
+    # refuses them for coordinates. A value reached `_fmt`, which calls
+    # `int(nan)`, and died as a ValueError with no element named.
+    if isinstance(value, float) and not math.isfinite(value):
+        raise DiagramError(
+            f"{where}: {name} must be a finite number, got {value!r}")
     return value
 
 
@@ -453,8 +466,49 @@ class Diagram:
         unit = self.unit(kind)
         return f"{text} {unit}".strip()
 
+    def _validate_top(self):
+        """The fields that are not on any element.
+
+        Everything inside a node, a branch, a source or the rail was checked
+        and these were not, so `"size": "big"` reached `_render.extent` and
+        died as `could not convert string to float: 'b'`, `"nodes": 5` died
+        as `'int' object is not iterable`, and both exited 1 — the code the
+        command line documents as *findings*. A script gating on the exit
+        status read a crash as a diagram with warnings. `"units": "K/W"`
+        was worse: `dict("K/W")` raises ValueError, which `__main__` reports
+        as "is not valid JSON" about a file whose JSON was perfectly good.
+        """
+        _text(self.title, "the diagram", "title")
+        if self.size is not None:
+            if (isinstance(self.size, (str, bytes))
+                    or not isinstance(self.size, Sequence)
+                    or len(self.size) != 2):
+                raise DiagramError(
+                    f"the diagram: size must be [width, height], got "
+                    f"{self.size!r}")
+            for i, n in enumerate(self.size):
+                _number(n, "the diagram", f"size[{i}]")
+            if not all(n > 0 for n in self.size):
+                raise DiagramError(
+                    f"the diagram: size must be positive, got {self.size!r}")
+        if not isinstance(self.units, dict):
+            raise DiagramError(
+                f"the diagram: units must be an object of quantity to unit, "
+                f"got {self.units!r}")
+        for quantity, unit in self.units.items():
+            if not isinstance(unit, str):
+                raise DiagramError(
+                    f"the diagram: the unit for {quantity!r} must be text, "
+                    f"got {unit!r}")
+        for name in ("nodes", "branches", "sources"):
+            got = getattr(self, name)
+            if isinstance(got, (str, bytes)) or not isinstance(got, Sequence):
+                raise DiagramError(
+                    f"the diagram: {name} must be a list, got {got!r}")
+
     def validate(self):
         """Every reason a diagram cannot be drawn, reported before drawing."""
+        self._validate_top()
         seen = set()
         for n in self.nodes:
             # The id is the one string other things point at, so it is
@@ -472,6 +526,20 @@ class Diagram:
             if n.id in seen:
                 raise DiagramError(f"duplicate node id {n.id!r}")
             seen.add(n.id)
+            # `corner` draws nothing at all, so anything written on one is
+            # dropped without a word. Saying so is better than discarding it:
+            # an author who labels a corner meant the label to appear.
+            if n.kind == "corner":
+                said = [f for f in ("label", "value", "sub")
+                        if getattr(n, f) not in (None, "")]
+                if said:
+                    raise DiagramError(
+                        f"node {n.id!r}: a `corner` draws nothing, so "
+                        + ", ".join(repr(f) for f in said)
+                        + " would not appear. Drop "
+                        + ("them" if len(said) > 1 else "it")
+                        + ", or use a `free` node with no `value` to label a "
+                          "junction")
             if n.kind not in NODE_KINDS:
                 raise DiagramError(
                     f"node {n.id!r}: unknown kind {n.kind!r}; expected one of "
@@ -559,6 +627,18 @@ class Diagram:
                 raise DiagramError(
                     f"branch {b.source}-{b.target} is a break, which carries "
                     f"no heat and so no value; got {b.value!r}")
+            # A branch is a path between two places. Named the same place
+            # twice it validated, laid out, rendered and checked clean while
+            # drawing a stub that leaves a node and returns to it; `rail` to
+            # `rail` did the same along the reference line. Neither is
+            # anything an author meant, and both are easy for a model
+            # emitting JSON to write.
+            if b.source == b.target:
+                raise DiagramError(
+                    f"branch {b.source}-{b.target}: a branch joins two "
+                    f"places and this names {b.source!r} twice. For heat "
+                    "leaving a node and not arriving anywhere, use a source "
+                    "with `from`")
             for end in (b.source, b.target):
                 if end == RAIL:
                     if not self.rail:
@@ -691,6 +771,22 @@ class Diagram:
             raise DiagramError(
                 f"unknown top-level field {', '.join(said)}. Expected: "
                 "title, units, size, nodes, branches, sources, rail")
+        # These are checked here rather than in `validate` because `from_dict`
+        # reads them first: a non-list `nodes` died in this comprehension and
+        # a non-object `units` died in the `dict()` below, both before
+        # anything could name the field.
+        for name in ("nodes", "branches", "sources"):
+            got = data.get(name, [])
+            if isinstance(got, (str, bytes)) or not isinstance(got, list):
+                raise DiagramError(
+                    f"the diagram: {name} must be a list, got {got!r}")
+        if not isinstance(data.get("units", {}), dict):
+            raise DiagramError(
+                "the diagram: units must be an object of quantity to unit, "
+                f"got {data['units']!r}")
+        if "rail" in data and data["rail"] is not None                 and not isinstance(data["rail"], dict):
+            raise DiagramError(
+                f"the diagram: rail must be an object, got {data['rail']!r}")
         nodes = [_build(Node, n, f"node {i}")
                  for i, n in enumerate(data.get("nodes", []))]
         branches = [_build(Branch, b, f"branch {i}",
@@ -714,31 +810,61 @@ class Diagram:
         return cls.from_dict(json.loads(text))
 
 
+def _default(cls, name):
+    """What this field is when the author did not set it."""
+    for f in fields(cls):
+        if f.name != name:
+            continue
+        if f.default is not _MISSING:
+            return f.default
+        if f.default_factory is not _MISSING:
+            return f.default_factory()
+    return _MISSING
+
+
 def _keep(out, obj, names):
+    """Every field the author set, and none they did not.
+
+    This used to skip anything falsy — `value in (None, "", [], ()) or
+    value == 0.0`. Two of those are wrong. A node at 0 °C has a temperature,
+    and a branch with `angle: 0` is saying "draw it flat whatever the wire
+    does", which is not the same as saying nothing; both came back absent.
+    What "did not set it" actually looks like is the field still holding its
+    own default, so that is what is skipped.
+
+    `Branch.angle` defaults to None precisely so that 0 is expressible, and
+    the old rule threw away the distinction the dataclass took care to make.
+    """
     for name in names:
         value = getattr(obj, name)
-        if value in (None, "", [], ()) or value == 0.0:
+        if value is None:
+            continue
+        default = _default(type(obj), name)
+        if default is not _MISSING and value == default:
             continue
         out[name] = list(value) if isinstance(value, tuple) else value
     return out
 
 
+# The order is the schema's, so a written file reads like a documented one.
 def _node_dict(n):
     out = {"id": n.id}
     if n.kind != "free":
         out["kind"] = n.kind
-    return _keep(out, n, ("label", "sub", "value", "at", "angle"))
+    return _keep(out, n, ("label", "sub", "value", "at", "angle", "side"))
 
 
 def _branch_dict(b):
     out = {"from": b.source, "to": b.target, "kind": b.kind}
-    return _keep(out, b, ("label", "sub", "value", "via", "at", "angle"))
+    return _keep(out, b, ("label", "sub", "value", "rate", "count",
+                          "arrangement", "via", "at", "angle", "side"))
 
 
 def _source_dict(s):
     out = {"from": s.source} if s.outward else {"to": s.target}
     out["kind"] = s.kind
-    return _keep(out, s, ("label", "sub", "value", "at", "angle"))
+    return _keep(out, s, ("label", "sub", "value", "count", "at", "angle",
+                          "side"))
 
 
 def _rail_dict(r):

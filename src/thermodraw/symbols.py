@@ -6,7 +6,7 @@ reaches perpendicular to the branch (``half``) and along it (``half_len``).
 """
 import math
 from dataclasses import dataclass
-from typing import Callable, Optional, Tuple
+from typing import Callable, List, Optional, Tuple
 
 from . import core as S
 
@@ -279,7 +279,7 @@ class Symbol:
 
     `reach` is the other measurement, and it is not the same one. `half` and
     `half_len` say how much room to leave a label; `reach` says how far the
-    ink goes, which for six of the twelve is further. A box symbol runs LEAD
+    ink goes, which for some of the eighteen is further. A box symbol runs LEAD
     past each end of the box, and a capacitance draws ±40 against a
     `half_len` of 15. Mid-route those leads lie over wire the canvas already
     counts, so nothing shows; at the end of a run the canvas is sized to the
@@ -519,7 +519,7 @@ def card(sym, fluid=False, user=SAMPLE, name=SAMPLE, value=SAMPLE):
     else:
         _, top, _, bh = rect
         y0, y1 = min(-across, top), max(across, top + bh)
-    body = []
+    body: List[str] = []
     place(DPAD - y0, body)
     return canvas(DW, (y1 - y0) + 2 * DPAD, "".join(body), fluid)
 

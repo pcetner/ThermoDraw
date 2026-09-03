@@ -22,11 +22,12 @@ ASCII only, like the report: this goes to a terminal, and a Windows console is
 cp1252. Ids and labels come from the file and can carry anything, which is why
 `__main__` also softens stdout.
 """
+import html
 import math
 import re
 from collections import Counter
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Sequence, Tuple
 
 from ._layout import layout as _layout, network, pieces as _pieces
 from ._render import PADDING, compose
@@ -64,10 +65,19 @@ def label_text(label):
     for x in getattr(label, "extra", ()):
         if x:
             parts.append(x if isinstance(x, str) else " = ".join(x))
-    # The author's text, as written. Escaping happens in `core.build_block`,
-    # downstream of the `Label` this reads, so there is nothing to undo — and
-    # a `<` an author typed is a `<` here, as it is in the drawing.
-    return _TSPAN.sub(r"_\1", " | ".join(parts))
+    # The author's text, as written. Escaping happens in
+    # `core.build_block`, downstream of the `Label` this reads, so
+    # `label.user` has nothing to undo: a `<` an author typed is a `<`
+    # here, as it is in the drawing.
+    #
+    # A subscript is the exception, and the claim above used to be made
+    # of the whole string. `core.sym_text` escapes the subscript on the
+    # way into its `<tspan>`, because that is where it enters markup, so
+    # a `sub` of "a&b" was reported as `T_a&amp;b` on a row whose label
+    # beside it read "Fins & fans". Undo it where it was done, and
+    # nowhere else.
+    return _TSPAN.sub(lambda m: "_" + html.unescape(m.group(1)),
+                      " | ".join(parts))
 
 
 def side_word(side):
@@ -175,7 +185,8 @@ class Description:
                         f"reference {ref!r}"]
         if self.edges or self.sources or len(self.pieces) > 1:
             out += ["", "network:"]
-            joined, directed = {}, []
+            joined: Dict[Tuple[str, str], List[str]] = {}
+            directed: List[str] = []
             details = self.detail or [(None, None, False)] * len(self.edges)
             for (a, b, kind), (count, arrangement, arrow) in zip(
                     self.edges, details):
@@ -268,7 +279,9 @@ def _kind(p):
     return p.element
 
 
-def describe(diagram, size=None, padding=PADDING, source="diagram"):
+def describe(diagram, size: Optional[Sequence[float]] = None,
+             padding: float = PADDING,
+             source: str = "diagram") -> "Description":
     """What `render` would draw, as a `Description`.
 
     Takes a `Diagram` or a `DiagramBuilder`. Not a list of `Placement`, which
@@ -316,7 +329,7 @@ def describe(diagram, size=None, padding=PADDING, source="diagram"):
         # the two. It is the node's wall, and saying so is both unique and
         # what a reader would call it.
         ref = f"wall of {p.ref}" if p.element == "ground" else (p.ref or "?")
-        line = Line(ref=ref, kind=kind, at=tuple(p.at),
+        line = Line(ref=ref, kind=kind, at=(p.at[0], p.at[1]),
                     angle=p.angle, says=label_text(p.label))
         if rect is not None:
             left, top, bw, bh = rect
@@ -331,7 +344,8 @@ def describe(diagram, size=None, padding=PADDING, source="diagram"):
     # The same walk `network` makes, for what it leaves out: one placement
     # per branch carries the group and the kind, and the symbol key says
     # which kind is the directed one.
-    detail, seen = [], set()
+    detail: List[Tuple[Optional[int], Optional[str], bool]] = []
+    seen: set = set()
     for p in placements:
         if p.role != "branch" or p.symbol is None or p.ref in seen:
             continue
@@ -339,10 +353,12 @@ def describe(diagram, size=None, padding=PADDING, source="diagram"):
         detail.append((p.count if p.count and p.count > 1 else None,
                        p.arrangement if p.count and p.count > 1 else None,
                        p.symbol.key == "flow-branch"))
+    # `q.symbol is not None` is inside the generator, so mypy cannot carry
+    # the narrowing out to the comprehension body; the local does.
+    kept = [q for q in placements
+            if q.role == "source" and q.symbol is not None]
     sources = [(i, p.ends[0], p.symbol.key, bool(p.outward))   # keys = kinds
-               for i, p in enumerate(q for q in placements
-                                     if q.role == "source"
-                                     and q.symbol is not None)]
+               for i, p in enumerate(kept) if p.symbol is not None]
     return Description(
         source=source,
         canvas=(round(bx1 - bx0, 1), round(by1 - by0, 1)),
