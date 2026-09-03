@@ -896,15 +896,43 @@ class TestRepeatedBranches:
 
     def test_the_canvas_still_fits_the_larger_form(self):
         """Which is what keeps the motion local. Expanding a group must not
-        reflow everything else on the page, so the room is already there."""
+        reflow everything else on the page, so the room is already there.
+
+        This used to `continue` past every `anchor`, which is the placement
+        that carries a group's label -- so it asserted the room was there for
+        the copies while the expanded form's text sat above the canvas top,
+        clipped by the root `<svg>` the moment a reader expanded it.
+        """
         from thermodraw._render import bounds
         placements = layout(self.group(16))
         box = compose(placements).box
         for p in placements:
-            if p.element == "anchor":
-                continue
             x0, y0, x1, y1 = bounds(p)
             assert box[1] <= y0 and y1 <= box[3], f"{p.ref} {p.variant}"
+
+    def test_every_line_of_both_labels_is_inside_the_canvas(self):
+        """The bug the test above could not reach, measured where a reader
+        meets it: on the page, after the group transform."""
+        import re
+        from thermodraw import render
+        svg = render(layout(self.group(16)))
+        vb = [float(v) for v in
+              re.search(r'viewBox="([^"]+)"', svg).group(1).split()]
+        tx, ty = (float(v) for v in
+                  re.search(r"translate\(([-\d.]+),([-\d.]+)\)", svg).groups())
+        ys = [float(y) + ty
+              for y in re.findall(r'<text[^>]*y="([-\d.]+)"', svg)]
+        assert ys, "the drawing has text"
+        assert min(ys) >= vb[1] and max(ys) <= vb[1] + vb[3], (
+            "text outside the canvas: "
+            f"{[y for y in ys if y < vb[1] or y > vb[1] + vb[3]]}")
+
+    def test_the_hidden_label_takes_no_room_from_a_visible_one(self):
+        """It is solved against the page so it does not overprint, and it
+        does not claim a place on it, because a reader cannot see it."""
+        scene = compose(layout(self.group(16)))
+        owners = [box[3] for box in scene.occupancy.boxes]
+        assert all(o is None or o.shown for o in owners),             "an invisible label would push a visible one"
 
     def test_each_form_carries_its_own_label(self):
         """Solved against its own extent, so a condensed group's text sits

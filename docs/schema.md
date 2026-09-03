@@ -453,6 +453,19 @@ report above exits 0 — unless you pass `--strict`. `--json` for a machine,
 report with `.ok`, `.findings` and `.text()`; a `DiagramBuilder` has `.check()`
 beside `.svg()`.
 
+Exit 1 means findings and only findings. A diagram that cannot be drawn is
+refused before drawing and exits 2, and so does anything else that stops the
+tool answering, so a script may gate on the status alone.
+
+**A finding's `where` is positional, and so is every id built from it.**
+Branches and sources have no id in this schema, so they are named by
+position — `branch 2 j->c`, `source 0 -> j` — and that is also what the
+`td-…` element ids in a `page` are hashed from. Insert a branch above and
+every later name shifts. Ids are stable within one revision of a file, which
+is what a page toggling a group needs, and not across edits: anything
+diffing `--json` output or scripting against a saved page has to key on
+something of its own.
+
 | code | severity | what it means |
 |---|---|---|
 | `label-collision` | error | text printed over something else |

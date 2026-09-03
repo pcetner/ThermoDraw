@@ -11,7 +11,7 @@ import pathlib
 DECLARATION = '<?xml version="1.0" encoding="UTF-8"?>\n'
 
 
-def save(text, path, declaration=True):
+def save(text: str, path, declaration: bool = True) -> pathlib.Path:
     """Write text as UTF-8, with LF endings, and return the path.
 
     The XML declaration is redundant when a file is served as image/svg+xml,

@@ -49,11 +49,16 @@ def _num(value) -> Optional[float]:
         return None
 
 
-def _effective(b, r: float) -> float:
-    """Resistance of the whole group `count` and `arrangement` describe."""
-    if not b.repeated:
-        return r
-    return r / b.count if b.arrangement == "parallel" else r * b.count
+def _folded(diagram, b) -> Optional[float]:
+    """What the whole group presents, or the item's own value if it is one.
+
+    `model.FOLD` is the single table, so the number this check works from and
+    the number drawn on the page cannot disagree. There used to be a second
+    copy here that knew about resistances and not about rates, and a `flow`
+    branch's per-item value went in raw.
+    """
+    folded = diagram.fold(b.kind, b.value, b.count, b.arrangement)
+    return _num(b.value) if folded is None else folded
 
 
 def _fmt(x: float) -> str:
@@ -79,12 +84,12 @@ class _Net:
         for i, b in enumerate(diagram.branches):
             label = f"branch {i} {b.source}->{b.target}"
             if b.kind in RESISTANCES:
-                r = _num(b.value)
-                r = None if r is None else _effective(b, r * r_scale)
-                self.paths.append((b.source, b.target, r, label))
+                r = _folded(diagram, b)
+                self.paths.append((b.source, b.target,
+                                   None if r is None else r * r_scale, label))
             elif b.kind == "flow":
-                q = _num(b.value)
-                self.flows.append((b.source, b.target, q, label))
+                self.flows.append((b.source, b.target,
+                                   _folded(diagram, b), label))
         self._fold_corners()
 
     def _fold_corners(self):
@@ -239,7 +244,7 @@ def balance(diagram) -> List[Finding]:
         ta, tb = net.temps.get(b.source), net.temps.get(b.target)
         if rate is None or r is None or ta is None or tb is None or r <= 0:
             continue
-        r_eff = _effective(b, r * r_scale)
+        r_eff = (_folded(diagram, b) or r) * r_scale
         implied = abs(ta - tb) / r_eff
         stated = rate * q_scale
         if abs(implied - stated) <= SLACK * max(implied, stated, 1e-12):

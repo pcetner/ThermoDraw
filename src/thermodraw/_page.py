@@ -11,10 +11,14 @@ self-contained document with nothing fetched from anywhere.
 
     thermodraw page diagram.json -o diagram.html
 
-The toggle is cheap because of how `layout` draws a repeated group: the
-condensed form keeps the outermost copies, so both forms occupy exactly the
-same footprint. Swapping is two `display` attributes. Nothing re-fits, no
-label re-solves, and the checker's verdict holds for what you are looking at.
+The toggle is cheap because both forms are drawn up front: swapping is two
+`display` attributes, nothing re-fits and no label re-solves. They do *not*
+occupy the same footprint — that property was given up so a group of sixteen
+condensed to two could take the room of two — so the canvas is sized for the
+larger form, text included, and the viewer tweens between the two extents.
+
+`check` grades the form on show. The hidden one is solved against the same
+drawing, so it cannot overprint, but its findings are not in the report.
 
 The script lives here and never in the SVG. A library whose first line is
 "emits SVG, no runtime dependencies" should not put a widget inside every
@@ -25,6 +29,7 @@ import html
 from ._layout import layout as _layout
 from ._render import PADDING, render, variant_id
 from .theme import _VARS, faces_used, font_face
+from typing import Any, Dict, Optional, Sequence
 
 CSS = """
 *{box-sizing:border-box}
@@ -91,7 +96,7 @@ def groups(placements):
     are the ids `render` actually wrote — the same reason `check` reads the
     scene instead of rebuilding it.
     """
-    found = {}
+    found: Dict[str, Any] = {}
     for p in placements:
         if not p.ref:
             continue
@@ -124,7 +129,9 @@ def _button(group):
         f'{html.escape(less if not condensed else more)}</button>')
 
 
-def page(diagram, size=None, padding=PADDING, title=None):
+def page(diagram, size: Optional[Sequence[float]] = None,
+         padding: float = PADDING,
+         title: Optional[str] = None) -> str:
     """A self-contained HTML document with the diagram inline.
 
     Takes a `Diagram` or a `DiagramBuilder`, like `describe`.

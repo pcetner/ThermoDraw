@@ -200,7 +200,18 @@ def main(argv=None):
     r.set_defaults(fn=do_render)
 
     args = ap.parse_args(argv)
-    return args.fn(args)
+    try:
+        return args.fn(args)
+    except SystemExit:
+        raise
+    except Exception as exc:                       # pragma: no cover - a net
+        # Exit 1 means findings. An uncaught exception used to reach the
+        # shell as 1 through Python's own handler, so a script gating on the
+        # status read a crash as a diagram with warnings. Every known cause
+        # is now refused by `validate`; this is the net under the unknown
+        # ones, and it says 2 -- no answer -- which is what a crash is.
+        _die(f"{type(exc).__name__}: {exc}. This is a bug in thermodraw; "
+             "the diagram was accepted and then could not be drawn")
 
 
 if __name__ == "__main__":

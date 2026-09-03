@@ -429,7 +429,8 @@ def _corner(cx, cy, side, d, bw, bh):
 
 def annotate(cx, cy, a, out, user=None, name=None, value=None, extra=(),
              half=10, half_len=None, gap=5, size=13, vsize=13, usize=11.5,
-             side="auto", occupied=None, owner=None, report=None):
+             side="auto", occupied=None, owner=None, report=None,
+             claim=True):
     """Place one text block and return the rectangle it took.
 
     `occupied` is consulted for labels already placed and wires already
@@ -502,7 +503,11 @@ def annotate(cx, cy, a, out, user=None, name=None, value=None, extra=(),
                        f'text-anchor="start">{txt}</text>')
             x += measure(txt, sz, CLASS_FACE.get(cls, "regular")) + RUN_GAP
         y += lh
-    if occupied is not None:
+    # `claim=False` solves against the page without taking a place on it.
+    # The hidden half of a repeated group needs exactly that: it must avoid
+    # what is drawn, and it must not push a visible label aside for a
+    # rectangle nobody can see.
+    if occupied is not None and claim:
         occupied.add_rect(left, top, bw, bh, owner=owner)
     return left, top, bw, bh
 
