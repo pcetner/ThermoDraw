@@ -76,7 +76,7 @@ A place with a temperature.
 | field | meaning |
 |---|---|
 | `id` | referred to by branches and sources |
-| `kind` | `free` (default), `fixed`, `break`, `phase`, `corner` |
+| `kind` | `free` (default), `fixed`, `break`, `phase` |
 | `label` | the words above the symbol — the top line, always. Optional: a node with none draws its `T` line alone, or nothing, and still counts as a label placed |
 | `sub` | subscript on `T`. Identity: you choose it, it names a place |
 | `value` | temperature, unit appended from `units.T` |
@@ -91,15 +91,14 @@ two surfaces with a path between them.
 
 `fixed` draws the boundary wall and connects to it with a short stub. `break`
 draws the same wall with no stub — the visible gap is the whole distinction,
-and it is topological rather than decorative. `corner` draws nothing and
-exists only to route a wire.
+and it is topological rather than decorative.
 
 A node with **no `value` and no `sub`** draws its label alone and no `T` at
 all. Interior junctions between series layers routinely have no temperature of
 their own, and a lone italic `T` states nothing. Give it a `sub` and you get
 `T_mid` with no number, which is what a symbolic diagram wants; give it
-neither and the symbol is simply left out. Use `corner` only when you want no
-label either.
+neither and the symbol is simply left out. A wire that has to bend on its way
+somewhere does not need a node at the bend: give the branch `via` waypoints.
 
 A `break` has no temperature to state, so `sub` and `value` are usually left
 off and the label alone is drawn. To tie one to the thing it is bolted to,
@@ -447,8 +446,8 @@ note: [parallel-pair-same-side] branch 2 s->amb and branch 3 s->amb run
       -> set `side` to "down" on branch 3 s->amb
 ```
 
-"11 labels placed" is every node except `corner` ones, plus every branch and
-every source — so it is the count you can work out from the file, and a
+"11 labels placed" is every node, plus every branch and every source — so it
+is the count you can work out from the file, and a
 number lower than that means a label was dropped rather than moved. It exits
 0 when clean, 1 on a warning or an error, and 2 when the file could not be
 read or was not a diagram. A note is advice and does not fail the run — the
@@ -516,11 +515,11 @@ whether the network is the one you meant. It reports how the drawing reads,
 not what it says.
 
 Behind `--physics` — from Python, `check(diagram, physics=True)` — is a
-prototype that asks the first of those, in the only form that needs no model
+check that asks the first of those, in the only form that needs no model
 of anything: do the stated numbers agree with each other? At every `free`
 node with a temperature, what arrives by sources and `flow` must leave by
 resistances at `(T_here − T_there) / R`, with `count` folding a group the way
-this page says a count folds, and a `corner` folded into the path through it.
+this page says a count folds.
 Two codes, both warnings: `node-does-not-balance`, which lists every term so
 you can see which one is off, and `rate-does-not-match`, for a branch whose
 `rate` disagrees with what its ends imply. A fixed node is a reservoir and is

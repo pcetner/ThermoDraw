@@ -18,7 +18,15 @@ from dataclasses import MISSING as _MISSING
 from dataclasses import dataclass, field, fields
 from typing import Any, Dict, List, Optional, Sequence, Union
 
-NODE_KINDS = {"free", "fixed", "break", "corner", "phase"}
+NODE_KINDS = {"free", "fixed", "break", "phase"}
+# Kinds that existed and were removed, and what to write instead. A file
+# from before the removal gets the reason and the replacement, not "unknown
+# kind" beside a list it used to be on.
+RETIRED_KINDS = {
+    "corner": "removed in 1.0. Route the branch with `via` waypoints, or "
+              "make the junction a `free` node with a `sub` and no `value` "
+              "so that it has a name and states no temperature",
+}
 BRANCH_KINDS = {"cond", "conv", "rad", "contact", "cap", "break",
                 "flow", "spread", "pipe", "mixed"}
 
@@ -526,24 +534,12 @@ class Diagram:
             if n.id in seen:
                 raise DiagramError(f"duplicate node id {n.id!r}")
             seen.add(n.id)
-            # `corner` draws nothing at all, so anything written on one is
-            # dropped without a word. Saying so is better than discarding it:
-            # an author who labels a corner meant the label to appear.
-            if n.kind == "corner":
-                said = [f for f in ("label", "value", "sub")
-                        if getattr(n, f) not in (None, "")]
-                if said:
-                    raise DiagramError(
-                        f"node {n.id!r}: a `corner` draws nothing, so "
-                        + ", ".join(repr(f) for f in said)
-                        + " would not appear. Drop "
-                        + ("them" if len(said) > 1 else "it")
-                        + ", or use a `free` node with no `value` to label a "
-                          "junction")
             if n.kind not in NODE_KINDS:
+                gone = RETIRED_KINDS.get(n.kind)
                 raise DiagramError(
                     f"node {n.id!r}: unknown kind {n.kind!r}; expected one of "
-                    + ", ".join(sorted(NODE_KINDS)))
+                    + ", ".join(sorted(NODE_KINDS))
+                    + (f". `{n.kind}` was {gone}" if gone else ""))
             if n.at is None:
                 raise DiagramError(
                     f"node {n.id!r} has no coordinates. Every node needs `at` "
@@ -729,8 +725,7 @@ class Diagram:
 
     def _valued(self):
         for n in self.nodes:
-            if n.kind != "corner":
-                yield f"node {n.id!r}", n.kind, n.value
+            yield f"node {n.id!r}", n.kind, n.value
         for b in self.branches:
             yield f"branch {b.source}-{b.target}", b.kind, b.value
         for s in self.sources:

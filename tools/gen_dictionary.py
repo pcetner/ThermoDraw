@@ -39,7 +39,7 @@ PAGE = ROOT / "Dictionary.html"
 # The three things a symbol can be: what to call it, what it means, and which
 # array of the file it is written into.
 #
-# This used to be a badge repeated on all nineteen entries, which said the
+# This used to be a badge repeated on all eighteen entries, which said the
 # same three words over and over and still never defined them. The definition
 # now sits once, at the top, on the panel you pick a symbol from — and the
 # entries carry no badge at all, because the sticky heading above them already
@@ -288,23 +288,6 @@ ENTRIES = {
               "value": "0.1"}),
 }
 
-# The one node kind that draws nothing, and so has no `Symbol` and no card.
-# It belongs in a dictionary all the same: a reader who does not find it here
-# will assume it does not exist, and two acceptance readers reached for it
-# when what they wanted was a labelled free node.
-CORNER = dict(
-    key="corner",
-    name="Corner",
-    where="node",
-    what="A coordinate, not a place. It draws no circle, takes no label and "
-         "has no temperature; it exists only so that a line has somewhere to "
-         "bend. If what you want is a junction that is named but has no "
-         "temperature of its own, use a free node with a label and no value "
-         "instead.",
-    use="Taking a path around something on the page instead of straight "
-        "through it.",
-    code={"id": "k1", "kind": "corner", "at": [420, 260]})
-
 # Each group's opening line. Keyed on the group titles in `symbols.GROUPS`, so
 # a regrouping there shows up here as a KeyError rather than as silent prose
 # attached to the wrong set of symbols.
@@ -419,7 +402,7 @@ def group(title, keys, by_key):
     whichever group a reader is in stays named at the top of the window until
     the next one takes over. That is what replaced the badge on every entry:
     the question "what am I looking at" is answered continuously rather than
-    nineteen times.
+    eighteen times.
     """
     body = [f'<section id="grp-{_slug(title)}">'
             f'<div class="section-head"><h2>{html.escape(title)}</h2>'
@@ -428,8 +411,6 @@ def group(title, keys, by_key):
         sym = by_key[key]
         body.append(entry(key, sym.name, ENTRIES[key],
                           plate(sym, ENTRIES[key])))
-    if title == "Nodes":
-        body.append(entry(CORNER["key"], CORNER["name"], CORNER))
     body.append("</section>")
     return "".join(body)
 
@@ -486,7 +467,7 @@ def shapes(by_key):
     It spent one revision as a single line under the contents, which is the
     wrong weight for the thing every other entry depends on: a reader holding
     it cannot badly misread any symbol here, and a reader without it learns
-    nineteen drawings one at a time.
+    eighteen drawings one at a time.
     """
     out = ['<section id="grp-shapes"><div class="section-head">'
            "<h2>What the shapes mean</h2>"
@@ -505,7 +486,7 @@ def shapes(by_key):
 def index(by_key):
     """Contents, as one table per category, side by side.
 
-    It does two jobs at once on purpose. Nineteen entries is past the point
+    It does two jobs at once on purpose. Eighteen entries is past the point
     where a reader can be expected to scroll for one, and the three words the
     whole page is organised around have to be defined somewhere — so the
     definition sits on the panel whose symbols it covers, which is where a
@@ -515,10 +496,8 @@ def index(by_key):
     group titles, so regrouping `symbols.GROUPS` cannot leave this behind.
     """
     order = [k for _, keys in symbols.GROUPS for k in keys]
-    order.append(CORNER["key"])
-    specs = dict(ENTRIES, **{CORNER["key"]: CORNER})
-    names = dict({k: by_key[k].name for k in by_key},
-                 **{CORNER["key"]: CORNER["name"]})
+    specs = ENTRIES
+    names = {k: by_key[k].name for k in by_key}
 
     out = ['<nav class="index" aria-label="Contents">']
     for where in CATEGORIES:
@@ -584,7 +563,7 @@ def main(argv=None):
         return 0
     with open(PAGE, "w", encoding="utf-8", newline="\n") as f:
         f.write(fresh)
-    n = len(symbols.SYMBOLS) + 1
+    n = len(symbols.SYMBOLS)
     print(f"{n} entries -> {PAGE} ({len(fresh):,} bytes)")
     return 0
 

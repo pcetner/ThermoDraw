@@ -369,7 +369,7 @@ def describe(diagram, size: Optional[Sequence[float]] = None,
         detail=detail,
         sources=sources,
         pieces=_pieces(edges,
-                       [n.id for n in diagram.nodes if n.kind != "corner"]),
+                       [n.id for n in diagram.nodes]),
         rail=None if not diagram.rail else (
             diagram.rail.reference, diagram.rail.y,
             tuple(diagram.rail.span) if diagram.rail.span else

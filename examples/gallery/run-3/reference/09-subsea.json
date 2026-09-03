@@ -29,7 +29,9 @@
     },
     {
       "id": "turn",
-      "kind": "corner",
+      "label": "Chamber end",
+      "sub": "vc",
+      "value": "17.8",
       "at": [
         860,
         170

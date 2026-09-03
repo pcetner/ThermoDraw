@@ -881,26 +881,6 @@ class TestShapesThatDrawNothingSensibleAreRefused:
                                    "value": "1"}],
                      "rail": {"reference": "a", "y": 300}})
 
-    def test_a_corner_says_so_rather_than_dropping_your_words(self):
-        with pytest.raises(DiagramError) as caught:
-            diagram({"units": {"R": "K/W", "T": "C"},
-                     "nodes": [{"id": "a", "label": "A", "value": "1",
-                                "at": [200, 150]},
-                               {"id": "c", "kind": "corner", "label": "gone",
-                                "value": "99", "at": [500, 150]}],
-                     "branches": [{"from": "a", "to": "c", "kind": "cond",
-                                   "label": "L", "value": "1"}]})
-        assert "would not appear" in str(caught.value)
-
-    def test_a_bare_corner_is_still_fine(self):
-        d = diagram({"units": {"R": "K/W", "T": "C"},
-                     "nodes": [{"id": "a", "label": "A", "value": "1",
-                                "at": [200, 150]},
-                               {"id": "c", "kind": "corner", "at": [500, 150]}],
-                     "branches": [{"from": "a", "to": "c", "kind": "cond",
-                                   "label": "L", "value": "1"}]})
-        assert check(d).ok
-
 
 # ------------------------------------------- a symbol away from its own run
 class TestASymbolOffItsRun:

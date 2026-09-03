@@ -1,4 +1,4 @@
-"""Do the numbers on the page agree with each other? — a prototype, behind a flag.
+"""Do the numbers on the page agree with each other? Behind a flag, by choice.
 
 Every check in `_check` is about how the drawing reads. None is about what it
 says. `model` holds every number a thermal network needs — temperatures,
@@ -66,7 +66,7 @@ def _fmt(x: float) -> str:
 
 
 class _Net:
-    """The network with its numbers read, corners folded away."""
+    """The network with its numbers read."""
 
     def __init__(self, diagram):
         self.temps: Dict[str, Optional[float]] = {
@@ -78,7 +78,7 @@ class _Net:
             self.temps[M.RAIL] = self.temps.get(diagram.rail.reference)
             self.kinds[M.RAIL] = "fixed"
         r_scale = R_SCALE[diagram.units.get("R", "K/W")]
-        # (a, b, R, label) for every resistance path, then corners folded
+        # (a, b, R, label) for every resistance path
         self.paths: List[Tuple[str, str, Optional[float], str]] = []
         self.flows: List[Tuple[str, str, Optional[float], str]] = []
         for i, b in enumerate(diagram.branches):
@@ -90,28 +90,6 @@ class _Net:
             elif b.kind == "flow":
                 self.flows.append((b.source, b.target,
                                    _folded(diagram, b), label))
-        self._fold_corners()
-
-    def _fold_corners(self):
-        """A chain of resistances through a corner is one resistance."""
-        changed = True
-        while changed:
-            changed = False
-            for node, kind in self.kinds.items():
-                if kind != "corner":
-                    continue
-                here = [p for p in self.paths if node in (p[0], p[1])]
-                others = [f for f in self.flows if node in (f[0], f[1])]
-                if len(here) != 2 or others:
-                    continue
-                (a1, b1, r1, l1), (a2, b2, r2, l2) = here
-                far1 = b1 if a1 == node else a1
-                far2 = b2 if a2 == node else a2
-                r = None if r1 is None or r2 is None else r1 + r2
-                self.paths = [p for p in self.paths if p not in here]
-                self.paths.append((far1, far2, r, f"{l1} + {l2}"))
-                changed = True
-                break
 
 
 def _grouped(skipped) -> str:

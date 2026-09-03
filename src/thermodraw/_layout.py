@@ -434,8 +434,6 @@ def layout(diagram) -> List[Placement]:
             out.append(Placement("wire", points=[end, edge], ref=ref, **who))
 
     for n in diagram.nodes:
-        if n.kind == "corner":
-            continue
         ref = f"node '{n.id}'"
         at = tuple(n.at)
         # A fixed node reaches down to its boundary wall, so the label has to
@@ -447,8 +445,8 @@ def layout(diagram) -> List[Placement]:
         # `T` with no number after it is not a statement about anything, and
         # interior junctions between series layers routinely have no
         # temperature of their own. It rendered as a lone italic T and the
-        # checker said nothing, so two readers fell back to `corner`, which
-        # draws nothing and loses the name. A subscript is enough to make it
+        # checker said nothing, so two readers fell back to `corner` (a kind
+        # since removed), which drew nothing and lost the name. A subscript is enough to make it
         # meaningful — a diagram may be symbolic throughout — but a bare T
         # is not.
         names = n.value is not None or bool(n.sub)

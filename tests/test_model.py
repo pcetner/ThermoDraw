@@ -86,7 +86,7 @@ def test_every_kind_in_the_schema_is_a_real_symbol():
     # symbol, which is exactly the bug it is here to catch.
     assert {BRANCH_SYM.get(k, k) for k in M.BRANCH_KINDS} <= keys
     assert M.SOURCE_KINDS <= keys
-    assert (M.NODE_KINDS - {"corner"}) <= keys
+    assert M.NODE_KINDS <= keys
     assert set(BRANCH_SYM) <= M.BRANCH_KINDS, "a mapping for no such kind"
 
 

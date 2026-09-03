@@ -119,6 +119,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **`--physics` is no longer called a prototype.** It was labelled one in
+  the module, the checker's docstring, the command-line help and the
+  schema while its fire rate on real diagrams was being judged. The third
+  clean-room run was the judgement: five diagrams whose numbers were
+  solved first, and no balance or rate finding on any of them — the first
+  pre-registered claim in three runs to hold. It stays opt-in, for the
+  reason it always was: a sketch with placeholder numbers is a diagram too.
 - **A counted `flow` states its group value.** `model.FOLD` gains a row for
   a rate: in parallel the group carries the sum, `4 in parallel = 40 W`;
   in series every link passes the same heat, so the group carries one
@@ -207,6 +214,26 @@ no finding changed and no golden moved.
   claims corrected on the way: `symbols.py` said six of twelve symbols, two
   comments asserted a shared footprint `_layout` had given up, and
   `CLAUDE.md` and `ci.yml` both said 91 mypy errors when there were 112.
+
+### Removed
+
+- **`corner`, the node kind that drew nothing.** A coordinate so that a wire
+  had somewhere to bend. Fifteen agents in three clean-room runs never drew
+  it, including the one whose brief was written to force it; the two
+  readers who reached for it wanted a named junction and got a kind that
+  lost the name. It put routing into the topology — `describe` hid it,
+  `check` skipped it when counting labels, and `--physics` had to fold the
+  two resistances through it into one before it could balance anything —
+  and everything it did is done by things that already existed: a bend is
+  `via`, and a junction between two paths is a `free` node with a `sub` and
+  no `value`. A file that names it is refused with that advice, not with
+  "unknown kind" beside a list it used to be on. The one committed diagram
+  that used it, the run-3 reference solution for the subsea bottle, now has
+  a free node at the junction with the temperature the brief's numbers
+  give it, and still closes under `--physics`. `Dictionary.html` loses its
+  one entry with no drawing.
+- **Python 3.9.** It reached end of life in October 2025. The floor is 3.10
+  and the CI matrix runs 3.10 to 3.13; no source changed for it.
 
 ## [0.3.0] - 2026-09-01
 

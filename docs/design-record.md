@@ -172,6 +172,41 @@ cannot name.
 **Heat flux is several arrows, not one.** Flux is per unit area and has no
 single line of action, so it must not borrow heat flow's symbol.
 
+### `corner` is gone
+
+It was a node kind that drew nothing: "a coordinate, not a place", in the
+dictionary's words, so that a wire had somewhere to bend. Removed before 1.0,
+for three reasons in the order the evidence gave them.
+
+It was never used. Fifteen agents in three clean-room runs drew sixteen of
+the eighteen symbols and not this, including the run-3 brief written to force
+it — the agent routed with `via` and did not mention having considered
+`corner`. The two readers who did reach for it, in the first run, wanted a
+named junction and got a kind that lost the name.
+
+It put layout into the topology. A `via` waypoint says "the wire goes here"
+and nothing about the network; a `corner` node said the same thing as a node,
+so `describe` had to hide it, `check` had to skip it when counting labels,
+and `--physics` had to fold the two resistances through it into one before it
+could balance anything. Run 3 recorded that "a bend cannot be a property of
+the hardware": delete the corner and the file asserts the same physics. Once a
+solver routes wires for itself, it is the one kind that is not a node.
+
+What it did is done by two things that already existed. A bend is `via`. A
+junction between two paths — a vapour chamber ending where an oil gap begins
+— is a `free` node with a `sub` and no `value`, which draws a circle, names
+the place, and states no temperature; `--physics` then says by name that it
+did not check it, which is more honest than folding it away. A file from 0.3
+that names `corner` is refused with exactly that advice, not with "unknown
+kind" beside a list it used to be on.
+
+One committed diagram used it: the run-3 reference solution for the subsea
+bottle, where the corner joined a `pipe` branch to a `conv` branch. It is a
+junction, and it is now a free node with the temperature the brief's numbers
+give it, 17.8 °C, so the reference still closes under `--physics`. That is a
+retouch of evidence, made because the alternative was a reference the library
+refuses to load.
+
 ## Rotation
 
 Geometry is defined in a local frame and placed with a transform. **Text is
@@ -485,8 +520,9 @@ Ten checks said how the drawing reads. None said what it says, while `model`
 held every number a thermal network needs. `_physics.balance` is Kirchhoff at
 a free node from stated values only: a resistance between two stated
 temperatures implies `ΔT/R`, sources and flows are what they say, `count`
-folds a group the way the schema says a count folds, a corner folds into the
-path through it. A fixed node is a reservoir and is not asked; a phase node is
+folds a group the way the schema says a count folds. (A `corner` used to fold
+into the path through it; the kind is gone, under Symbols.) A fixed node is a
+reservoir and is not asked; a phase node is
 holding latent heat this cannot see; a `flux` source has no area; a unit it
 does not know skips the diagram rather than guessing.
 
