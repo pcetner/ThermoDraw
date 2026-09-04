@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "thermodraw"
-version = "0.3.0"
+version = "1.0.0"
 description = "Thermal network diagrams for Python"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -17,7 +17,7 @@ license-files = ["LICENSE", "NOTICE", "src/thermodraw/fonts/OFL.txt"]
 authors = [{ name = "Peter Cetner" }]
 keywords = ["thermal", "heat transfer", "diagram", "svg", "schematic"]
 classifiers = [
-  "Development Status :: 3 - Alpha",
+  "Development Status :: 5 - Production/Stable",
   "Intended Audience :: Science/Research",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3.10",

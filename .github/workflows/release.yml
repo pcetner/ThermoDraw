@@ -1,0 +1,53 @@
+name: Release
+
+# A push of a tag `vX.Y.Z` builds the wheel and the sdist and publishes them
+# to PyPI by trusted publishing: no token is stored anywhere, PyPI trusts
+# this repository's workflow by name. That trust is set up once, by hand,
+# on PyPI's side — project "thermodraw", owner and repository as on GitHub,
+# workflow "release.yml", environment "pypi" — and until it is, this job
+# fails at the publish step and nothing else happens.
+#
+# The tag has to be the package's own version. A tag pushed against the
+# wrong commit would otherwise publish whatever version that commit says,
+# under a name PyPI will never let go of.
+
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  publish:
+    name: build and publish ${{ github.ref_name }}
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: The tag is the package's version
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e .
+          want="v$(python -c 'import thermodraw; print(thermodraw.__version__)')"
+          test "$want" = "${{ github.ref_name }}" || {
+            echo "tag ${{ github.ref_name }} but the package says $want"; exit 1; }
+
+      - name: Tests
+        run: |
+          python -m pip install pytest
+          python -m pytest -q
+
+      - name: Build
+        run: |
+          python -m pip install build twine
+          python -m build
+          python -m twine check dist/*
+
+      - name: Publish
+        uses: pypa/gh-action-pypi-publish@release/v1

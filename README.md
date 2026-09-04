@@ -41,8 +41,10 @@
 ## Install
 
 ```bash
-pip install -e .
+pip install thermodraw
 ```
+
+Python 3.10 or later, no dependencies. From a checkout, `pip install -e .`.
 
 ## Use
 

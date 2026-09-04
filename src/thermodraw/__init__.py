@@ -34,7 +34,7 @@ from .io import save
 from .model import Branch, Diagram, DiagramError, Node, Rail, Source
 from .symbols import SYMBOLS, Symbol
 
-__version__ = "0.3.0"
+__version__ = "1.0.0"
 __all__ = [
     # the data
     "Diagram", "Node", "Branch", "Source", "Rail", "DiagramError",
