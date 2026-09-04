@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **What 1.0 promises, written down.** `docs/stability.md` says what
+  changes only by addition within 1.x — the schema, the finding codes and
+  both JSON reports, the exit codes, `Placement`'s fields, `__all__` and
+  the five subcommands — and what is not promised: the SVG's bytes and
+  ids, every message's wording, and the coordinates the solver chooses.
+  `tests/test_stability.py` holds the document to the code: the public
+  names are pinned literally, and every finding code in the source must
+  be in the document and every code in the document in the source.
+- **`Diagram.placements`, `svg`, `check`, `describe` and `page`**, the
+  builder's five outputs on the data itself, and `_repr_svg_` on both so a
+  notebook shows the drawing. The builder delegates, so there is one
+  implementation of each, and its `check` gains `physics=`. The README's
+  first example is two calls, and says how to get a PNG from the SVG.
 - **The gallery, drawn a fourth time, with `at` forbidden.** Run 3's five
   briefs in `examples/gallery/11-battery` to `15-pv`, five `claude-opus-5`
   sessions one after another in a room built from `9d507d3`, graded in

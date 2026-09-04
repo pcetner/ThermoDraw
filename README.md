@@ -160,6 +160,7 @@ that a reviewer can read from the picture, this.
 ## More
 
 [`docs/schema.md`](docs/schema.md) — the whole format, written to be pasted into a prompt.
+[`docs/stability.md`](docs/stability.md) — what 1.0 promises to keep, and what it does not.
 [`docs/symbol-reference.html`](docs/symbol-reference.html) — every symbol at eight orientations, with the reasoning.
 [`CLAUDE.md`](CLAUDE.md) — the decisions, one line each.
 [`docs/design-record.md`](docs/design-record.md) — the argument behind each one.
