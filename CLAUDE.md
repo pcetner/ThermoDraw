@@ -85,6 +85,11 @@ sentence after it says what would overturn it.
   turned to arrive from above. Anything else is refused naming the node,
   never drawn badly in silence. Explicit `at` is kept and measured from.
 - Rendering is a pure function of its input; element ids are content-addressed.
+- **What 1.0 promises is written down**, in `docs/stability.md`, and
+  `tests/test_stability.py` holds it to the code: the schema, the finding
+  codes and both JSON reports, the exit codes, `Placement`'s fields and
+  `__all__` change only by addition within 1.x. The SVG's bytes, every
+  message's wording and the solver's coordinates are not promised.
 
 ### Symbols
 - **Boxes, not zigzags — a bet.** The reader's reason is legibility at
@@ -289,14 +294,14 @@ sentence after it says what would overturn it.
    others in is still the author's. The record's table of what survives a
    solver says which checks it must satisfy, which it minimises, and which it
    may delete, and the chain solver says which it meets by construction.
-2. **What the format cannot state** (`examples/gallery/FINDINGS.md`, the
-   second set, and its deferred table). The clean-room run's checker and
-   schema defects are fixed; what is left is design: a way to relate two
-   elements first, then a stream with an inlet and an outlet, quantities
-   beyond the six, a capacity-versus-load marker. Each needs its argument
-   in the record before it is built. The next set of briefs is written and
-   its numbers close; run 3 will say whether these four are still what is
-   missing.
+2. **What the format cannot state.** The deferred four have now recurred
+   in three runs — a way to relate two elements, a stream with an inlet
+   and an outlet, a result or provisional marker on a number, a
+   diagram-wide qualifier that is drawn — and run 4 named an area basis,
+   a boundary that is one thing drawn twice, physical arrangement as
+   distinct from page layout, and an effective temperature marked as one
+   (`FINDINGS-run-4.md`). Each needs its argument in the record before it
+   is built.
 3. Region enclosures that auto-size to their contents.
 4. Unit handling — `0.35` choosing between K/W and mK/W, with a deliberate
    per-element override.

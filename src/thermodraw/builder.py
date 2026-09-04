@@ -59,8 +59,9 @@ class DiagramBuilder:
             at=at, angle=angle, side=side, count=count, **end))
         return self
 
-    def rail(self, reference, y, span=None):
-        """The reference rail. Branches may name `rail` as an endpoint."""
+    def rail(self, reference, y=None, span=None):
+        """The reference rail. Branches may name `rail` as an endpoint.
+        `y` left out goes 222 below the lowest node, as in the schema."""
         self.diagram.rail = M.Rail(reference=reference, y=y, span=span)
         return self
 
