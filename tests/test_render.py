@@ -125,3 +125,59 @@ def test_save_only_declares_xml_on_svg(tmp_path):
 def test_save_writes_lf_not_crlf(tmp_path):
     path = save("a\nb", tmp_path / "d.txt")
     assert path.read_bytes() == b"a\nb"
+
+
+class TestNotation:
+    """Zigzags are an option: every resistance in circuit notation, with the
+    same `half` and `half_len`, so the glyph is the only thing that moves."""
+
+    @staticmethod
+    def hero():
+        import json
+        import pathlib
+        from thermodraw import Diagram
+        root = pathlib.Path(__file__).resolve().parents[1]
+        return Diagram.from_json(
+            (root / "examples" / "hero.json").read_text(encoding="utf-8"))
+
+    def test_zigzags_replace_every_resistance_and_nothing_else(self):
+        from thermodraw import layout, render
+        placements = layout(self.hero())
+        boxes = render(placements)
+        zigs = render(placements, notation="zigzags")
+        assert zigs != boxes
+        # the hero has four resistances and two capacitances: four zigzag
+        # paths, and the capacitor glyphs untouched
+        assert zigs.count("l14,16 l14,-16") == 4 * 2
+        assert boxes.count("l14,16") == 0
+        ET.fromstring(zigs)
+
+    def test_the_geometry_is_unchanged(self):
+        """Labels, wires and the checker see the same placements: the
+        text and every wire are byte-identical between the notations."""
+        from thermodraw import check, layout, render
+        placements = layout(self.hero())
+        boxes = render(placements)
+        zigs = render(placements, notation="zigzags")
+        texts = re.findall(r"<text[^>]*>.*?</text>", boxes)
+        assert texts and texts == re.findall(r"<text[^>]*>.*?</text>", zigs)
+        # wires only: the radiation box's wave is a polyline too, and it is
+        # exactly what the zigzag replaces
+        lines = re.findall(r'<polyline class="w"[^>]*>', boxes)
+        assert lines and lines == re.findall(r'<polyline class="w"[^>]*>',
+                                             zigs)
+        assert check(self.hero()).to_dict() == check(
+            self.hero()).to_dict()
+
+    def test_boxes_is_the_default_and_anything_else_is_refused(self):
+        from thermodraw import layout, render
+        placements = layout(self.hero())
+        assert render(placements) == render(placements, notation="boxes")
+        with pytest.raises(ValueError, match="boxes, zigzags"):
+            render(placements, notation="circles")
+
+    def test_the_diagram_and_the_builder_take_it(self):
+        d = self.hero()
+        assert d.svg(notation="zigzags") != d.svg()
+        assert "l14,16" in d.svg(notation="zigzags")
+        assert "l14,16" in d.page(notation="zigzags")

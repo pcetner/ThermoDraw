@@ -192,3 +192,22 @@ class TestBadInput:
         with pytest.raises(SystemExit) as exit_:
             main([])
         assert exit_.value.code == 2
+
+
+class TestNotation:
+    def test_render_takes_a_notation(self, capsys, tmp_path):
+        out = tmp_path / "z.svg"
+        code, _ = run(capsys, "render", str(HERO), "-o", str(out),
+                      "--notation", "zigzags")
+        assert code == 0
+        assert "l14,16 l14,-16" in out.read_text(encoding="utf-8")
+        plain = tmp_path / "b.svg"
+        assert run(capsys, "render", str(HERO), "-o", str(plain))[0] == 0
+        assert "l14,16" not in plain.read_text(encoding="utf-8")
+
+    def test_page_takes_it_too(self, capsys, tmp_path):
+        out = tmp_path / "z.html"
+        code, _ = run(capsys, "page", str(HERO), "-o", str(out),
+                      "--notation", "zigzags")
+        assert code == 0
+        assert "l14,16 l14,-16" in out.read_text(encoding="utf-8")

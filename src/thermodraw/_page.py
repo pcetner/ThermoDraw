@@ -131,15 +131,16 @@ def _button(group):
 
 def page(diagram, size: Optional[Sequence[float]] = None,
          padding: float = PADDING,
-         title: Optional[str] = None) -> str:
+         title: Optional[str] = None, notation: str = "boxes") -> str:
     """A self-contained HTML document with the diagram inline.
 
-    Takes a `Diagram` or a `DiagramBuilder`, like `describe`.
+    Takes a `Diagram` or a `DiagramBuilder`, like `describe`. `notation`
+    is `render`'s: `boxes`, or `zigzags` for circuit notation.
     """
     diagram = diagram.build() if hasattr(diagram, "build") else diagram
     placements = _layout(diagram)
     size = size if size is not None else diagram.size
-    svg = render(placements, size=size, padding=padding)
+    svg = render(placements, size=size, padding=padding, notation=notation)
     heading = title or diagram.title or "Thermal network"
 
     repeated = groups(placements)

@@ -92,11 +92,15 @@ sentence after it says what would overturn it.
   message's wording and the solver's coordinates are not promised.
 
 ### Symbols
-- **Boxes, not zigzags — a bet.** The reader's reason is legibility at
-  thumbnail and print scale, where a 0.7-em structural subscript fails and a
-  texture does not. No human reader has been asked. One thermal engineer shown
-  a thumbnail in each notation and asked which mechanism is where would settle
-  it either way.
+- **Boxes by default; zigzags are an option.** The reader's reason for the
+  default is legibility at thumbnail and print scale, where a 0.7-em
+  structural subscript fails and a texture does not. That is a claim about
+  readers, and since 1.0 the reader settles it: `notation="zigzags"` on
+  `render`, `Diagram.svg` and the command line draws every resistance in
+  circuit notation, same geometry, glyph only. Notation is presentation,
+  like light and dark; the file does not carry it. The thumbnail test in
+  `docs/notation-test/` would say which should be the default, and nobody
+  has run it.
 - Uniform 84 × 32 boxes. The interior states what the heat is crossing: four
   textures, one rule. Contact hatches its halves in opposite directions.
 - Radiation is dashed because its **value holds at one operating point** —

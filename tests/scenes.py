@@ -69,9 +69,18 @@ def _solved_hero():
     return render(layout(Diagram.from_dict(data)))
 
 
+def _zigzag_hero():
+    """The hero in circuit notation: the option's one golden, so the zigzag
+    glyph and the unchanged geometry around it are both pinned."""
+    from thermodraw import Diagram, layout, render
+    d = Diagram.from_json(_HERO.read_text(encoding="utf-8"))
+    return render(layout(d), notation="zigzags")
+
+
 _HERO = pathlib.Path(__file__).resolve().parents[1] / "examples" / "hero.json"
 if _HERO.exists():
     SCENES["solved-hero"] = _solved_hero
+    SCENES["zigzag-hero"] = _zigzag_hero
 
 # From a checkout the demo scenes must be here. If the file exists and the
 # import still failed, that is an error and not a reason to go quiet: a bare

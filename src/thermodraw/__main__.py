@@ -132,7 +132,8 @@ def do_describe(args):
 def do_page(args):
     """The diagram as a page: the same SVG inline, plus its controls."""
     diagram = _load(args.diagram)
-    out = page(diagram, size=args.size or diagram.size, title=args.title)
+    out = page(diagram, size=args.size or diagram.size, title=args.title,
+               notation=args.notation)
     if args.out == "-":
         _soften(sys.stdout).write(out)
         return 0
@@ -143,7 +144,8 @@ def do_page(args):
 
 def do_render(args):
     diagram = _load(args.diagram)
-    svg = render(layout(diagram), size=args.size or diagram.size)
+    svg = render(layout(diagram), size=args.size or diagram.size,
+                 notation=args.notation)
     svg = theme.bake(svg, args.mode) if args.mode else theme.with_variables(svg)
 
     # The same bytes to stdout as to a file. `save` is the library's one
@@ -209,6 +211,10 @@ def main(argv=None):
     g.add_argument("diagram")
     g.add_argument("-o", "--out", help='output path, or "-" for stdout')
     g.add_argument("--title", help="heading for the page")
+    g.add_argument("--notation", choices=["boxes", "zigzags"],
+                   default="boxes",
+                   help="draw resistances as textured boxes (default) or "
+                        "as circuit zigzags")
     size(g)
     g.set_defaults(fn=do_page)
 
@@ -217,6 +223,10 @@ def main(argv=None):
     r.add_argument("-o", "--out", help='output path, or "-" for stdout')
     r.add_argument("--mode", choices=["light", "dark"],
                    help="bake the palette, for Word, slides and rasterisers")
+    r.add_argument("--notation", choices=["boxes", "zigzags"],
+                   default="boxes",
+                   help="draw resistances as textured boxes (default) or "
+                        "as circuit zigzags")
     size(r)
     r.set_defaults(fn=do_render)
 

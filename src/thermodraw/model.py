@@ -877,17 +877,21 @@ class Diagram:
         from ._layout import layout
         return layout(self.validate())
 
-    def svg(self, mode=None, size=None, padding=None):
+    def svg(self, mode=None, size=None, padding=None, notation="boxes"):
         """SVG for this diagram.
 
         `mode` picks a baked palette, `light` or `dark`, for Word, slides
         and rasterisers. Without it the output carries custom properties
         and follows the reader's light/dark setting. Both embed the faces.
+        `notation` is `boxes`, or `zigzags` for circuit notation on every
+        resistance; like `mode`, it is how the drawing is shown, not what
+        it says, and the file does not carry it.
         """
         from . import theme
         from ._render import PADDING, render
         out = render(self.placements(), size=size or self.size,
-                     padding=PADDING if padding is None else padding)
+                     padding=PADDING if padding is None else padding,
+                     notation=notation)
         return theme.bake(out, mode) if mode else theme.with_variables(out)
 
     def check(self, size=None, padding=None, source="diagram",
@@ -907,13 +911,13 @@ class Diagram:
                         padding=PADDING if padding is None else padding,
                         source=source)
 
-    def page(self, size=None, padding=None, title=None):
+    def page(self, size=None, padding=None, title=None, notation="boxes"):
         """This diagram as a self-contained HTML page, controls and all."""
         from ._page import page
         from ._render import PADDING
         return page(self.validate(), size=size or self.size,
                     padding=PADDING if padding is None else padding,
-                    title=title)
+                    title=title, notation=notation)
 
     def _repr_svg_(self):
         """A notebook shows the drawing rather than the dataclass."""

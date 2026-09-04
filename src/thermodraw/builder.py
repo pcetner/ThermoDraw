@@ -75,14 +75,15 @@ class DiagramBuilder:
     def placements(self):
         return self.build().placements()
 
-    def svg(self, mode=None, size=None, padding=R.PADDING):
+    def svg(self, mode=None, size=None, padding=R.PADDING, notation="boxes"):
         """SVG for this diagram.
 
         `mode` picks a baked palette for Word, slides and rasterisers. Without
         it the output carries custom properties and follows the reader's
-        light/dark setting.
+        light/dark setting. `notation` is `boxes` or `zigzags`.
         """
-        return self.build().svg(mode, size=size, padding=padding)
+        return self.build().svg(mode, size=size, padding=padding,
+                                notation=notation)
 
     def check(self, size=None, padding=R.PADDING, physics=False):
         """What is wrong with this diagram, without rendering it to look."""
@@ -95,9 +96,11 @@ class DiagramBuilder:
         """
         return self.build().describe(size=size, padding=padding)
 
-    def page(self, size=None, padding=R.PADDING, title=None):
+    def page(self, size=None, padding=R.PADDING, title=None,
+             notation="boxes"):
         """This diagram as a self-contained HTML page, controls and all."""
-        return self.build().page(size=size, padding=padding, title=title)
+        return self.build().page(size=size, padding=padding, title=title,
+                                 notation=notation)
 
     def _repr_svg_(self):
         return self.svg()

@@ -61,7 +61,9 @@ save(d.svg("light"), "word.svg")  # colours and font resolved, for Word and slid
 
 The stages are there if you want them — `render(layout(d))` is the SVG
 before the theme, `theme.with_variables` and `theme.bake` are the two ways
-to finish it — and a notebook shows a `Diagram` as its drawing. A PNG needs a
+to finish it — and a notebook shows a `Diagram` as its drawing. If your
+readers know circuit notation, `d.svg(notation="zigzags")` draws every
+resistance as a zigzag instead of a textured box; nothing else moves. A PNG needs a
 rasteriser, which the library does not carry:
 
 ```python

@@ -5,10 +5,12 @@ origin — plus the metadata the label solver needs: how far the symbol
 reaches perpendicular to the branch (``half``) and along it (``half_len``).
 """
 import math
+import dataclasses
 from dataclasses import dataclass
 from typing import Callable, List, Optional, Tuple
 
 from . import core as S
+from . import model as M
 
 CSS = """
 .w,.sym-box{stroke:var(--sym);stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round}
@@ -578,3 +580,29 @@ def diagonal_demo(fluid=False):
         S.annotate(x, y, 0, body, user=u, name=n, value=None,
                    half=5.5, half_len=5.5)
     return canvas(W, H, "".join(body), fluid)
+
+
+# ------------------------------------------------------------ the other notation
+# A resistance in circuit notation: leads and six peaks, the length of a
+# box, so the labels land exactly where they do around the box and the
+# glyph is the only thing that changes. Boxes are the default because the
+# texture survives a reduction a subscript does not — see the record — and
+# zigzags are an option because that is a claim about readers, and the
+# reader can now settle it for themselves with `notation="zigzags"`.
+RESISTANCE_KEYS = frozenset(
+    k for k, q in M.BRANCH_SYMBOL.items() if q == "R")
+
+
+def zigzag(a):
+    hb, peak = S.BW / 2, 8
+    path = (f"M{-hb},0 l7,{-peak}" + " l14,16 l14,-16" * 2
+            + f" l14,16 l7,{-peak}")
+    return leads(hb) + f'<path class="w" d="{path}"/>'
+
+
+def in_notation(sym, notation):
+    """`sym` drawn in `notation`: itself for boxes, a zigzag if it is a
+    resistance and the notation is zigzags. Same `half` and `half_len`."""
+    if notation == "zigzags" and sym.key in RESISTANCE_KEYS:
+        return dataclasses.replace(sym, draw=zigzag, texture=None)
+    return sym

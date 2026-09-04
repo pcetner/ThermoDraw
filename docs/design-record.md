@@ -71,6 +71,16 @@ this library, handed a thumbnail of the hero and a thumbnail of the same
 network as zigzags, and asked which mechanism is where. Until that happens
 this is a bet, and it is written down as one.
 
+Since 1.0 it is a default rather than a bet. `render`, `Diagram.svg` and
+the command line take `notation="zigzags"`, which draws every resistance as
+leads and six peaks the length of a box — the same glyph
+`docs/notation-test/make.py` used for the thumbnails — with `half` and
+`half_len` unchanged, so labels, wires and the checker see the same
+geometry. The reader who prefers the notation they arrived fluent in has
+it; the reader's reason above is why boxes are what you get without
+asking. The notation test is still worth running, because it would say
+which should be the default, and nobody has run it.
+
 What follows from the bet: uniform 84 × 32 rectangles, so a ladder keeps an
 even rhythm however many mechanisms appear in it. (The evenness follows from
 *uniform*, not from *box* — uniform zigzags would be even too. The two choices

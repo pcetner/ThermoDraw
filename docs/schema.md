@@ -17,6 +17,13 @@ file draws as written — and so do `page` and a builder's `.svg()`. This
 paragraph is about the function, and every reader who met it before the
 command grepped their own SVG to find out.
 
+Resistances are drawn as textured boxes. If your readers know circuit
+notation, `render(..., notation="zigzags")`, `.svg(notation="zigzags")` or
+`thermodraw render --notation zigzags` draws every resistance as a zigzag
+instead, with the same geometry, so labels, wires and `check` are unchanged.
+Like light and dark, that is how the drawing is shown and not what it says:
+nothing in this file names a notation.
+
 ## Shape
 
 ```jsonc
