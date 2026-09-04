@@ -397,7 +397,10 @@ class Source:
 @dataclass
 class Rail:
     reference: str
-    y: float
+    # Optional since the solver: a file that leaves every `at` out still had
+    # to invent this one number, and nothing said what it should be. Left
+    # out, the rail goes `_solve.RAIL_DROP` below the solved line.
+    y: Optional[float] = None
     span: Optional[Sequence[float]] = None
 
 
@@ -596,7 +599,8 @@ class Diagram:
             if self.rail.reference not in seen:
                 raise DiagramError(
                     f"rail references unknown node {self.rail.reference!r}")
-            _number(self.rail.y, "rail", "y")
+            if self.rail.y is not None:
+                _number(self.rail.y, "rail", "y")
             if self.rail.span is not None:
                 _point(self.rail.span, "rail", "span")
         for b in self.branches:
@@ -920,8 +924,8 @@ def _source_dict(s):
 
 
 def _rail_dict(r):
-    out = {"reference": r.reference, "y": r.y}
-    return _keep(out, r, ("span",))
+    out = {"reference": r.reference}
+    return _keep(out, r, ("y", "span"))
 
 
 def _rename(data, mapping=None):

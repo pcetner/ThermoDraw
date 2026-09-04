@@ -503,9 +503,11 @@ class TestTwoSymbolsOnOneRunAreToldToRoute:
         assert "wire-through-wall" in codes(
             check(self.pair(via=[[400, 320], [760, 320]])))
 
-    def test_a_symbol_against_a_wall_still_says_at(self):
-        """The fallback is not lost: two things that do *not* share a run
-        have nothing to route around each other, and `at` is the field."""
+    def test_a_symbol_against_a_wall_says_wall_then_at(self):
+        """Two things that do *not* share a run have nothing to route around
+        each other. When one of them is a boundary's hatching the field
+        that moves it is `wall`, and `at` is the fallback — run 4's PV
+        reader was told `at` for a wall that `wall: "up"` cleared."""
         d = {"units": {"R": "K/W", "T": "°C"},
              "nodes": [{"id": "a", "kind": "fixed", "label": "Hot",
                         "value": "200", "at": [200, 200]},
@@ -515,7 +517,8 @@ class TestTwoSymbolsOnOneRunAreToldToRoute:
                            "label": "Wall", "value": "0.5", "count": 3,
                            "arrangement": "series"}]}
         found = one(check(diagram(d)), "symbols-overlap")
-        assert found.remedy == "move one of them with `at`"
+        assert found.remedy.startswith("turn the wall of node 'a' with `wall`")
+        assert found.remedy.endswith("or move one of them with `at`")
 
 
 # ------------------------------------- a wire through a boundary node's wall
@@ -980,3 +983,96 @@ class TestTheWebOutputCarriesItsFont:
         from thermodraw import theme
         out = theme.with_variables(self.hero_svg(), embed_font=False)
         assert "@font-face" not in out and "--sym:" in out
+
+
+# --------------------------------------------------- what run 4 found
+class TestRunFour:
+    """Run 4: the same five briefs with `at` forbidden. Four claims held and
+    two failed, and the failures were the library's own words: a refusal
+    whose remedy did not apply, wrapped as a bug; a wall remedy naming the
+    side the branch was on; an overlap against a wall told `at`."""
+
+    @staticmethod
+    def probe(wall=None):
+        """15's probe A: a boundary above the cell, reached from below."""
+        amb = {"id": "amb", "kind": "fixed", "label": "Air", "value": "35",
+               "at": [220, 40]}
+        if wall:
+            amb["wall"] = wall
+        return diagram({"units": {"R": "K/W", "T": "°C"},
+                        "nodes": [{"id": "cell", "label": "Cell",
+                                   "value": "65", "at": [300, 150]}, amb],
+                        "branches": [{"from": "cell", "to": "amb",
+                                      "kind": "conv", "label": "Wind",
+                                      "value": "0.05"}]})
+
+    def test_the_wall_remedy_names_the_side_away_from_the_branch(self):
+        """It named `wall: "down"` — the default the node already had, and
+        the side the branch came through. Measured from the hatching's own
+        centre the short run's far end was the node."""
+        found = one(check(self.probe()), "wire-through-wall")
+        assert '`wall: "up"`' in found.remedy
+
+    def test_and_applying_it_clears_the_wall_and_the_overlap_at_once(self):
+        before = codes(check(self.probe()))
+        assert "wire-through-wall" in before and "symbols-overlap" in before
+        after = codes(check(self.probe(wall="up")))
+        assert "wire-through-wall" not in after
+        assert "symbols-overlap" not in after
+
+    def test_a_refusal_exits_2_and_is_not_called_a_bug(self, tmp_path, capsys):
+        from thermodraw.__main__ import main
+        path = tmp_path / "star.json"
+        path.write_text(json.dumps({
+            "units": {"R": "K/W", "T": "K"},
+            "nodes": [{"id": "hub", "label": "H", "value": "3"},
+                      {"id": "a", "label": "A", "value": "2"},
+                      {"id": "b", "label": "B", "value": "2"},
+                      {"id": "c", "label": "C", "value": "2"}],
+            "branches": [{"from": "hub", "to": x, "kind": "cond",
+                          "value": "1"} for x in "abc"]}), encoding="utf-8")
+        with pytest.raises(SystemExit) as caught:
+            main(["check", str(path)])
+        assert caught.value.code == 2
+        err = capsys.readouterr().err
+        assert "give every node `at` yourself" in err
+        assert "bug" not in err
+
+    def test_rail_y_is_optional_and_lands_below_the_solved_line(self):
+        """11: the one number a file with no `at` still had to invent, and
+        the schema never said whether it was required or what it should be."""
+        d = diagram({"units": {"R": "K/W", "C": "J/K", "T": "K"},
+                     "nodes": [{"id": "a", "label": "A", "value": "3"},
+                               {"id": "b", "kind": "fixed", "label": "B",
+                                "value": "2"}],
+                     "branches": [{"from": "a", "to": "b", "kind": "cond",
+                                   "value": "1"},
+                                  {"from": "a", "to": "rail", "kind": "cap",
+                                   "value": "5"}],
+                     "rail": {"reference": "b"}})
+        from thermodraw import solve
+        assert solve(d).rail.y == 372
+        assert check(d).ok, check(d).text()
+        assert "y" not in d.to_dict()["rail"]
+
+    def test_describe_pads_a_long_ref_and_names_a_node_with_no_temperature(self):
+        """14: `branch 1 flange->vchead` printed as `vchea`, in the column
+        whose job is to be the name a finding uses; and the junction about
+        to blind `--physics` on three nodes looked like every other row."""
+        from thermodraw import describe
+        d = diagram({"units": {"R": "K/W", "T": "°C"},
+                     "nodes": [{"id": "flange", "label": "F", "value": "19"},
+                               {"id": "vchead", "label": "Chamber head"},
+                               {"id": "bore", "label": "B", "value": "13"}],
+                     "branches": [{"from": "flange", "to": "vchead",
+                                   "kind": "pipe", "value": "0.02"},
+                                  {"from": "vchead", "to": "bore",
+                                   "kind": "conv", "value": "0.08"}]})
+        text = describe(d).text()
+        assert "branch 1 vchead->bore " in text
+        assert "vchea " not in text
+        assert "vchead         free     at" in text
+        assert "solved no T" in text
+        node = [n for n in describe(d).to_dict()["nodes"]
+                if n["id"] == "vchead"][0]
+        assert node["temperature"] is False

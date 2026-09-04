@@ -121,11 +121,18 @@ class Line:
     def text(self):
         where = f"({self.at[0]:.0f}, {self.at[1]:.0f})"
         # Only when it is turned. Printing "angle 0" on every row of a flat
-        # ladder buries the one source that is not.
-        if self.angle % 360:
+        # ladder buries the one source that is not. A wall says which way it
+        # faces in the word `wall` takes, not as `a270`: two readers set
+        # `"wall": "up"` and had to turn 270 back into "up" to see it took.
+        if self.ref.startswith("wall of "):
+            faces = {90: "down", 270: "up", 180: "left", 0: "right"}
+            where += f" faces {faces.get(int(self.angle % 360), 'down')}"
+        elif self.angle % 360:
             where += f" a{self.angle % 360:g}"
+        # Padded, never cut: `branch 1 flange->vchead` came out `vchea`, in
+        # the one column whose job is to be the name a finding will use.
         if self.label_at is None:
-            return f"  {self.ref:<22.22s} {self.kind:<15.15s} {where:<17s} "                    "(no label)"
+            return f"  {self.ref:<22s} {self.kind:<15.15s} {where:<17s} "                    "(no label)"
         notes = []
         if self.flipped:
             notes.append("flipped")
@@ -135,7 +142,7 @@ class Line:
             notes.append("OVERLAPS")
         notes.append(self.says)
         tail = "   ".join(n for n in notes if n)
-        return (f"  {self.ref:<22.22s} {self.kind:<15.15s} {where:<17s}"
+        return (f"  {self.ref:<22s} {self.kind:<15.15s} {where:<17s}"
                 f" {self.side:<12s} {self.size[0]:>4.0f}x"
                 f"{self.size[1]:<4.0f} {tail}").rstrip()
 
@@ -158,6 +165,10 @@ class Description:
     # `solved` so an author knows which numbers are the library's to start
     # from and which are theirs.
     solved: List[str] = field(default_factory=list)
+    # Nodes with no temperature. The row said `free at (790, 150) solved`
+    # for the one junction about to blind `--physics` on three of four
+    # nodes, in the same shape as every node that carries a value.
+    unvalued: List[str] = field(default_factory=list)
     # What `units.T` declared, if anything, and the unit it is on. Where a
     # wall landed was the one thing nothing could report; whether `K` meant
     # absolute or a rise was the other.
@@ -232,6 +243,7 @@ class Description:
             out += [f"  {i:<14.14s} {k:<8s} at ({x:.0f}, {y:.0f})"
                     + (" solved" if i in self.solved else "")
                     + (f" wall {self.walls[i]}" if i in self.walls else "")
+                    + (" no T" if i in self.unvalued else "")
                     for i, k, (x, y) in self.nodes]
         if self.lines:
             out += ["", "elements:"]
@@ -244,7 +256,8 @@ class Description:
             "canvas": list(self.canvas),
             "counts": dict(self.counts),
             "nodes": [dict({"id": i, "kind": k, "at": list(a),
-                            "solved": i in self.solved},
+                            "solved": i in self.solved,
+                            "temperature": i not in self.unvalued},
                            **({"wall": self.walls[i]} if i in self.walls
                               else {}))
                       for i, k, a in self.nodes],
@@ -395,6 +408,8 @@ def describe(diagram, size: Optional[Sequence[float]] = None,
         nodes=[(n.id, n.kind, tuple(n.at)) for n in diagram.nodes if n.at],
         walls={n.id: n.wall for n in diagram.nodes if n.wall != "down"},
         solved=solved,
+        unvalued=[n.id for n in diagram.nodes
+                  if n.at and n.value is None and n.kind != "phase"],
         scale=diagram.scale,
         temperature_unit=diagram.units.get("T", ""),
         edges=edges,

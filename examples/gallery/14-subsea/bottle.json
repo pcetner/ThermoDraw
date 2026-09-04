@@ -1,0 +1,20 @@
+{
+  "title": "Subsea electronics bottle on the seabed at 1800 m",
+  "units": {"R": "K/W", "T": "°C", "P": "W", "q": "W"},
+  "nodes": [
+    {"id": "board",  "label": "Power board",   "sub": "b",   "value": "37"},
+    {"id": "flange", "label": "Spreader flange", "sub": "f", "value": "19"},
+    {"id": "vchead", "label": "Vapour chamber head"},
+    {"id": "bore",   "label": "Housing bore",  "sub": "hb",  "value": "13"},
+    {"id": "sea",    "kind": "fixed", "label": "Seawater at 1800 m", "sub": "sea", "value": "4"}
+  ],
+  "branches": [
+    {"from": "board",  "to": "flange", "kind": "spread", "label": "Bolted joint spreading", "value": "0.30", "rate": "60"},
+    {"from": "flange", "to": "vchead", "kind": "pipe",   "label": "Vapour chamber", "value": "0.02"},
+    {"from": "vchead", "to": "bore",   "kind": "conv",   "label": "Oil-filled gap", "value": "0.08"},
+    {"from": "bore",   "to": "sea",    "kind": "mixed",  "label": "Housing wall and sea film", "sub": "wall", "value": "0.15"}
+  ],
+  "sources": [
+    {"to": "board", "kind": "diss", "label": "Converter stage", "value": "60", "sub": "d"}
+  ]
+}

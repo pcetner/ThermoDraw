@@ -1,0 +1,23 @@
+{
+  "title": "Industrial furnace wall, steady state, per square metre",
+  "units": {"R": "K/W", "T": "°C", "q": "W", "q″": "W/cm²"},
+  "nodes": [
+    {"id": "furn", "kind": "fixed", "label": "Furnace interior", "sub": "furn", "value": "1200"},
+    {"id": "bb", "label": "Brick to board interface", "sub": "bb", "value": "660"},
+    {"id": "shell", "label": "Steel shell", "sub": "shell", "value": "120"},
+    {"id": "shop", "kind": "fixed", "label": "Shop air", "sub": "shop", "value": "30"}
+  ],
+  "branches": [
+    {"from": "furn", "to": "bb", "kind": "cond", "label": "Firebrick courses",
+     "value": "0.06", "count": 3, "arrangement": "series", "rate": "3000"},
+    {"from": "bb", "to": "shell", "kind": "cond", "label": "Ceramic fibre board",
+     "value": "0.18"},
+    {"from": "shell", "to": "shop", "kind": "conv", "label": "Natural convection",
+     "value": "0.05"},
+    {"from": "shell", "to": "shop", "kind": "rad", "label": "Radiation to shop",
+     "value": "0.075"}
+  ],
+  "sources": [
+    {"to": "furn", "kind": "flux", "label": "Flame and hot gas", "value": "18", "sub": "rad"}
+  ]
+}

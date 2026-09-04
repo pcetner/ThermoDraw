@@ -23,9 +23,10 @@ is where the hero's authors put theirs; `layout`'s own default of a few
 units past the arrow is for a hand-placed drawing and is unchanged. `angle`
 0 is both "unset" and "from the left", and on the main line "from the left"
 is the branch, so an angle-0 source on any node but the hot end is turned to
-arrive from above — or, leaving, to leave upward — and a node that gets one
-while it also has a capacitance below it has its label frame turned to 45,
-the one direction that clears the lead, the wire and the run. A repeated
+arrive from above — or, leaving, to leave downward — and a node with a lead
+above it and a wire below it, a capacitance or a leaving source, has its
+label frame turned to 45, the one direction that clears the lead, the wire
+and the run. A repeated
 branch draws a comb that stands off its own nodes and refuses `via`, so
 there is nothing to route; a plain branch round it goes far enough out to
 clear its lanes.
@@ -87,11 +88,17 @@ def _chain(diagram) -> List[str]:
     for node in order:
         if len(joined[node]) > 2:
             others = ", ".join(repr(o) for o in sorted(joined[node]))
+            # "Give node 'x' `at`" was the remedy here, and it did not
+            # apply: one unplaced node anywhere sends the whole file to
+            # this test, so a clean-room reader gave the named node `at`,
+            # then `via` as well, and got the same message back twice.
+            # What clears it is placing every node, and the message says
+            # that. Placing part of a non-chain is the general placer.
             raise M.DiagramError(
                 f"node {node!r} joins {len(joined[node])} others ({others}); "
-                "the solver places a chain, so give node "
-                f"{node!r} `at` yourself, and `via` on the branches that "
-                "leave it sideways")
+                "the solver places a chain, so give every node `at` "
+                "yourself, and `via` on the branches that leave "
+                f"node {node!r} sideways")
     if not order:
         return []
     ends = [n for n in order if len(joined[n]) <= 1]
@@ -99,7 +106,7 @@ def _chain(diagram) -> List[str]:
         first = order[0]
         raise M.DiagramError(
             f"the nodes form a loop through node {first!r}; the solver "
-            f"places a chain, so give node {first!r} `at` yourself")
+            "places a chain, so give every node `at` yourself")
 
     def temperature(node):
         return _num(diagram.node(node).value)
@@ -147,10 +154,27 @@ def solve(diagram):
     all of the branch's — done before the drawing rather than after.
     """
     if all(n.at is not None for n in diagram.nodes):
-        return diagram
+        return _with_rail(diagram)
     order = _chain(diagram)
     first = _place(diagram, order, {})
-    return _place(diagram, order, _room(first, order))
+    return _with_rail(_place(diagram, order, _room(first, order)))
+
+
+# Where the rail goes when the file does not say: the hero's 372 against
+# its line at 150. A file with no node `at` still had to invent this one
+# number, and a wrong one draws without a word.
+RAIL_DROP = 222
+
+
+def _with_rail(diagram):
+    """The diagram with `rail.y` filled in if it was left out."""
+    if diagram.rail is None or diagram.rail.y is not None:
+        return diagram
+    out = copy.deepcopy(diagram) if all(
+        n.at is not None for n in diagram.nodes) else diagram
+    ys = [n.at[1] for n in out.nodes if n.at is not None]
+    out.rail.y = (max(ys) if ys else Y0) + RAIL_DROP
+    return out
 
 
 def _place(diagram, order, room):
@@ -237,34 +261,48 @@ def _place_sources(diagram, order):
     An angle of 0 on a node that is not the hot end is turned first: a
     source arriving from the left onto an interior node arrives along the
     branch that is already there, so it comes from above instead, and one
-    leaving to the right from an interior node leaves upward. The hot end
-    keeps its source on the left, which is where the habit puts it, and a
-    source leaving the cold end keeps going right.
+    leaving to the right from an interior node leaves downward — heat in
+    from the top and out to the cold head at the bottom, which is how run
+    4's cryostat agent drew it, and which keeps an inbound and an outbound
+    source on one node off each other. (Leaving *upward* put the outbound
+    symbol above the node, on top of the inbound one.) The hot end keeps
+    its source on the left, which is where the habit puts it, and a source
+    leaving the cold end keeps going right.
     """
-    railed = {b.source for b in diagram.branches if b.target == M.RAIL} | \
+    below = {b.source for b in diagram.branches if b.target == M.RAIL} | \
         {b.target for b in diagram.branches if b.source == M.RAIL}
+    above = set()
     for s in diagram.sources:
         if s.at is not None:
             continue
         node = diagram.node(s.node)
         rank = order.index(s.node)
         if s.angle == 0 and s.outward and rank != len(order) - 1:
-            s.angle = 270
+            s.angle = 90
         elif s.angle == 0 and not s.outward and rank != 0:
             s.angle = 90
-        # A source above and a capacitance below leave the node's label
-        # nowhere on the line: above is the source's lead, below is the
-        # wire to the rail, and beside it is the run. Diagonal clears all
-        # three, and since it was this pass that put the source above, it
-        # is this pass that turns the label frame — only where the author
-        # left it at its default, which is also 0.
-        if (s.angle in (90, 270) and s.node in railed
-                and node.angle == 0 and node.side == "auto"):
-            node.angle = 45
         rad = math.radians(s.angle)
         step = SOURCE if s.outward else -SOURCE
         s.at = [node.at[0] + math.cos(rad) * step,
                 node.at[1] + math.sin(rad) * step]
+        # Where the symbol landed, whoever chose the angle: the label rule
+        # below cares about the lead, not about who turned it.
+        if s.at[1] < node.at[1] - 1:
+            above.add(s.node)
+        elif s.at[1] > node.at[1] + 1:
+            below.add(s.node)
+    # A lead above and a wire below leave the node's label nowhere on the
+    # line: above is the lead, below is the wire, and beside it is the run.
+    # Diagonal clears all three, and since it was this pass that put the
+    # source above, it is this pass that turns the label frame — only where
+    # the author left it at its default, which is also 0. The wire below
+    # is a capacitance to the rail, or a source this pass turned to leave
+    # downward: the cryostat's shield had one of each in run 4 and its
+    # label was reported adrift between them.
+    for name in above & below:
+        node = diagram.node(name)
+        if node.angle == 0 and node.side == "auto":
+            node.angle = 45
 
 
 def _route_pairs(diagram):
