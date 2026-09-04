@@ -12,13 +12,8 @@ the data is the representation, not a serialisation of some object.
          .source("j", "diss", "Switching loss", 45, sub="d"))
     open("out.svg", "w").write(d.svg())
 """
-from . import _check as C
-from . import _describe as D
-from . import _layout as L
 from . import model as M
-from . import _page as P
 from . import _render as R
-from . import theme as T
 
 
 class DiagramBuilder:
@@ -73,8 +68,11 @@ class DiagramBuilder:
     def build(self):
         return self.diagram.validate()
 
+    # Each output is the `Diagram`'s own, on the built data: one
+    # implementation, and the same size and padding for all of them, so
+    # what `check` reports and `describe` says is what `svg` draws.
     def placements(self):
-        return L.layout(self.build())
+        return self.build().placements()
 
     def svg(self, mode=None, size=None, padding=R.PADDING):
         """SVG for this diagram.
@@ -83,33 +81,25 @@ class DiagramBuilder:
         it the output carries custom properties and follows the reader's
         light/dark setting.
         """
-        out = R.render(self.placements(), size=size or self.diagram.size,
-                       padding=padding)
-        return T.bake(out, mode) if mode else T.with_variables(out)
+        return self.build().svg(mode, size=size, padding=padding)
 
-    def check(self, size=None, padding=R.PADDING):
-        """What is wrong with this diagram, without rendering it to look.
-
-        Symmetry with `.svg()`: the same size and padding, so what is reported
-        is what would be drawn.
-        """
-        return C.check(self.placements(), size=size or self.diagram.size,
-                       padding=padding)
+    def check(self, size=None, padding=R.PADDING, physics=False):
+        """What is wrong with this diagram, without rendering it to look."""
+        return self.build().check(size=size, padding=padding, physics=physics)
 
     def describe(self, size=None, padding=R.PADDING):
         """What this diagram contains, without rendering it to look.
 
         `check` says whether the drawing reads well; this says what is in it.
-        Same size and padding as `.svg()`, so what is described is what would
-        be drawn.
         """
-        return D.describe(self, size=size or self.diagram.size,
-                          padding=padding)
+        return self.build().describe(size=size, padding=padding)
 
     def page(self, size=None, padding=R.PADDING, title=None):
         """This diagram as a self-contained HTML page, controls and all."""
-        return P.page(self, size=size or self.diagram.size, padding=padding,
-                      title=title)
+        return self.build().page(size=size, padding=padding, title=title)
+
+    def _repr_svg_(self):
+        return self.svg()
 
     def to_dict(self):
         return self.build().to_dict()

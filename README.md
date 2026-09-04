@@ -49,13 +49,22 @@ pip install -e .
 A diagram is data. Write it, or have a model write it, and render it:
 
 ```python
-from thermodraw import Diagram, layout, render, save, theme
+from thermodraw import Diagram, save
 
-d = Diagram.from_json(open("hero.json").read())
-svg = render(layout(d))
+d = Diagram.from_json(open("hero.json", encoding="utf-8").read())
 
-save(theme.with_variables(svg), "web.svg")   # follows the reader's light/dark
-save(theme.bake(svg, "light"), "word.svg")   # colours and font resolved
+save(d.svg(), "web.svg")          # follows the reader's light/dark
+save(d.svg("light"), "word.svg")  # colours and font resolved, for Word and slides
+```
+
+The stages are there if you want them — `render(layout(d))` is the SVG
+before the theme, `theme.with_variables` and `theme.bake` are the two ways
+to finish it — and a notebook shows a `Diagram` as its drawing. A PNG needs a
+rasteriser, which the library does not carry:
+
+```python
+import cairosvg
+cairosvg.svg2png(bytestring=d.svg("light").encode("utf-8"), write_to="out.png")
 ```
 
 Or build it in Python:
