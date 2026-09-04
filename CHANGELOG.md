@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [1.0.0] - 2026-09-03
+
+The first release whose promises are written down. Since 0.3.0: `at` is
+optional and a chain of nodes is placed for you; a boundary's wall can be
+turned; `units.T` can say whether `K` is absolute or a rise; `corner` is
+gone; `--physics` is no longer a prototype; the floor is Python 3.10; the
+`Diagram` has the builder's outputs; and the gallery has been drawn a fourth
+time, against the solver, in a clean room. `docs/stability.md` says what
+changes only by addition from here.
+
 ### Added
 
 - **What 1.0 promises, written down.** `docs/stability.md` says what
