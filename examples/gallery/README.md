@@ -123,3 +123,9 @@ that a `--physics` finding could only be the agent's arithmetic or the
 library's. None of the five reports one. The interesting result is 09, which
 is silent only because three of its four free nodes were never examined, and
 says so in a note that did not exist before run 2 asked for it.
+
+Run 4 is run 3's briefs again, in `11` to `15`, with `at` forbidden: the
+solver's first test. Four of the five are chains and hold no coordinate at
+all; the fifth is a star, was refused, and its agent placed every node by
+hand after the refusal's own remedy failed twice. `FINDINGS-run-4.md` grades
+it, and the two claims that failed are both the library's own sentences.

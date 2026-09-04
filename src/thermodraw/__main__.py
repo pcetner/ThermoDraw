@@ -231,6 +231,13 @@ def main(argv=None):
         return args.fn(args)
     except SystemExit:
         raise
+    except DiagramError as exc:
+        # A refusal from the solver comes out of `check`, `describe`,
+        # `render` and `page`, after `_load` has accepted the file. It is
+        # the library declining a diagram it does not place, which the
+        # schema documents; the net below called it a bug in thermodraw,
+        # in the same sentence as telling the reader what to type instead.
+        _die(str(exc))
     except Exception as exc:                       # pragma: no cover - a net
         # Exit 1 means findings. An uncaught exception used to reach the
         # shell as 1 through Python's own handler, so a script gating on the

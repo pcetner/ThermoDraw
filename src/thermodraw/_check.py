@@ -285,17 +285,24 @@ def _move(p, past="this label"):
     return f"move {ref} with `at`"
 
 
-def _away_from(centre, points):
+def _away_from(node, points):
     """The `wall` value that faces away from where this wire comes from.
 
-    The far end of the offending run, seen from the wall, says which side
+    The far end of the offending run, seen from the *node*, says which side
     the branch arrives on; the wall should face the other way. Quantised to
     the axis with the larger component, which is the only kind of answer
     the field can take.
+
+    Seen from the wall it was wrong. The run that crosses a wall is the
+    short one between the box and the node, and measured from the hatching's
+    own centre its far end is the node — so a branch arriving from below at
+    a downward wall was told `wall: "down"`, the value it already had and
+    the one in its way. A clean-room reader applied that and got the same
+    finding back.
     """
-    far = max(points, key=lambda q: (q[0] - centre[0]) ** 2
-              + (q[1] - centre[1]) ** 2)
-    dx, dy = far[0] - centre[0], far[1] - centre[1]
+    far = max(points, key=lambda q: (q[0] - node[0]) ** 2
+              + (q[1] - node[1]) ** 2)
+    dx, dy = far[0] - node[0], far[1] - node[1]
     if abs(dx) > abs(dy):
         return "left" if dx > 0 else "right"
     return "up" if dy > 0 else "down"
@@ -808,7 +815,12 @@ def _same_run(pa, pb):
 
 
 def _overlap_remedy(pa, pb):
-    """`via` where the two share a run, `at` where they do not."""
+    """`via` where the two share a run, `at` where they do not — and `wall`
+    first when one of the two is a boundary's hatching, which turns."""
+    for p in (pa, pb):
+        if p.element == "ground":
+            return (f"turn the wall of {p.ref} with `wall` so it faces away "
+                    "from the branch, or move one of them with `at`")
     if not _same_run(pa, pb):
         return "move one of them with `at`"
     routable = [p for p in (pa, pb) if _routable(p)]
@@ -917,6 +929,7 @@ def _wire_through_wall(placements, out):
     walls = [(p, _wall_box(p)) for p in placements if p.element == "ground"]
     if not walls:
         return
+    nodes = {p.ref: tuple(p.at) for p in placements if p.element == "node"}
     hits: Dict[Tuple[str, str], Any] = {}
     for ground, (centre, half, angle) in walls:
         shaved = (max(0.0, half[0] - SHAVE), max(0.0, half[1] - SHAVE))
@@ -930,7 +943,7 @@ def _wire_through_wall(placements, out):
                                     (ground, centre, pts[i:i + 2]))
                     break
     for (_, offender), (ground, centre, run) in sorted(hits.items()):
-        away = _away_from(centre, run)
+        away = _away_from(nodes.get(ground.ref, tuple(centre)), run)
         out.append(Finding(
             "wire-through-wall", "warning", ground.ref or "a boundary",
             f"{offender} runs through {_name(ground)}",

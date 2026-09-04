@@ -9,6 +9,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The gallery, drawn a fourth time, with `at` forbidden.** Run 3's five
+  briefs in `examples/gallery/11-battery` to `15-pv`, five `claude-opus-5`
+  sessions one after another in a room built from `9d507d3`, graded in
+  `FINDINGS-run-4.md` against `RERUN.md`'s run-4 section. The solver claim
+  held: the four chains were placed with no node carrying `at`, three clean
+  on the first draft, and no solved diagram reported a wall, an overlap, a
+  narrow run or a symbol off its run. The physics claim held again, and
+  both fields the briefs did not name, `wall` and `scale`, were found from
+  the schema. Two claims failed, both on the library's own words: the
+  refusal for a node joining three named a remedy that did not apply, and
+  two briefs took more rounds than in run 3. Seventeen of eighteen symbols
+  were drawn; `break` as a node kind was not, for the fourth time. Every
+  entry below marked run 4 came from it.
+- **`rail.y` is optional.** A file with no node `at` still had to invent
+  one coordinate, and the schema never said whether it was required. Left
+  out, the rail goes 222 below the lowest node, which is the hero's 372.
+- **`describe` says `faces up` on a ground row, `no T` on a node without a
+  temperature, and never cuts a ref.** `describe --json` gains
+  `temperature` per node.
 - **`at` is optional: the ladder solver.** A node without coordinates is
   placed. What is placed is a chain — every node joined to at most two
   others by branches, which is the shape nearly every network in this
@@ -216,6 +235,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   is the thing the checker-first order was for.
 
 ### Fixed
+
+- **A refusal's remedy applies, and a refusal is not a bug** (run 4). The
+  solver said "give node 'cell' `at` yourself" and one unplaced node
+  anywhere refuses a non-chain whole, so the PV agent gave it `at`, then
+  `via`, and got the same message back twice; the command line then wrapped
+  it as "This is a bug in thermodraw", because the crash net caught a
+  `DiagramError` it was not meant for. Both refusals say every node, the
+  test applies that and draws, the command line prints a refusal as one and
+  exits 2, and the schema says a non-chain is refused whole.
+- **The `wire-through-wall` remedy named the side the branch came through**
+  (run 4). Measured from the hatching's box centre, the short run between a
+  box and its node has the node at its far end, so a branch arriving from
+  below at a downward wall was told `wall: "down"`. Measured from the node.
+  An overlap against a wall names `wall` first as well.
+- **A solver-placed source above and another below turn the node's label**
+  (run 4): the cryostat's shield had a `radin` turned to arrive from above
+  and a `flow` turned to leave below, and its label was reported adrift
+  between them. The 45° rule for a source above a capacitance covers any
+  solver-placed wire below.
+- **`docs/schema.md` gave a source's placement as 40 units and as half a
+  run**, and the file put it 110 out; four agents quoted the pair. Both say
+  110, the default `angle` is stated, the parallel-pair rule is scoped to a
+  file whose nodes the author places, `rail` is said not to be a neighbour
+  for the physics skip, `mixed`'s `sub` names the part rather than the
+  mechanism it exists not to name, and `cond`, `conv`, `rad` and `contact`
+  each have a sentence.
 
 Everything a blind code review found — `tools/clean_room.py --profile
 review` hands a reader the code and the tests with no argument for either.

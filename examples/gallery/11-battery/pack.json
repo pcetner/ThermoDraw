@@ -1,0 +1,31 @@
+{
+  "title": "EV battery module on a liquid cold plate",
+  "units": {"R": "K/W", "C": "J/K", "T": "°C", "P": "W", "q": "W"},
+  "nodes": [
+    {"id": "core",  "label": "Cell core",      "sub": "core",  "value": "108"},
+    {"id": "floor", "label": "Can floor",      "sub": "floor", "value": "60"},
+    {"id": "plate", "label": "Cold plate wall","sub": "plate", "value": "40"},
+    {"id": "film",  "label": "Coolant film",   "sub": "film",  "value": "30"},
+    {"id": "chill", "kind": "fixed", "label": "Chiller supply", "sub": "chill",
+     "value": "25"}
+  ],
+  "branches": [
+    {"from": "core",  "to": "floor", "kind": "cond",
+     "label": "Jelly roll to can floor", "value": "0.24", "rate": "200"},
+    {"from": "floor", "to": "plate", "kind": "contact",
+     "label": "Compressible thermal pad", "value": "0.10"},
+    {"from": "plate", "to": "film",  "kind": "conv",
+     "label": "Milled microchannels", "value": "0.05"},
+    {"from": "film",  "to": "chill", "kind": "flow",
+     "label": "Pumped glycol loop", "sub": "loop", "value": "200"},
+    {"from": "core",  "to": "rail",  "kind": "cap",
+     "label": "Cells", "sub": "cells", "value": "4200"},
+    {"from": "plate", "to": "rail",  "kind": "cap",
+     "label": "Cold plate", "sub": "cp", "value": "1800"}
+  ],
+  "sources": [
+    {"to": "core", "kind": "diss", "label": "Cell dissipation",
+     "sub": "cell", "value": "25", "count": 8}
+  ],
+  "rail": {"reference": "chill", "y": 372}
+}

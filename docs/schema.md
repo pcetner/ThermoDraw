@@ -159,7 +159,7 @@ A path heat takes between two nodes.
 | `from`, `to` | node ids, or the literal `"rail"` |
 | `kind` | `cond`, `conv`, `rad`, `contact`, `spread`, `pipe`, `mixed`, `cap`, `flow`, `break` |
 | `label` | the words above the box |
-| `sub` | yours on the kinds whose subscript the library does not set: `cap`, where it names a place; `mixed`, where it names the mechanism; `flow`. Ignored on `break`, and overridden on every resistance kind |
+| `sub` | yours on the kinds whose subscript the library does not set: `cap`, where it names a place; `mixed`, where it names the part — `R_wall` — since the mechanism is what `mixed` declines to say, and it may be left off; `flow`. Ignored on `break`, and overridden on every resistance kind |
 | `value` | unit appended from `units.R` (`units.C` for `cap`, `units.q` for `flow`). Optional: a path with no number draws its label alone. Refused on `break` |
 | `rate` | what this path actually carries. Drawn as `q = 12 W` on its own line, in `units.q`, under the resistance it presents. Needs `units.q`. Refused on `flow`, whose value already is a rate, and on `break`. On a `count`ed branch it is the whole group's, not per item. Stating it opts the branch into `rate-does-not-match` under `--physics` |
 | `count` | how many identical ones there are |
@@ -169,7 +169,13 @@ A path heat takes between two nodes.
 | `angle` | overrides the direction taken from the wire |
 | `side` | `auto` (default), `up`, `down`, `left`, `right` — where the label goes. On a horizontal run only `up` and `down` are useful: `left` and `right` put the label along the wire, into the next thing on it |
 
-`spread` is a path whose cross-section grows as the heat goes — hatching
+`cond` is conduction through a solid: a die attach, a brick course, a
+jelly roll. `conv` is heat crossing into a fluid: a wall to the air or the
+coolant beside it, a fin to the wind. `rad` is radiation to a surface it
+can see, and its value holds at the pair of temperatures it was taken at.
+`contact` is the join between two solids pressed together — a thermal pad,
+a bolted flange, an interface material — and hatches its two halves in
+opposite directions. `spread` is a path whose cross-section grows as the heat goes — hatching
 that fans from a point rather than running parallel. `pipe` is a near
 isothermal link, a heat pipe or a vapour chamber: it still takes a small
 resistance, it just stops wearing solid-conduction hatching. `mixed` has no
@@ -302,9 +308,12 @@ can be reported as crossed by it, so a source moved further out has a longer
 lead, and `at` decides what that lead runs past. Three of one reader's
 findings were leads.
 
-Leave `at` out and the source is placed along its own `angle`, about 40
-units from the node — on the far side of the node for a `to`, so the arrow
-arrives, and on the near side for a `from`, so it leaves. That is right for
+Leave `at` out and the source is placed along its own `angle` — 0 if you
+give none, which is along +x — 110 units from the node, half the narrowest
+run: on the far side of the node for a `to`, so the arrow travels in the
+direction the angle names and arrives, and on the near side for a `from`, so
+it leaves. `{"to": "sh", "kind": "radin", "angle": 90}` puts the source
+above its node with the arrow pointing down into it. That is right for
 one source on a node with a short label:
 `{"from": "cell", "kind": "flux", "angle": 270}` puts a hatched face on top of
 the cell with the arrows rising off it, and needs no coordinates. Two sources
@@ -325,7 +334,8 @@ the extent of the nodes.
 `reference` must name a node that exists, and does nothing else — it does not
 move the rail, route anything, or have to be a `fixed` node. It records which
 node the rail *is*, for a reader and for a later version. `y` is what actually
-places the line.
+places the line, and it is optional: left out, the rail goes 222 below the
+lowest node, which for a solved ladder on `y = 150` is the 372 above.
 
 A branch naming `rail` as its `to` drops straight down from the other end,
 meeting the line directly below that node. Give it `via` if you want it
@@ -372,9 +382,12 @@ the README.
 ## Coordinates
 
 `at` is optional on a node. Leave it out and the library places the node;
-give it and the node goes exactly there. The two mix: a node with `at` keeps
-it, and the solver measures the next one from it. Wire runs, label positions
-and the canvas size are worked out either way.
+give it and the node goes exactly there. Within a chain the two mix: a node
+with `at` keeps it, and the solver measures the next one from it. A network
+that is not a chain is refused whole the moment any node lacks `at` — the
+solver does not place part of it — so give every node `at` there, as the
+refusal says. Wire runs, label positions and the canvas size are worked out
+either way.
 
 What is solved is a **ladder**: the nodes form one chain, each joined to at
 most two others by branches (`rail` and sources do not count). Heat runs left
@@ -385,10 +398,11 @@ it need and never narrower than 220. Two branches between the same pair of
 nodes are routed one above and one below, 80 off the line, leaving and
 arriving 48 sideways of each node, and their labels take the outer sides; a
 third between the same pair keeps the straight run, and a repeated branch
-always does. A source without `at` is placed half a run out along its
-`angle`, and an `angle` of 0 on any node but the hot end is turned to arrive
-from above, because on the line "from the left" is the branch. A node given
-a source above it that also has a capacitance below it gets `angle: 45` for
+always does. A source without `at` is placed 110 out along its `angle`, half
+the narrowest run, and an `angle` of 0 on any node but the hot end is turned to arrive
+from above, because on the line "from the left" is the branch, and one
+leaving is turned to leave downward. A node with a source above it and a
+wire below it — a capacitance, or a source leaving — gets `angle: 45` for
 its label, since above is the lead, below is the wire and beside is the run;
 an `angle` you wrote is kept.
 
@@ -458,7 +472,9 @@ Two more details are worth copying rather than rediscovering:
   ambient node and gets away with it only because that node has `angle: 90`
   and no other traffic. A node with three branches and a source on it does
   not, and one reader traced four findings to copying the hero's arrival.
-- **A parallel pair needs `via` first, and then `side`.** Two branches
+- **In a file where you place the nodes yourself, a parallel pair needs
+  `via` first, and then `side`.** (Leave `at` off the nodes and the solver
+  routes the pair for you, as the Coordinates section says.) Two branches
   between one pair of nodes share a single straight run, and both their
   symbols are drawn at the same point on it — which is a `symbols-overlap`
   error, not a label problem. `side` moves labels; it does not make the
@@ -583,7 +599,8 @@ temperatures the page then cannot state. A fixed node is a reservoir and is
 not asked; a `phase` node is holding latent heat this cannot see. A `free`
 node is skipped when it has no temperature, when a **neighbour** has none —
 which is what an interior junction drawn the way this page recommends does
-to the nodes either side of it — when it carries a `flux` source, which has
+to the nodes either side of it; `rail` is not a neighbour, and a capacitance
+to it blinds nothing — when it carries a `flux` source, which has
 no area, or when a value is not a number. Every skip is reported, as one
 note per diagram: `physics-not-checked`, `checked 2 of 6 free nodes; not
 checked: j (source 1 is a flux, which has no area); sm, cb (neighbour 'smb'
@@ -644,7 +661,7 @@ elements:
   node 'c'               node            (424, 150)        above          72x33   Case | T_c = 110 °C
   node 's'               node            (648, 150)        above          72x33   Sink base | T_s = 103 °C
   node 'amb'             node            (936, 372) a90    right          78x33   Still air | T_amb = 40 °C
-  wall of node 'amb'     ground          (936, 384) a90    (no label)
+  wall of node 'amb'     ground          (936, 384) faces down (no label)
 ```
 
 That is the real output for `examples/hero.json`, not an abridgement. Element

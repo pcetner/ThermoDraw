@@ -113,13 +113,23 @@ class TestTheChainRule:
                 [{"id": "hub"}, {"id": "a"}, {"id": "b"}, {"id": "c"}],
                 [{"from": "hub", "to": x, "kind": "cond"} for x in "abc"]))
 
-    def test_the_refusal_says_what_to_do(self):
+    def test_the_refusal_says_what_to_do_and_it_works(self):
+        """It said "give node 'hub' `at`" once, and run 4's PV reader gave
+        it `at`, then `via` too, and got the same message back both times:
+        one unplaced node anywhere sends the whole file here. What clears
+        it is every node placed, so that is what it says."""
+        nodes = [{"id": "hub"}, {"id": "a"}, {"id": "b"}, {"id": "c"}]
+        branches = [{"from": "hub", "to": x, "kind": "cond"} for x in "abc"]
         with pytest.raises(DiagramError) as caught:
-            layout(self.build(
-                [{"id": "hub"}, {"id": "a"}, {"id": "b"}, {"id": "c"}],
-                [{"from": "hub", "to": x, "kind": "cond"} for x in "abc"]))
-        assert "give node 'hub' `at` yourself" in str(caught.value)
+            layout(self.build(nodes, branches))
+        assert "give every node `at` yourself" in str(caught.value)
         assert "`via`" in str(caught.value)
+        nodes[0]["at"] = [400, 150]                 # the named node alone
+        with pytest.raises(DiagramError):
+            layout(self.build(nodes, branches))
+        for n, at in zip(nodes[1:], ([200, 150], [400, 40], [600, 150])):
+            n["at"] = at                            # every node, as it says
+        assert layout(self.build(nodes, branches))
 
     def test_two_pieces_are_refused(self):
         with pytest.raises(DiagramError, match="no path of branches"):
@@ -157,6 +167,21 @@ class TestTheChainRule:
         d.branch("b", "rail", "cap", "Mass", "5", sub="b")
         d.source("a", "diss", "Load", "10", sub="d")
         assert check(d).ok, check(d).text()
+
+    def test_a_source_above_and_a_source_below_turn_the_label_too(self):
+        """13: the shield's `radin` turned to arrive from above and its
+        outbound `flow` turned to leave below, and its label was reported
+        adrift between the two leads."""
+        d = DiagramBuilder(R="K/W", T="K", P="W", q="W")
+        d.node("v", "Vessel", "300", kind="fixed", sub="v")
+        d.node("sh", "Shield", "40", sub="sh")
+        d.node("he", "Bath", "4.2", kind="phase", sub="he")
+        d.branch("v", "sh", "cond", "Straps", "50")
+        d.branch("sh", "he", "cond", "Leads", "179")
+        d.source("sh", "radin", "Through MLI", "30", sub="mli")
+        d.source("sh", "flow", "Cold head", "35", sub="cc", outward=True)
+        assert check(d).ok, check(d).text()
+        assert solve(d.build()).node("sh").angle == 45
 
     def test_a_source_above_and_a_capacitance_below_turns_the_label(self):
         """The label has the source's lead above it and the capacitance's
@@ -336,11 +361,14 @@ class TestPairsAndSources:
         assert s.angle == 90 and s.at == [b[0], b[1] - 110]
         assert check(self.sourced("b", to="b")).ok
 
-    def test_heat_leaving_an_interior_node_leaves_upward(self):
+    def test_heat_leaving_an_interior_node_leaves_downward(self):
+        """It left upward once, which put an outbound source's symbol above
+        the node — on top of an inbound one turned to arrive from above.
+        Heat in at the top, out at the bottom, as run 4's cryostat drew."""
         d = self.sourced("b", **{"from": "b", "kind": "flow"})
         out = solve(d)
         s, b = out.sources[0], out.node("b").at
-        assert s.angle == 270 and s.at == [b[0], b[1] - 110]
+        assert s.angle == 90 and s.at == [b[0], b[1] + 110]
 
     def test_an_authored_angle_is_kept(self):
         out = solve(self.sourced("b", to="b", angle=45))

@@ -1,0 +1,22 @@
+{
+  "title": "Superconducting magnet in a cryostat, persistent mode",
+  "units": {"R": "K/W", "T": {"unit": "K", "scale": "absolute"}, "P": "W", "q": "W"},
+  "nodes": [
+    {"id": "vess", "kind": "fixed", "label": "Outer vessel in room", "sub": "vess", "value": "300"},
+    {"id": "sh", "label": "Radiation shield", "sub": "sh", "value": "40", "angle": 45},
+    {"id": "he", "kind": "phase", "label": "Liquid helium bath", "sub": "He", "value": "4.2"},
+    {"id": "w", "label": "Magnet winding", "sub": "w", "value": "4.5"},
+    {"id": "mt", "kind": "fixed", "label": "Room-temperature mount", "sub": "mt", "value": "300", "wall": "up"}
+  ],
+  "branches": [
+    {"from": "vess", "to": "sh", "kind": "cond", "label": "G-10 support straps", "value": "50", "rate": "5.2"},
+    {"from": "sh", "to": "he", "kind": "cond", "label": "Instrumentation leads", "value": "179"},
+    {"from": "he", "to": "w", "kind": "cond", "label": "Winding-to-bath link", "value": "6"},
+    {"from": "w", "to": "mt", "kind": "break", "label": "Suspension strut"}
+  ],
+  "sources": [
+    {"to": "sh", "kind": "radin", "label": "Through MLI", "sub": "mli", "value": "30", "angle": 90},
+    {"from": "sh", "kind": "flow", "label": "Cryocooler first stage", "sub": "cc", "value": "35", "angle": 90},
+    {"to": "w", "kind": "diss", "label": "Persistent-joint loss", "sub": "j", "value": "0.05", "angle": 90}
+  ]
+}

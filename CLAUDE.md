@@ -178,7 +178,10 @@ sentence after it says what would overturn it.
 - A wire through a boundary node's hatching is a warning. The wall faces
   `wall`, `down` unless turned, so a branch arriving from that side crosses
   it; nothing looked, because a ground carries no `Symbol`. The remedy names
-  the `wall` that faces away from the branch first, then `at`. It fires twice
+  the `wall` that faces away from the branch first, then `at`, and the side
+  is measured from the node, not from the hatching: measured from the
+  hatching, the short run's far end is the node, and run 4 was told the side
+  it already had. An overlap against a wall names `wall` too. It fires twice
   on run 2's `house.json`, correctly, and that diagram is evidence and stays
   as drawn.
 - A placement carries `role`, `ends`, `via`, `count`, `arrangement` and
@@ -204,7 +207,10 @@ sentence after it says what would overturn it.
 - `check` grades; `describe` reports, always exits 0, reads the same `Scene`,
   keys rows on placements, prints what each label reads. A ground gets a row
   too, named `wall of node 'x'`: where a boundary wall landed was the one
-  thing on the page nothing could report.
+  thing on the page nothing could report. It says which way it faces in the
+  word `wall` takes, a node without a temperature says `no T`, and a ref is
+  padded and never cut: run 4 read `a270`, a junction that looked like every
+  other node, and `vchea`.
 
 ### Goldens
 - No `--update-goldens` commit without `tools/golden_diff.py` output in its
@@ -236,6 +242,17 @@ sentence after it says what would overturn it.
   error it prevents, and a boundary cannot sit above what it holds. Sixteen of
   eighteen symbols were drawn; `break` as a node kind and `corner` were not,
   in the two briefs written to force them.
+- The fourth, 2026-09-03, was run 3's five briefs with `at` forbidden
+  (`FINDINGS-run-4.md`), against the solver. **The solver claim held**: the
+  four chains were placed with no node carrying `at`, three of them clean on
+  the first draft, and no solved diagram reported a wall, an overlap or a
+  narrow run. The refusal claim failed on the solver's own words — "give
+  node 'cell' `at`" did not apply, since one unplaced node refuses a
+  non-chain whole, and the command line called the refusal a bug — and the
+  rounds claim failed on two briefs. Both fields the briefs did not name,
+  `wall` and `scale`, were found from the schema. Seventeen of eighteen
+  symbols were drawn; `break` as a node kind was not, for the fourth time,
+  its agent choosing a `fixed` mount with `wall: "up"` and a `break` branch.
 
 ## Sharp edges
 

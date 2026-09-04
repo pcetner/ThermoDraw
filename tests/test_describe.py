@@ -237,7 +237,7 @@ class TestWhatOnePointZeroAdded:
     def test_a_turned_wall_is_said_on_the_node_row(self):
         text = describe(self.mount("up")).text()
         assert "  mount          fixed    at (400, 80) wall up" in text
-        assert "wall of node 'mount'   ground          (400, 68) a270" in text
+        assert "wall of node 'mount'   ground          (400, 68) faces up" in text
 
     def test_a_wall_facing_down_is_not_remarked_on(self):
         assert "wall" not in [w for l in describe(self.mount()).text()
