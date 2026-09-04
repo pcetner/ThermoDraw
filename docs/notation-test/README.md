@@ -44,3 +44,12 @@ drawing. That does not mean the notation changes tomorrow; it means the
 decision is recorded as a preference, and the record says so.
 
 Either answer is worth more than the current one, which is a guess.
+
+## Since 1.0
+
+Zigzags are an option in the library itself — `render(...,
+notation="zigzags")`, `Diagram.svg(notation="zigzags")`, `thermodraw render
+--notation zigzags` — drawn with the glyph `make.py` uses here, so a reader
+who prefers circuit notation is not waiting on this test. What the test
+still decides is the *default*. Boxes are the default on the reader's reason
+above, and nobody has asked a reader.

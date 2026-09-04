@@ -423,16 +423,38 @@ def extent(placements, rects, padding=PADDING):
             max(xs) + padding, max(ys) + padding)
 
 
+NOTATIONS = ("boxes", "zigzags")
+
+
+def in_notation(placements: Sequence["Placement"],
+                notation: str) -> List["Placement"]:
+    """The same placements with every resistance drawn in `notation`.
+
+    Presentation, not data: the diagram does not say which notation it is
+    in, any more than it says light or dark. `half` and `half_len` are
+    unchanged, so labels, wires and the checker see the same geometry.
+    """
+    if notation not in NOTATIONS:
+        raise ValueError(f"notation must be one of {', '.join(NOTATIONS)}, "
+                         f"not {notation!r}")
+    if notation == "boxes":
+        return list(placements)
+    import dataclasses
+    return [dataclasses.replace(p, symbol=SY.in_notation(p.symbol, notation))
+            if p.symbol is not None else p for p in placements]
+
+
 def render(placements: Sequence["Placement"],
            size: Optional[Sequence[float]] = None,
-           padding: float = PADDING) -> str:
+           padding: float = PADDING, notation: str = "boxes") -> str:
     """A complete SVG, sized to its contents unless told otherwise.
 
     `canvas` took dimensions the caller invented, and anything placed outside
     them was clipped with no warning at all. Measuring what was emitted
-    removes the guess; passing `size` keeps the old behaviour.
+    removes the guess; passing `size` keeps the old behaviour. `notation`
+    is `boxes`, or `zigzags` for circuit notation on every resistance.
     """
-    scene = compose(placements, size, padding)
+    scene = compose(in_notation(placements, notation), size, padding)
     body = "".join(scene.parts)
     if size is not None:
         return SY.canvas(size[0], size[1], body)

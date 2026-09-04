@@ -21,6 +21,16 @@ changes only by addition from here.
 
 ### Added
 
+- **Zigzags are an option.** `render(..., notation="zigzags")`,
+  `Diagram.svg(notation=)`, and `--notation zigzags` on `render` and
+  `page` draw every resistance in circuit notation — leads and six peaks,
+  the length of a box, so labels, wires and the checker see the same
+  geometry and the glyph is the only thing that changes. Boxes stay the
+  default, for the reason the record gives: a texture survives a reduction
+  a subscript does not. That reason is a claim about readers, and the
+  reader can now settle it for themselves; the decision is no longer
+  recorded as a bet. Notation is presentation, like light and dark, and
+  the file does not carry it.
 - **What 1.0 promises, written down.** `docs/stability.md` says what
   changes only by addition within 1.x — the schema, the finding codes and
   both JSON reports, the exit codes, `Placement`'s fields, `__all__` and
