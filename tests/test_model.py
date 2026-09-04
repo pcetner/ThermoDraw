@@ -208,3 +208,53 @@ def test_a_plain_temperature_unit_declares_nothing():
                            "nodes": [{"id": "a", "at": [0, 0], "value": "20"}]})
     assert d.scale is None
     assert d.to_dict()["units"] == {"T": "K"}
+
+
+# ------------------------------------------------ the outputs, on the data
+class TestTheDiagramHasTheBuildersOutputs:
+    """A diagram read from JSON needed `layout`, `render` and `theme` by hand
+    to reach a file the builder reached in one call. The five outputs are
+    the `Diagram`'s, and the builder delegates, so there is one of each."""
+
+    @staticmethod
+    def both():
+        b = (DiagramBuilder(R="K/W", T="°C", P="W")
+             .node("j", "Junction", "112", at=(200, 150), sub="j")
+             .node("c", "Case", "78", at=(424, 150), sub="c")
+             .branch("j", "c", "cond", "Die attach", "0.35")
+             .source("j", "diss", "Switching loss", "45", sub="d"))
+        return b, Diagram.from_dict(b.to_dict())
+
+    def test_svg_is_the_same_from_either(self):
+        b, d = self.both()
+        assert d.svg() == b.svg()
+        assert d.svg("light") == b.svg("light")
+        assert d.svg().startswith("<svg") and "var(--" in d.svg()
+        assert "var(--" not in d.svg("dark")
+
+    def test_check_describe_and_page_agree(self):
+        b, d = self.both()
+        assert d.check().to_dict() == b.check().to_dict()
+        assert d.describe().text() == b.describe().text()
+        assert d.page() == b.page()
+        assert d.check(physics=True).ok == b.check(physics=True).ok
+
+    def test_a_notebook_shows_the_drawing(self):
+        b, d = self.both()
+        assert d._repr_svg_() == d.svg()
+        assert b._repr_svg_() == b.svg()
+
+    def test_the_model_imports_alone(self):
+        """The methods import lazily: `model` is what the pipeline imports,
+        and a top-level import back would be a cycle. Checked in a fresh
+        interpreter, where a cycle actually fails."""
+        import subprocess
+        import sys
+        got = subprocess.run(
+            [sys.executable, "-c",
+             "import thermodraw.model as m; print(m.Diagram.__name__)"],
+            capture_output=True, text=True,
+            cwd=str(pathlib.Path(__file__).resolve().parents[1]),
+            env={**__import__("os").environ, "PYTHONPATH": "src"})
+        assert got.returncode == 0, got.stderr
+        assert got.stdout.strip() == "Diagram"

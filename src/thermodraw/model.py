@@ -864,6 +864,61 @@ class Diagram:
     def from_json(cls, text):
         return cls.from_dict(json.loads(text))
 
+    # ------------------------------------------------------- the outputs
+    # The same five the builder has had since 0.2, on the data itself. A
+    # diagram read from JSON needed `layout`, `render` and `theme` by hand
+    # to reach a file the builder reached in one call, and the README's
+    # first example was four lines of plumbing. The imports are inside the
+    # bodies: this module is what `_layout`, `_render` and `_check` import,
+    # and a cycle at the top would import nothing.
+
+    def placements(self):
+        """The drawing as placements, solved and laid out."""
+        from ._layout import layout
+        return layout(self.validate())
+
+    def svg(self, mode=None, size=None, padding=None):
+        """SVG for this diagram.
+
+        `mode` picks a baked palette, `light` or `dark`, for Word, slides
+        and rasterisers. Without it the output carries custom properties
+        and follows the reader's light/dark setting. Both embed the faces.
+        """
+        from . import theme
+        from ._render import PADDING, render
+        out = render(self.placements(), size=size or self.size,
+                     padding=PADDING if padding is None else padding)
+        return theme.bake(out, mode) if mode else theme.with_variables(out)
+
+    def check(self, size=None, padding=None, source="diagram",
+              physics=False):
+        """What is wrong with this diagram, without rendering it to look."""
+        from ._check import check
+        from ._render import PADDING
+        return check(self.validate(), size=size or self.size,
+                     padding=PADDING if padding is None else padding,
+                     source=source, physics=physics)
+
+    def describe(self, size=None, padding=None, source="diagram"):
+        """What this diagram contains, without rendering it to look."""
+        from ._describe import describe
+        from ._render import PADDING
+        return describe(self.validate(), size=size or self.size,
+                        padding=PADDING if padding is None else padding,
+                        source=source)
+
+    def page(self, size=None, padding=None, title=None):
+        """This diagram as a self-contained HTML page, controls and all."""
+        from ._page import page
+        from ._render import PADDING
+        return page(self.validate(), size=size or self.size,
+                    padding=PADDING if padding is None else padding,
+                    title=title)
+
+    def _repr_svg_(self):
+        """A notebook shows the drawing rather than the dataclass."""
+        return self.svg()
+
 
 def _default(cls, name):
     """What this field is when the author did not set it."""
