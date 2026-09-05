@@ -1,4 +1,4 @@
-"""Three demo scenes for the README.
+"""The two README images.
 
     python examples/render_demo.py
 
@@ -6,11 +6,10 @@ Writes light and dark SVGs to docs/assets/. Colours are baked rather than
 left as custom properties, because GitHub serves README images through an
 <img> tag and picks the variant with <picture> media queries.
 
-Everything here is laid out by hand at explicit coordinates. That is the
-current state of the library: it places one symbol at a time. The network
-layer that would do this from a node/branch declaration is not built yet.
+The hero is read from a file that holds no coordinates: the ladder solver
+places it. The vocabulary sheet is laid out here, symbol by symbol, because
+it is a table of glyphs and not a network.
 """
-import math
 import pathlib
 import sys
 
@@ -22,82 +21,26 @@ from thermodraw import (Diagram, core as S, layout, render, save,  # noqa: E402
 OUT = pathlib.Path(__file__).resolve().parents[1] / "docs" / "assets"
 
 
-# ------------------------------------------------------------------ plumbing
-def wire(*pts):
-    d = " ".join(f"{x:.1f},{y:.1f}" for x, y in pts)
-    return f'<polyline class="w" points="{d}"/>'
+# --------------------------------------------------- scene 1 — the hero
+RAPTOR = pathlib.Path(__file__).resolve().parent / "raptor.json"
 
 
-def node(x, y, r=5.5):
-    return f'<circle class="node-open" cx="{x}" cy="{y}" r="{r}"/>'
+def raptor():
+    """One square centimetre of a regeneratively cooled methalox throat wall.
 
+    Combustion gas to methane coolant: gas-side convection and radiation in
+    parallel, conduction through the copper-alloy liner, convection into the
+    coolant channel, and the heat carried away to the injector.
 
-def block(cx, cy, a, inner, dashed=False):
-    return f'<g transform="{S.xf(cx, cy, a)}">{inner}{sym.rect(dashed)}</g>'
-
-
-def ground(x, y, a=90, half=24, depth=13):
-    """A hatched boundary band. a=90 lays it flat with the hatch below."""
-    return f'<g transform="{S.xf(x, y, a)}">{S.hatched_wall(0, half, depth)}</g>'
-
-
-# The four box interiors, taken from the library rather than rebuilt here.
-HATCH, FLOW, WAVE, SEAM = (sym.tex_cond(), sym.tex_conv(),
-                           sym.tex_rad(), sym.tex_contact())
-
-
-# ------------------------------------------------------ scene 1 — the ladder
-HERO = pathlib.Path(__file__).resolve().parent / "hero.json"
-
-
-def hero():
-    """A power device from junction to still air.
-
-    Series conduction, a contact resistance at the mounting face, then
-    convection and radiation in parallel to ambient, with two capacitances on
-    the reference rail — which is what makes it a transient model rather than
-    a steady-state one.
-
-    Read from hero.json rather than built here. It used to be sixty lines of
-    hand-placed coordinates; the model, the layout and the label solver do
-    that work now, and the file is the same data an LLM would be given.
+    The file carries no `at`. Every number in it is an estimate from public
+    figures for this class of engine; `examples/raptor.md` has the sources
+    and the arithmetic, and `check --physics` is silent on it.
     """
-    diagram = Diagram.from_json(HERO.read_text(encoding="utf-8"))
+    diagram = Diagram.from_json(RAPTOR.read_text(encoding="utf-8"))
     return render(layout(diagram))
 
 
-# --------------------------------------------------- scene 2 — the rosette
-ROSETTE_TEX = [HATCH, FLOW, WAVE, SEAM]
-
-
-def rosette(n=12, R=176):
-    """One node losing heat by twelve parallel paths, each to a boundary.
-
-    Every box is the same geometry placed through a different transform, and
-    the mechanism texture rotates with it. Nothing here is drawn twice.
-    """
-    wall = R + S.BW / 2 + 16
-    half = wall + 30
-    b = []
-    for i in range(n):
-        a = 360 * i / n
-        r = math.radians(a)
-        cx, cy = half + R * math.cos(r), half + R * math.sin(r)
-        inner = ROSETTE_TEX[i % 4]
-        b += [wire((half + 7 * math.cos(r), half + 7 * math.sin(r)),
-                   (half + (R - S.BW / 2) * math.cos(r),
-                    half + (R - S.BW / 2) * math.sin(r))),
-              wire((half + (R + S.BW / 2) * math.cos(r),
-                    half + (R + S.BW / 2) * math.sin(r)),
-                   (half + wall * math.cos(r), half + wall * math.sin(r))),
-              block(cx, cy, a, inner, dashed=(i % 4 == 2)),
-              ground(half + wall * math.cos(r), half + wall * math.sin(r),
-                     a, half=21, depth=11)]
-    b.append(node(half, half, 7))
-    return sym.canvas(2 * half, 2 * half, "".join(b))
-
-
-# ------------------------------------------------ scene 3 — the vocabulary
+# ------------------------------------------------ scene 2 — the vocabulary
 # Geometry that is not symmetric about its own origin, nudged so the cell
 # reads as centred. The symbols themselves are correct; only this sheet
 # cares where the ink sits inside a box.
@@ -139,7 +82,8 @@ def vocabulary(cols=4, cw=250, ch=152):
     return sym.canvas(cw * cols, ch * row, "".join(b))
 
 
-SCENES = {"hero": hero, "rosette": rosette, "vocabulary": vocabulary}
+SCENES = {"raptor": raptor, "vocabulary": vocabulary}
+
 
 def main():
     OUT.mkdir(parents=True, exist_ok=True)
