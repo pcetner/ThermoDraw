@@ -967,3 +967,53 @@ not drawn. That last is a solver fact worth a sentence of its own: a
 solved diagram with a rail reads better when the rail's reference is the
 cold end of the chain and the rail is left out unless something hangs on
 it.
+
+## The editor
+
+Everything before this started from a file someone or some model wrote.
+The editor is a page on the site where a person draws the network by
+hand, and three decisions shape it.
+
+**The library draws, in the browser.** The alternatives were a port of
+the label solver and the twelve checks to JavaScript, or a server. A port
+is a second implementation that drifts from the first the week after it
+ships, and the two generated pages already live by the rule that nothing
+on the site can show a glyph the code cannot draw. A server is not free.
+Pyodide runs the wheel this build made, in a worker; the spike that
+chose it boots in under four seconds here, loads the wheel in a fifth of
+a second, and checks the largest gallery diagram with `--physics` in
+under a hundred milliseconds. The classic `pyodide.js` fails to import
+from a worker in Chromium; the ES module build does not, so the worker
+is a module.
+
+**A hit map, not attributes in the SVG.** The render carries no
+identity: no `data-*`, no per-element id beyond clip geometry and
+repeated-group forms. The choice was to add attributes to every element
+the renderer writes, or to build a map of clickable boxes in Python from
+what `compose` already knows and hand it across with the drawing. The
+map won. The SVG's bytes stay what they are for every other reader, the
+boxes come from the same placements and label rectangles the checker
+grades, and a wire segment gets a box a finger can land on without the
+renderer knowing a finger exists. The one thing the map needed that no
+placement stated was which element a placement came from, as a number.
+`ref` says it in prose, and a pair of branches between one node pair
+share every other field. `Placement.index` is that number, and it is
+data where `ref` is for people, which is the same argument `role` and
+`ends` were added on.
+
+**Coordinates are written in.** A file the solver placed is drawn as
+the solver placed it, so the editor writes those coordinates into the
+file once it is drawn. Nothing on screen changes; what a drag does
+changes. Without it, pinning one node with `at` made the solver re-flow
+every unplaced node around it, and a drag moved the whole chain. With
+it, one node moves. That is the editor taking the solver's answer as a
+starting point, which is what `thermodraw solve` exists for on the
+command line.
+
+The rest is the reader's: mouse and touch alike, a popover beside the
+element rather than a panel, files in the browser's storage, a link
+that carries the diagram compressed in its fragment so nothing is stored
+anywhere, and a present mode for a lecture hall. What is not built is
+written down in the plan that built it: offline use, pinch-zoom polish,
+editing a repeated group's expanded form on the canvas, a text view of
+the JSON.

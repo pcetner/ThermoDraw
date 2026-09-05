@@ -130,6 +130,11 @@ writes the same drawing as a self-contained HTML page with its controls.
 can write a network without coordinates, solve it, and move only what you
 would have put elsewhere.
 
+Or draw one by hand. The [editor](https://pcetner.github.io/ThermoDraw/editor/)
+runs this library in the browser: drag symbols on, connect nodes, edit
+values, and see the findings as you go. Files stay in your browser, and a
+link carries a diagram to anyone.
+
 ## The symbols
 
 <p align="center">
@@ -164,9 +169,11 @@ network that a reviewer can read from the picture, this.
 
 ## Docs
 
-- [The site](https://pcetner.github.io/ThermoDraw/): the symbol dictionary,
-  the symbol reference, and the [gallery](https://pcetner.github.io/ThermoDraw/gallery/)
-  of fifteen networks drawn by agents from the schema alone.
+- [The site](https://pcetner.github.io/ThermoDraw/): the
+  [editor](https://pcetner.github.io/ThermoDraw/editor/), the symbol
+  dictionary, the symbol reference, and the
+  [gallery](https://pcetner.github.io/ThermoDraw/gallery/) of fifteen
+  networks drawn by agents from the schema alone.
 - [`docs/schema.md`](docs/schema.md): the whole format, written to be pasted
   into a prompt.
 - [`docs/stability.md`](docs/stability.md): what 1.0 promises to keep, and
