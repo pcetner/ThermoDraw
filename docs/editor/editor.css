@@ -1,0 +1,169 @@
+/* The editor's own furniture. Everything shared with the site is in
+   site.css; this is the layout of one page and the things only it has. */
+html,body{height:100%;overflow:hidden}
+[hidden]{display:none !important}  /* a display rule on a class must not undo `hidden` */
+body{display:grid;font-family:var(--sans);font-size:14px;line-height:1.4;
+     grid-template-rows:auto 1fr auto;
+     grid-template-columns:232px 1fr;
+     grid-template-areas:"top top" "palette stage" "findings findings"}
+#ed-top{grid-area:top;display:flex;align-items:center;gap:8px;padding:8px 12px;
+        border-bottom:1px solid var(--rule);background:var(--panel);flex-wrap:wrap}
+#ed-top button,#ed-top .btn{padding:6px 12px;font-size:13px}
+.ed-name{font-weight:600;max-width:34vw;overflow:hidden;text-overflow:ellipsis}
+.ed-tools{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-left:auto}
+.ed-version{font-family:var(--mono);font-size:12px;color:var(--ink-3);text-decoration:none;margin-left:6px}
+
+/* the palette */
+#ed-palette{grid-area:palette;overflow-y:auto;border-right:1px solid var(--rule);
+            background:var(--paper);padding:10px 10px 24px}
+#ed-palette h3{font-size:11px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;
+               color:var(--accent);margin:12px 4px 6px}
+.ed-cards{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.ed-card{display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 4px 5px;
+         border-radius:8px;background:var(--panel);border:1px solid var(--rule);
+         cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none;
+         min-height:64px;white-space:normal;line-height:1.15}
+.ed-card svg{width:100%;height:auto;max-height:44px;pointer-events:none}
+.ed-card span{font-size:11px;color:var(--ink-2);text-align:center}
+.ed-card[aria-pressed="true"]{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
+.ed-hint{font-size:12px;color:var(--ink-3);margin:14px 4px 0;line-height:1.45}
+
+/* the stage */
+#ed-stage{grid-area:stage;position:relative;overflow:hidden;background:var(--paper);
+          touch-action:none;user-select:none;-webkit-user-select:none}
+#ed-drawing text{pointer-events:none}
+#ed-canvas{position:absolute;inset:0;width:100%;height:100%;display:block;
+           cursor:default}
+#ed-canvas.ed-pan{cursor:grabbing}
+#ed-canvas.ed-place{cursor:crosshair}
+#ed-hits rect{fill:transparent;stroke:none;pointer-events:all}
+#ed-hits rect[data-element="wire"]{cursor:pointer}
+#ed-hits rect[data-element="node"],#ed-hits rect[data-element="symbol"],
+#ed-hits rect[data-element="ground"]{cursor:move}
+#ed-hits rect.ed-hover{stroke:var(--accent);stroke-opacity:.45;stroke-width:1.5px;
+                       vector-effect:non-scaling-stroke}
+#ed-hits rect.ed-flash{animation:ed-flash 1.2s ease-out}
+@keyframes ed-flash{0%{fill:var(--accent);fill-opacity:.35}100%{fill-opacity:0}}
+#ed-ui .ed-sel{fill:none;stroke:var(--accent);stroke-width:1.5px;stroke-dasharray:4 3;
+               vector-effect:non-scaling-stroke;pointer-events:none}
+#ed-ui .ed-handle{fill:var(--panel);stroke:var(--accent);stroke-width:2px;
+                  vector-effect:non-scaling-stroke;cursor:crosshair;pointer-events:all}
+#ed-ui .ed-handle-label{font:600 10px var(--sans);fill:var(--accent);pointer-events:none}
+#ed-ui .ed-rubber{fill:none;stroke:var(--accent);stroke-width:1.5px;stroke-dasharray:6 4;
+                  vector-effect:non-scaling-stroke;pointer-events:none}
+#ed-ui .ed-ghost{opacity:.55;pointer-events:none}
+#ed-ui .ed-via{fill:var(--panel);stroke:var(--accent);stroke-width:1.5px;
+               vector-effect:non-scaling-stroke;cursor:move;pointer-events:all}
+
+/* overlays on the stage */
+.ed-loading{position:absolute;inset:0;display:grid;place-items:center;
+            background:color-mix(in srgb,var(--paper) 72%,transparent);z-index:5}
+.ed-loading .card{padding:18px 22px;max-width:36ch}
+.ed-loading p{margin:0 0 6px;font-size:14px}
+.ed-loading p:last-child{margin:0;color:var(--ink-2)}
+.ed-empty{position:absolute;inset:0;display:grid;place-items:center;pointer-events:none;
+          z-index:2}
+.ed-empty p{color:var(--ink-3);font-size:15px;max-width:34ch;text-align:center}
+.ed-quick{position:absolute;z-index:6;width:min(300px,80vw)}
+.ed-quick input{width:100%;font:inherit;font-size:14px;padding:8px 10px;border-radius:8px;
+                border:1px solid var(--accent);background:var(--panel);color:var(--ink);
+                outline:none;box-shadow:0 6px 24px rgba(0,0,0,.14)}
+.ed-quick ul{list-style:none;margin:4px 0 0;padding:4px;background:var(--panel);
+             border:1px solid var(--rule);border-radius:8px;box-shadow:0 6px 24px rgba(0,0,0,.14)}
+.ed-quick li{padding:6px 8px;border-radius:6px;cursor:pointer;display:flex;gap:8px;
+             align-items:baseline}
+.ed-quick li b{font-weight:600}
+.ed-quick li small{color:var(--ink-3)}
+.ed-quick li[aria-selected="true"],.ed-quick li:hover{background:var(--tint);color:var(--accent)}
+
+.ed-popover{position:absolute;z-index:7;width:min(320px,calc(100vw - 24px));
+            padding:12px 14px 10px;box-shadow:0 10px 30px rgba(0,0,0,.18);
+            max-height:min(70vh,560px);overflow-y:auto}
+.ed-popover h4{margin:0 0 8px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;
+               color:var(--accent);display:flex;justify-content:space-between;align-items:center}
+.ed-popover h4 code{font-size:11px;text-transform:none;letter-spacing:0}
+.ed-popover label{display:grid;grid-template-columns:96px 1fr;gap:8px;align-items:center;
+                  margin:0 0 6px;font-size:13px;color:var(--ink-2)}
+.ed-popover input,.ed-popover select{font:inherit;font-size:13px;padding:5px 8px;
+   border:1px solid var(--rule);border-radius:6px;background:var(--paper);color:var(--ink);
+   min-width:0;width:100%}
+.ed-popover input:focus,.ed-popover select:focus{border-color:var(--accent);outline:none}
+.ed-popover .ed-row{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.ed-popover .ed-row button{padding:5px 11px;font-size:12.5px}
+.ed-popover .ed-danger{color:#b4442c;border-color:#b4442c}
+.ed-popover .ed-error{margin:8px 0 0;font-size:12.5px;color:#b4442c;white-space:pre-wrap}
+.ed-popover details{margin-top:6px}
+.ed-popover summary{cursor:pointer;font-size:12.5px;color:var(--ink-3);margin-bottom:6px}
+.ed-popover .ed-vias{list-style:none;margin:0;padding:0;font-family:var(--mono);font-size:12px}
+.ed-popover .ed-vias li{display:flex;gap:6px;align-items:center;margin-bottom:4px}
+.ed-popover .ed-vias button{padding:2px 8px;font-size:11px}
+
+.ed-menu{position:absolute;z-index:7;padding:6px;box-shadow:0 10px 30px rgba(0,0,0,.18);
+         min-width:220px}
+.ed-menu button{display:block;width:100%;text-align:left;border:0;border-radius:6px;
+                padding:8px 10px;background:none;font-size:13.5px}
+.ed-menu button:hover{background:var(--tint)}
+.ed-menu hr{border:0;border-top:1px solid var(--rule);margin:4px 0}
+.ed-toast{position:absolute;left:50%;bottom:16px;transform:translateX(-50%);z-index:8;
+          background:var(--ink);color:var(--paper);padding:8px 14px;border-radius:999px;
+          font-size:13px;box-shadow:0 6px 24px rgba(0,0,0,.2);max-width:80vw}
+.ed-present-label{position:absolute;left:18px;bottom:14px;z-index:3;font-size:14px;
+                  color:var(--ink-3);pointer-events:none}
+
+/* findings */
+#ed-findings{grid-area:findings;border-top:1px solid var(--rule);background:var(--panel);
+             max-height:40vh;display:flex;flex-direction:column}
+.ed-findings-summary{border:0;border-radius:0;background:none;text-align:left;
+                     padding:8px 14px;font-size:13px;width:100%}
+.ed-findings-summary:hover{color:var(--ink)}
+#ed-findings-list{list-style:none;margin:0;padding:0 14px 10px;overflow-y:auto;font-size:13px}
+#ed-findings-list li{padding:6px 8px;border-radius:6px;cursor:pointer;display:grid;
+                     grid-template-columns:auto 1fr;gap:8px;margin-bottom:2px}
+#ed-findings-list li:hover{background:var(--tint)}
+#ed-findings-list li .ed-code{font-family:var(--mono);font-size:12px;white-space:nowrap}
+#ed-findings-list li .ed-remedy{color:var(--ink-2);display:block;margin-top:2px}
+.ed-sev-error .ed-code{color:#b4442c}
+.ed-sev-warning .ed-code{color:#b0751c}
+.ed-sev-note .ed-code{color:var(--ink-3)}
+.ed-count-error{color:#b4442c;font-weight:600}
+.ed-count-warning{color:#b0751c;font-weight:600}
+
+/* the files drawer */
+.ed-drawer{position:fixed;top:0;left:0;bottom:0;width:min(360px,92vw);z-index:9;
+           background:var(--panel);border-right:1px solid var(--rule);
+           box-shadow:0 0 40px rgba(0,0,0,.2);padding:14px 16px;overflow-y:auto}
+.ed-drawer-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.ed-drawer-actions{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.ed-drawer-actions button,.ed-drawer-actions .btn{padding:6px 12px;font-size:13px;
+   display:inline-block}
+#ed-files,#ed-examples{list-style:none;margin:0;padding:0}
+#ed-files li,#ed-examples li{display:flex;align-items:center;gap:6px;padding:7px 8px;
+   border-radius:8px;cursor:pointer}
+#ed-files li:hover,#ed-examples li:hover{background:var(--tint)}
+#ed-files li.ed-current{border:1px solid var(--accent)}
+#ed-files li .ed-fname{flex:1;font-weight:500;overflow:hidden;text-overflow:ellipsis;
+   white-space:nowrap}
+#ed-files li small{color:var(--ink-3);white-space:nowrap}
+#ed-files li button{padding:3px 8px;font-size:11.5px}
+#ed-examples li{font-size:13px}
+
+/* present mode */
+body.ed-present{grid-template-columns:1fr;grid-template-rows:1fr;grid-template-areas:"stage"}
+body.ed-present #ed-top,body.ed-present #ed-palette,body.ed-present #ed-findings{display:none}
+body.ed-present #ed-paper{fill:none}
+body.ed-present #ed-hits,body.ed-present #ed-ui{display:none}
+
+/* small screens: the palette becomes a strip above the findings */
+@media (max-width:720px){
+  body{grid-template-columns:1fr;grid-template-rows:auto 1fr auto auto;
+       grid-template-areas:"top" "stage" "palette" "findings"}
+  #ed-palette{border-right:0;border-top:1px solid var(--rule);overflow-x:auto;overflow-y:hidden;
+              display:flex;gap:6px;padding:8px;max-height:112px}
+  #ed-palette h3{display:none}
+  .ed-cards{display:flex;gap:6px}
+  .ed-card{min-width:74px}
+  .ed-hint{display:none}
+  .ed-name{max-width:40vw}
+  .ed-tools button{padding:6px 9px}
+  .ed-version{display:none}
+}
