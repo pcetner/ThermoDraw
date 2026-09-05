@@ -138,8 +138,7 @@ def _wheel(into: pathlib.Path) -> None:
                              capture_output=True, text=True)
         if run.returncode:
             sys.exit("the wheel did not build (is `build` installed? it is "
-                     "in the dev extra):
-" + run.stdout + run.stderr)
+                     "in the dev extra):\n" + run.stdout + run.stderr)
         built = pathlib.Path(tmp) / WHEEL
         if not built.exists():
             sys.exit(f"build made no {WHEEL} in {tmp}: "
