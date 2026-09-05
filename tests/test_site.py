@@ -5,6 +5,7 @@ the only place it can be wrong is here and in the Pages workflow's log; a
 gallery page that failed to build would be found by a visitor.
 """
 import html
+import json
 import pathlib
 import sys
 
@@ -78,3 +79,21 @@ def test_every_link_and_image_on_both_indexes_resolves(site):
             path = (out / page).parent / target
             assert path.exists() or (path / "index.html").exists(), (
                 f"{page} -> {target}")
+
+
+def test_the_editor_is_on_the_site_with_its_wheel(site):
+    from thermodraw import __version__
+    out, _ = site
+    wheel = f"thermodraw-{__version__}-py3-none-any.whl"
+    assert (out / "editor" / wheel).stat().st_size > 100_000
+    page = (out / "editor" / "index.html").read_text(encoding="utf-8")
+    assert wheel in page and build_site.PYODIDE in page
+    assert "{{" not in page
+    assert page.count('class="ed-card"') == 18
+    examples = json.loads((out / "editor" / "examples.json").read_text(
+        encoding="utf-8"))
+    assert len(examples) == 17
+    for e in examples:
+        target = (out / "editor" / e["path"]).resolve()
+        assert target.is_file(), e
+        json.loads(target.read_text(encoding="utf-8"))

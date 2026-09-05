@@ -9,35 +9,10 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Serif:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="site.css">
 <style>
-:root{
-  --paper:#fcfcfd; --panel:#fff; --ink:#16181d; --ink-2:#565b66; --ink-3:#8b909b;
-  --rule:#e2e4e9; --accent:#b4442c; --tint:#f4f5f8;
-  --serif:"IBM Plex Serif",Georgia,serif;
-  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
-  --sans:"IBM Plex Sans","Helvetica Neue",Arial,sans-serif;
-}
-@media (prefers-color-scheme:dark){
-  :root{
-    --paper:#0f1115; --panel:#171a1f; --ink:#e9e7e2; --ink-2:#a2a7b2; --ink-3:#727884;
-    --rule:#2a2e36; --accent:#e8996b; --tint:#1b1f26;
-  }
-}
-*{box-sizing:border-box}
-body{margin:0;background:var(--paper);color:var(--ink);
-     font-family:var(--serif);font-size:17px;line-height:1.62;
-     -webkit-font-smoothing:antialiased}
 main{width:100%;max-width:1020px;margin:0 auto;
      padding:52px clamp(20px,3.5vw,56px) 96px}
-h1{font-size:clamp(27px,3.6vw,38px);font-weight:600;margin:0 0 6px;line-height:1.14}
-h2{font-family:var(--sans);font-size:15px;font-weight:600;letter-spacing:.02em;
-   margin:40px 0 6px;color:var(--ink)}
-.sub{font-family:var(--sans);font-size:15px;color:var(--ink-2);margin:0 0 28px;max-width:62ch}
-.crumb{font-family:var(--sans);font-size:14px;color:var(--ink-3);margin:0 0 18px}
-p{margin:0 0 14px;max-width:68ch;color:var(--ink-2)}
-a{color:var(--accent);text-decoration-thickness:1px;text-underline-offset:2px}
-code{font-family:var(--mono);font-size:.85em;background:var(--tint);
-     padding:1px 5px;border-radius:3px;color:var(--ink)}
 figure{margin:0 0 10px;background:var(--panel);border:1px solid var(--rule);
        border-radius:8px;padding:18px 20px}
 figure img{display:block;width:100%;height:auto}
@@ -50,6 +25,7 @@ figcaption{font-family:var(--sans);font-size:14px;color:var(--ink-2);margin:0 0 
             margin-bottom:5px;text-decoration:none}
 .links li a:hover{text-decoration:underline}
 .links li span{font-family:var(--sans);font-size:14px;color:var(--ink-2);line-height:1.5;display:block}
+.links li.first{grid-column:1 / -1;border-color:var(--accent)}
 .gallery{list-style:none;margin:0 0 8px;padding:0;display:grid;gap:14px;
          grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}
 .gallery li{background:var(--panel);border:1px solid var(--rule);border-radius:8px;
@@ -60,10 +36,6 @@ figcaption{font-family:var(--sans);font-size:14px;color:var(--ink-2);margin:0 0 
 .gallery li span{font-family:var(--sans);font-size:13.5px;line-height:1.4;display:block}
 .gallery li b{color:var(--ink-3);font-weight:500;margin-right:4px}
 .gallery li a:hover span{color:var(--accent)}
-pre{font-family:var(--mono);font-size:14px;background:var(--tint);padding:12px 16px;
-    border-radius:6px;overflow-x:auto;color:var(--ink);margin:0 0 14px}
-footer{font-family:var(--sans);font-size:13.5px;color:var(--ink-3);margin-top:56px;
-       padding-top:18px;border-top:1px solid var(--rule)}
 </style>
 </head>
 <body>
@@ -82,6 +54,7 @@ the numbers are estimates from public figures rather than SpaceX data, and
 <pre>pip install thermodraw</pre>
 
 <ul class="links">
+  <li class="first"><a href="editor/">Editor</a><span>Draw a network by hand, in the browser, with this library doing the drawing. Files stay in your browser; a link carries a diagram to anyone.</span></li>
   <li><a href="dictionary.html">Symbol dictionary</a><span>What each of the eighteen symbols means, and when to use it.</span></li>
   <li><a href="symbol-reference.html">Symbol reference</a><span>Every symbol at eight orientations, with the reasoning.</span></li>
   <li><a href="gallery/">Gallery</a><span>Fifteen networks drawn by agents who had only the schema and a brief.</span></li>

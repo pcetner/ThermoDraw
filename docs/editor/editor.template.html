@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Editor · ThermoDraw {{VERSION}}</title>
+<meta name="description" content="Draw a thermal network by hand, in the browser, with ThermoDraw doing the drawing.">
+<link rel="icon" href="../raptor.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Serif:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../site.css">
+<link rel="stylesheet" href="editor.css">
+<script>
+// What the script needs to know about this build. The wheel is the library
+// this page was built from, and the page cannot run without it.
+window.THERMODRAW = {version: "{{VERSION}}", wheel: "{{WHEEL}}", pyodide: "{{PYODIDE}}"};
+</script>
+</head>
+<body>
+<header id="ed-top">
+  <button type="button" id="ed-file" class="ed-name" title="Files">Untitled</button>
+  <div class="ed-tools">
+    <button type="button" id="ed-undo" title="Undo (Ctrl+Z)" disabled>Undo</button>
+    <button type="button" id="ed-redo" title="Redo (Ctrl+Shift+Z)" disabled>Redo</button>
+    <button type="button" id="ed-fit" title="Fit the drawing (F)">Fit</button>
+    <button type="button" id="ed-settings" title="Title, units, rail">Diagram</button>
+    <button type="button" id="ed-notation" aria-pressed="false" title="Circuit notation (Z)">Zigzags</button>
+    <button type="button" id="ed-physics" aria-pressed="false" title="Check that the numbers agree (P)">Physics</button>
+    <button type="button" id="ed-share" title="Copy a link that carries this diagram">Share</button>
+    <button type="button" id="ed-export" title="SVG, PNG, HTML page or JSON">Export</button>
+    <button type="button" id="ed-present" title="The drawing alone, full window (Esc leaves)">Present</button>
+    <button type="button" id="ed-theme" title="Light or dark (D)">Dark</button>
+    <a class="ed-version" href="https://github.com/pcetner/ThermoDraw/blob/main/CHANGELOG.md" title="ThermoDraw {{VERSION}}">{{VERSION}}</a>
+  </div>
+</header>
+
+<aside id="ed-palette" aria-label="Symbols">
+{{PALETTE}}
+<p class="ed-hint">Drag a symbol onto the drawing, or tap it and then tap the drawing. Or tap empty space and type its name.</p>
+</aside>
+
+<main id="ed-stage">
+  <svg id="ed-canvas" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 600" role="application" aria-label="The drawing">
+    <defs>
+      <pattern id="ed-grid" width="10" height="10" patternUnits="userSpaceOnUse">
+        <path d="M10 0H0V10" fill="none" stroke="var(--rule)" stroke-width="0.5"/>
+      </pattern>
+    </defs>
+    <rect id="ed-paper" x="-100000" y="-100000" width="200000" height="200000" fill="url(#ed-grid)"/>
+    <g id="ed-drawing"></g>
+    <g id="ed-hits"></g>
+    <g id="ed-ui"></g>
+  </svg>
+  <div id="ed-loading" class="ed-loading" role="status">
+    <div class="card">
+      <p><strong>Starting the library.</strong></p>
+      <p id="ed-loading-text">Fetching Python for the browser, about 10 MB, once.</p>
+    </div>
+  </div>
+  <div id="ed-empty" class="ed-empty" hidden>
+    <p>An empty drawing. Drag a symbol from the left, or tap here and type one.</p>
+  </div>
+  <div id="ed-quick" class="ed-quick" hidden>
+    <input id="ed-quick-input" type="text" autocomplete="off" spellcheck="false" placeholder="Type a symbol: cond, conv, fixed …" aria-label="Add a symbol by name">
+    <ul id="ed-quick-list"></ul>
+  </div>
+  <div id="ed-popover" class="ed-popover card" hidden></div>
+  <div id="ed-menu" class="ed-menu card" hidden></div>
+  <div id="ed-toast" class="ed-toast" hidden></div>
+  <div id="ed-present-label" class="ed-present-label" hidden></div>
+</main>
+
+<section id="ed-findings" aria-label="Findings">
+  <button type="button" id="ed-findings-toggle" class="ed-findings-summary" aria-expanded="false">
+    <span id="ed-findings-count">No findings</span>
+  </button>
+  <ul id="ed-findings-list" hidden></ul>
+</section>
+
+<aside id="ed-drawer" class="ed-drawer" hidden aria-label="Files">
+  <div class="ed-drawer-head">
+    <strong>Files</strong>
+    <button type="button" id="ed-drawer-close" title="Close">Close</button>
+  </div>
+  <div class="ed-drawer-actions">
+    <button type="button" id="ed-new">New</button>
+    <button type="button" id="ed-open-example">From an example</button>
+    <label class="btn">Import JSON<input type="file" id="ed-import" accept=".json,application/json" hidden></label>
+  </div>
+  <ul id="ed-files"></ul>
+  <ul id="ed-examples" hidden></ul>
+  <p class="ed-hint">Files live in this browser only. Export or share to take one elsewhere.</p>
+</aside>
+
+<script type="module" src="editor.js"></script>
+</body>
+</html>

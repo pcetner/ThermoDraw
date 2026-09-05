@@ -45,7 +45,7 @@ thermodraw = "thermodraw.__main__:main"
 # suite itself needs only pytest. Nothing here rasterises: cairosvg and
 # pillow were declared for a while, imported nowhere, and kept alive by a
 # CI job whose only purpose was to notice if they stopped installing.
-dev = ["pytest", "mypy", "fonttools", "brotli"]
+dev = ["pytest", "mypy", "fonttools", "brotli", "build"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
