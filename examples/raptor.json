@@ -1,0 +1,19 @@
+{
+  "title": "Raptor-class methalox throat wall, steady state, per cm² of liner — estimates from public figures, not SpaceX data",
+  "units": {"R": "K/W", "T": {"unit": "K", "scale": "absolute"}, "q": "W"},
+  "nodes": [
+    {"id": "gas",  "kind": "fixed", "label": "Combustion gas",  "sub": "g",  "value": "3500", "wall": "left"},
+    {"id": "hw",                    "label": "Liner hot face",  "sub": "hw", "value": "900"},
+    {"id": "cw",                    "label": "Channel wall",    "sub": "cw", "value": "650"},
+    {"id": "cool", "kind": "fixed", "label": "Methane coolant", "sub": "c",  "value": "300"}
+  ],
+  "branches": [
+    {"from": "gas", "to": "hw",   "kind": "conv", "label": "Gas-side convection",     "value": "0.283",  "rate": "9200"},
+    {"from": "gas", "to": "hw",   "kind": "rad",  "label": "Gas radiation",           "value": "3.25",   "rate": "800"},
+    {"from": "hw",  "to": "cw",   "kind": "cond", "label": "GRCop liner, 0.8 mm",     "value": "0.0250", "rate": "10000"},
+    {"from": "cw",  "to": "cool", "kind": "conv", "label": "Coolant-side convection", "value": "0.0350"}
+  ],
+  "sources": [
+    {"from": "cool", "kind": "flow", "label": "Carried to the injector", "value": "10000", "sub": "regen"}
+  ]
+}
