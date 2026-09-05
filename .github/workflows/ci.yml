@@ -51,6 +51,11 @@ jobs:
         # got a named step — and the dictionary is the page a reader opens.
         run: python tools/gen_dictionary.py --check
 
+      - name: The site builds
+        # What pages.yml deploys, built here on both platforms so a gallery
+        # page that fails to render is a red job and not a broken link.
+        run: python tools/build_site.py "${{ runner.temp }}/site"
+
       - name: Nothing was regenerated in place
         # The freshness guards read; if one ever writes, the checkout is dirty
         # and the run should say so rather than pass quietly.

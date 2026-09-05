@@ -5,6 +5,7 @@ venv/
 build/
 dist/
 out/
+site/
 *.egg-info/
 .pytest_cache/
 .DS_Store
@@ -20,3 +21,4 @@ PLAN.md
 # cannot be clean. This is here so an accidental copy cannot be committed.
 ThermoDraw-cleanroom*/
 .coverage
+.gstack/
