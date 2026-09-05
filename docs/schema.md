@@ -383,8 +383,8 @@ and sink thermal masses on the rail:
 }
 ```
 
-That file is `examples/hero.json`, and it renders the diagram at the top of
-the README.
+That file is `examples/hero.json`, the worked example this page and the
+tests use.
 
 ## Coordinates
 

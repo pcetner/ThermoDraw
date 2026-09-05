@@ -226,8 +226,8 @@ EDITS = [
      "A body losing heat to still air by one path, with the dissipation "
      "that\nputs it there:"),
 
-    ("That file is `examples/hero.json`, and it renders the diagram at the "
-     "top of\nthe README.",
+    ("That file is `examples/hero.json`, the worked example this page and "
+     "the\ntests use.",
      "That is a whole file. Two nodes, one path, one source, and numbers "
      "that\nclose: 65 K over 0.5 K/W is the 130 W the source puts in."),
 
