@@ -4,7 +4,7 @@ html,body{height:100%;overflow:hidden}
 [hidden]{display:none !important}  /* a display rule on a class must not undo `hidden` */
 body{display:grid;font-family:var(--sans);font-size:14px;line-height:1.4;
      grid-template-rows:auto 1fr auto;
-     grid-template-columns:224px 1fr 236px;
+     grid-template-columns:212px 1fr 264px;
      grid-template-areas:"top top top" "files stage palette" "findings findings findings"}
 
 /* the top bar: groups with a caption each, so a button reads in context */
@@ -25,6 +25,7 @@ body{display:grid;font-family:var(--sans);font-size:14px;line-height:1.4;
 
 /* the two side panels */
 #ed-files-panel,#ed-palette{overflow-y:auto;background:var(--paper);padding:10px 10px 24px}
+#ed-palette{padding-bottom:10px}
 #ed-files-panel{grid-area:files;border-right:1px solid var(--rule)}
 #ed-palette{grid-area:palette;border-left:1px solid var(--rule)}
 .ed-panel-head{display:flex;justify-content:space-between;align-items:center;margin:2px 4px 8px}
@@ -48,17 +49,22 @@ body{display:grid;font-family:var(--sans);font-size:14px;line-height:1.4;
 #ed-examples li:hover{background:var(--tint);color:var(--accent)}
 .ed-hint{font-size:12px;color:var(--ink-3);margin:14px 4px 0;line-height:1.45}
 
-/* the palette */
-#ed-palette h3{font-size:11px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;
-               color:var(--accent);margin:12px 4px 6px}
-.ed-cards{display:grid;grid-template-columns:1fr 1fr;gap:6px}
-.ed-card{display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 4px 5px;
-         border-radius:8px;background:var(--panel);border:1px solid var(--rule);
+/* The palette. Eighteen components have to be visible at once: a panel you
+   scroll to find the symbol you want is a panel that hides half the
+   vocabulary. Three columns and a 30px glyph fit them all above 800px. */
+#ed-palette h3{font-size:10.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;
+               color:var(--accent);margin:8px 3px 4px;line-height:1.25}
+/* four across, because every group but one has four symbols in it: at
+   three the odd one takes a row of its own and the panel needs scrolling */
+.ed-cards{display:grid;grid-template-columns:repeat(4,1fr);gap:4px}
+.ed-card{display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:1px;
+         padding:4px 2px 3px;border-radius:7px;background:var(--panel);border:1px solid var(--rule);
          cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none;
-         min-height:64px;white-space:normal;line-height:1.15}
-.ed-card svg{width:100%;height:auto;max-height:44px;pointer-events:none}
-.ed-card span{font-size:11px;color:var(--ink-2);text-align:center}
+         white-space:normal;line-height:1.1}
+.ed-card svg{width:100%;height:30px;pointer-events:none}
+.ed-card span{font-size:10px;color:var(--ink-2);text-align:center;hyphens:auto}
 .ed-card[aria-pressed="true"]{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
+.ed-card:hover{border-color:var(--accent)}
 
 /* the stage */
 #ed-stage{grid-area:stage;position:relative;overflow:hidden;background:var(--paper);
@@ -165,11 +171,23 @@ body{display:grid;font-family:var(--sans);font-size:14px;line-height:1.4;
 /* findings */
 #ed-findings{grid-area:findings;border-top:1px solid var(--rule);background:var(--panel);
              max-height:40vh;display:flex;flex-direction:column}
+.ed-findings-bar{display:flex;align-items:center;gap:4px}
 .ed-findings-summary{border:0;border-radius:0;background:none;text-align:left;
-                     padding:8px 14px;font-size:13px;width:100%;display:flex;gap:10px;
-                     justify-content:space-between}
+                     padding:8px 14px;font-size:13px;flex:1;min-width:0;display:flex;gap:10px;
+                     justify-content:space-between;align-items:baseline}
 .ed-findings-summary:hover{color:var(--ink)}
 .ed-findings-more{color:var(--ink-3)}
+/* the first finding, so a warning is legible before the list is opened */
+.ed-first{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+          color:var(--ink-2);margin-left:10px;text-align:left}
+/* the check that produces the findings sits with them, not in the top bar */
+.ed-check,.ed-popover label.ed-check{display:flex;align-items:center;gap:7px;cursor:pointer;
+      font-size:13px;line-height:1.3}
+.ed-popover label.ed-check{margin:2px 0 10px}
+.ed-popover label.ed-check input{width:15px !important;flex:none}
+.ed-check input{width:15px;height:15px;accent-color:var(--accent);margin:0;cursor:pointer}
+.ed-physics-check{padding:6px 14px 6px 10px;white-space:nowrap;border-left:1px solid var(--rule)}
+.ed-said{margin:0;padding:0 14px 8px;font-size:12.5px;color:var(--ink-2);max-width:none}
 #ed-findings-list{list-style:none;margin:0;padding:0 14px 10px;overflow-y:auto;font-size:13px}
 #ed-findings-list li{padding:6px 8px;border-radius:6px;cursor:pointer;display:grid;
                      grid-template-columns:auto 1fr;gap:8px;margin-bottom:2px}
@@ -182,27 +200,63 @@ body{display:grid;font-family:var(--sans);font-size:14px;line-height:1.4;
 .ed-count-error{color:#b4442c;font-weight:600}
 .ed-count-warning{color:#b0751c;font-weight:600}
 
+/* an angle: never a blank box, and two buttons that turn it in 45s */
+.ed-rot .ed-rot-c{display:flex;align-items:center;gap:3px}
+.ed-rot input{width:56px !important;text-align:center}
+.ed-rot button{padding:3px 8px !important;font-size:13px !important;line-height:1.1}
+.ed-rot .ed-rot-reset{font-size:11.5px !important;padding:3px 7px !important;color:var(--ink-3)}
+
+/* the tour: a card beside whatever the step is about, over the whole page */
+.ed-tour{position:fixed;z-index:11;width:min(276px,calc(100vw - 20px));padding:12px 14px 10px;
+         box-shadow:0 12px 36px rgba(0,0,0,.22);font-size:13.5px;line-height:1.45}
+.ed-tour p{margin:0 0 8px;max-width:none}
+.ed-tour .ed-tour-n{font-size:10.5px;font-weight:600;letter-spacing:.09em;
+                    text-transform:uppercase;color:var(--accent);margin-bottom:5px}
+.ed-tour .ed-row{margin:0}
+.ed-tour button{padding:4px 12px;font-size:12.5px}
+.ed-tour-done button{border-color:var(--accent);color:var(--accent)}
+.ed-tour-offer{display:flex;align-items:center;gap:10px;margin:0 0 12px !important;
+               color:var(--ink-2);max-width:none}
+.ed-tour-offer button{border-color:var(--accent);color:var(--accent);white-space:nowrap}
+/* what the step is pointing at */
+.ed-tour-mark{outline:2px solid var(--accent);outline-offset:2px;border-radius:8px;
+              animation:ed-pulse 1.6s ease-in-out infinite}
+rect.ed-tour-mark{fill:var(--accent);fill-opacity:.14}
+@keyframes ed-pulse{50%{outline-color:transparent}}
+@media (prefers-reduced-motion:reduce){.ed-tour-mark{animation:none}}
+
 /* present mode */
 body.ed-present{grid-template-columns:1fr;grid-template-rows:1fr;grid-template-areas:"stage"}
 body.ed-present #ed-top,body.ed-present #ed-palette,body.ed-present #ed-findings,
 body.ed-present #ed-files-panel{display:none}
 body.ed-present #ed-paper{fill:none}
 body.ed-present #ed-hits,body.ed-present #ed-ui,body.ed-present #ed-mode{display:none}
+body.ed-present #ed-tour{display:none}
 
 /* small screens: files become an overlay, the palette a strip above the findings */
 @media (max-width:820px){
   body{grid-template-columns:1fr;grid-template-rows:auto 1fr auto auto;
        grid-template-areas:"top" "stage" "palette" "findings"}
   .ed-narrow-only{display:inline-block}
+  .ed-wide-only{display:none}
   .ed-cap{display:none}
-  .ed-name{max-width:40vw}
+  .ed-name{max-width:36vw}
+  /* one row: the pills used to wrap to four and take a quarter of a phone.
+     Delete joins the overflow menu; it is also on every element's card. */
+  #ed-top{flex-wrap:nowrap;gap:4px;padding:6px 8px;overflow:hidden}
   #ed-top button{padding:5px 8px}
+  #ed-delete{display:none}
+  .ed-group-file{min-width:0}
+  .ed-findings-bar{flex-wrap:wrap}
+  .ed-physics-check{border-left:0;padding:2px 14px 8px;font-size:12.5px}
+  .ed-findings-summary{flex-basis:100%}
+  .ed-first{display:none}
   #ed-files-panel{position:fixed;top:0;left:0;bottom:0;width:min(340px,92vw);z-index:9;
                   background:var(--panel);border-right:1px solid var(--rule);
                   box-shadow:0 0 40px rgba(0,0,0,.2);display:none}
   #ed-files-panel.ed-open{display:block}
   #ed-palette{border-left:0;border-top:1px solid var(--rule);overflow-x:auto;overflow-y:hidden;
-              display:flex;gap:6px;padding:8px;max-height:118px;align-items:flex-start}
+              display:flex;gap:6px;padding:8px;max-height:96px;align-items:flex-start}
   #ed-palette h3,#ed-palette .ed-panel-head,#ed-palette .ed-hint{display:none}
   .ed-cards{display:flex;gap:6px}
   .ed-card{min-width:74px}
