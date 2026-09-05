@@ -58,9 +58,13 @@ GALLERY_REMOVE = [
     "CLAUDE.md", "README.md", "CHANGELOG.md", "Dictionary.html",
     "docs/design-record.md", "docs/symbol-reference.html",
     "docs/dictionary.template.html", "docs/symbol-reference.template.html",
+    "docs/site.template.html",
     ".claude", ".github", "docs/assets", "docs/notation-test", "tests",
     "tools",
     "examples/hero.json", "examples/build_ladder.py",
+    # The README hero, its sources and its arithmetic: a finished, solved
+    # diagram with no `at`, which is exactly what a run-4 brief asks for.
+    "examples/raptor.json", "examples/raptor.md",
     "examples/render_demo.py", "examples/render_reference.py",
     "examples/gallery/README.md", "examples/gallery/RERUN.md",
     "examples/gallery/FINDINGS.md", "examples/gallery/FINDINGS-first-run.md",
@@ -114,7 +118,8 @@ PROFILES = {
         "needs_briefs": True,
         "strip_schema": True,
         "forbidden": ("CLAUDE.md", ".claude", "tests", "tools",
-                      "docs/design-record.md", "examples/hero.json"),
+                      "docs/design-record.md", "examples/hero.json",
+                      "examples/raptor.json"),
         "wanted": (),
     },
     "review": {
