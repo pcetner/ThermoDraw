@@ -1,0 +1,58 @@
+name: Pages
+
+# The site is assembled from the checkout by tools/build_site.py: the two
+# generated pages copied, the hero and every gallery diagram as the
+# library's own page, and one hand-written index. Nothing is committed for
+# it; it is rebuilt on every push to main and served by GitHub Pages from
+# the workflow's artifact. Pages has to be set to "GitHub Actions" as its
+# source once, in the repository's settings.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: build the site
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e .
+
+      - name: Build
+        run: python tools/build_site.py site
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    name: deploy
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
