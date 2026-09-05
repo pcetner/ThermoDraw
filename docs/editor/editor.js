@@ -1,11 +1,15 @@
 // The editor. One file, no framework: state, the canvas, the interactions,
-// the popover, the findings strip, the files drawer, share and present.
+// the popover, the findings strip, the files panel, share and present.
 //
 // The library does every drawing. This script keeps the diagram as the
 // JSON the schema describes, sends it to the worker after every edit, and
 // puts back what comes out: the page's parts inside its own <svg>, one
 // transparent rectangle per thing that can be clicked, and the findings.
 // Nothing here knows how a symbol looks.
+//
+// The workflow it is built around: drag components in (nodes go anywhere,
+// a path or a source lands on a node), double-click a node to connect it
+// to another, click anything to edit it.
 
 const $ = (id) => document.getElementById(id);
 const BUILD = window.THERMODRAW;
@@ -55,8 +59,8 @@ const S = {
   data: null,            // the diagram, as JSON
   scene: null,           // the last good scene from the library
   sel: null,             // {role, index} or null
-  mode: "idle",          // idle | place | connect | attach
-  pending: null,         // the palette entry waiting for a place or a node
+  mode: "idle",          // idle | place | connect
+  pending: null,         // place: the palette entry; connect: {fromId, kind}
   view: {x: 0, y: 0, w: 1000, h: 600},
   undo: [], redo: [],
   notation: "boxes", physics: false,
@@ -70,7 +74,7 @@ const KINDS = {
   branch: ["cond", "conv", "rad", "contact", "spread", "pipe", "mixed", "cap", "flow", "break"],
   source: ["diss", "radin", "flow", "flux"],
 };
-const NAMES = {};  // key -> name, from the palette in the page
+const NAMES = {};  // role:kind -> name, from the palette in the page
 for (const b of document.querySelectorAll(".ed-card")) {
   NAMES[`${b.dataset.role}:${b.dataset.kind}`] = b.querySelector("span").textContent;
 }
@@ -79,6 +83,7 @@ const kindName = (role, kind) => NAMES[`${role}:${kind}`] || kind;
 // -------------------------------------------------------------- the model
 const list = (role) => S.data[{node: "nodes", branch: "branches", source: "sources"}[role]];
 const element = (sel) => (sel ? list(sel.role)[sel.index] : null);
+const nodeById = (id) => S.data.nodes.find((n) => n.id === id);
 
 function newNodeId() {
   const used = new Set(S.data.nodes.map((n) => n.id));
@@ -106,14 +111,14 @@ function undo() {
   if (!S.undo.length) return;
   S.redo.push(snapshot());
   S.data = JSON.parse(S.undo.pop());
-  closePopover();
+  select(null);
   afterEdit();
 }
 function redo() {
   if (!S.redo.length) return;
   S.undo.push(snapshot());
   S.data = JSON.parse(S.redo.pop());
-  closePopover();
+  select(null);
   afterEdit();
 }
 
@@ -159,7 +164,6 @@ function fit(box) {
   const ink = box || (S.scene && S.scene.ink);
   const st = stageSize();
   if (st.w < 50 || st.h < 50) return;   // not laid out yet; the observer refits
-  S.fitted = true;
   if (!ink || ink[2] <= ink[0]) {
     setView({x: -st.w / 2, y: -st.h / 2, w: st.w, h: st.h});
     return;
@@ -171,6 +175,11 @@ function fit(box) {
   const vw = st.w * scale, vh = st.h * scale;
   setView({x: (ink[0] + ink[2]) / 2 - vw / 2, y: (ink[1] + ink[3]) / 2 - vh / 2, w: vw, h: vh});
 }
+
+// The stage's size settles after the page's first paint and changes with
+// the window; until the reader has panned or zoomed, the drawing stays
+// fitted through both.
+new ResizeObserver(() => { if (!S.touched) fit(); }).observe($("ed-stage"));
 
 function toPage(clientX, clientY) {
   const m = canvas.getScreenCTM();
@@ -185,11 +194,6 @@ function toScreen(x, y) {
   return {x: p.x - r.left, y: p.y - r.top};
 }
 const unitsPerPixel = () => S.view.w / stageSize().w;
-
-// The stage's size settles after the page's first paint and changes with
-// the window; until the reader has panned or zoomed, the drawing stays
-// fitted through both.
-new ResizeObserver(() => { if (!S.touched) fit(); }).observe($("ed-stage"));
 
 function zoomAt(clientX, clientY, factor) {
   S.touched = true;
@@ -218,6 +222,7 @@ function refresh() {
       buildHits(scene.hits);
       showFindings(scene.findings);
       if (S.sel) drawSelection();
+      if (S.mode === "connect") markFrom();
       if (!S.dirty && S.data.nodes.some((n) => !n.at)) bake();
     }
     $("ed-empty").hidden = S.data.nodes.length > 0;
@@ -242,7 +247,6 @@ async function bake() {
     const solved = await rpc.call("solve", S.data);
     if (!solved.error && S.data.nodes.some((n) => !n.at)) {
       S.data = solved;
-      S.undo = S.undo.map((snap) => snap);   // earlier snapshots stay as written
       save();
     }
   } finally { baking = false; }
@@ -287,24 +291,13 @@ function svgEl(name, attrs, cls) {
 }
 
 function drawSelection() {
-  ui.innerHTML = "";
+  ui.querySelectorAll(".ed-sel, .ed-via").forEach((e) => e.remove());
   if (!S.sel) return;
   const b = boundsOf(S.sel);
   if (!b) return;
   const upp = unitsPerPixel();
   ui.appendChild(svgEl("rect", {x: b[0] - 3, y: b[1] - 3, width: b[2] - b[0] + 6, height: b[3] - b[1] + 6, rx: 3}, "ed-sel"));
   const el = element(S.sel);
-  if (S.sel.role === "node" && el) {
-    // the connect handle, off the right edge, finger-sized on screen
-    const r = 11 * upp;
-    const hx = b[2] + 14 * upp, hy = (b[1] + b[3]) / 2;
-    const h = svgEl("circle", {cx: hx, cy: hy, r}, "ed-handle");
-    h.dataset.handle = "connect";
-    ui.appendChild(h);
-    const t = svgEl("text", {x: hx, y: hy + 3.5 * upp, "text-anchor": "middle", "font-size": 10 * upp}, "ed-handle-label");
-    t.textContent = "+";
-    ui.appendChild(t);
-  }
   if (S.sel.role === "branch" && el && el.via && el.via.length) {
     el.via.forEach(([x, y], i) => {
       const v = svgEl("circle", {cx: x, cy: y, r: 7 * upp}, "ed-via");
@@ -315,7 +308,6 @@ function drawSelection() {
 }
 
 // -------------------------------------------------------------- findings
-const SEV_ORDER = {error: 0, warning: 1, note: 2};
 function showFindings(findings) {
   const list = $("ed-findings-list");
   list.innerHTML = "";
@@ -364,12 +356,13 @@ function escapeHtml(s) {
 }
 
 // ------------------------------------------------------------ interaction
-let drag = null;  // {kind, sel, start, orig, moved, snapshot} | pan | connect | via | palette
+let drag = null;  // {kind: element|pan|via, ...}
 const pointers = new Map();
 let pinch = null;
+let lastTap = null;   // {sel, t, x, y} for a double-tap on touch
 
 function hitAt(target) {
-  const r = target.closest ? target.closest("#ed-hits rect") : null;
+  const r = target && target.closest ? target.closest("#ed-hits rect") : null;
   return r ? {role: r.dataset.role, index: +r.dataset.index, element: r.dataset.element, rect: r} : null;
 }
 
@@ -385,27 +378,22 @@ canvas.addEventListener("pointerdown", (e) => {
   closeQuick(); closeMenu();
   canvas.setPointerCapture(e.pointerId);
   const p = toPage(e.clientX, e.clientY);
-  const handle = e.target.dataset && e.target.dataset.handle;
   const via = e.target.dataset && e.target.dataset.via;
-  if (handle === "connect" && S.sel && S.sel.role === "node") {
-    drag = {kind: "connect", from: element(S.sel).id, start: p, moved: false};
-    return;
-  }
   if (via !== undefined && S.sel && S.sel.role === "branch") {
     drag = {kind: "via", sel: S.sel, i: +via, start: p, orig: [...element(S.sel).via[+via]], moved: false, snapshot: snapshot()};
     return;
   }
   const hit = hitAt(e.target);
+  if (S.mode === "connect") {
+    // connection mode: the next node clicked is the other end
+    if (hit && hit.role === "node") finishConnect(S.pending.fromId, element(hit).id, S.pending.kind);
+    else setMode("idle");
+    return;
+  }
   if (S.mode === "place" && S.pending) {
     if (S.pending.role === "node") { placeNode(S.pending.kind, p); return; }
-    if (hit && hit.role === "node") { startPendingOn(hit); return; }
-    // a branch or a source needs a node; tapping empty space cancels
-    setMode("idle"); return;
-  }
-  if (S.mode === "connect" && S.pending) {
-    if (hit && hit.role === "node") {
-      finishConnect(S.pending.fromId, element(hit).id, S.pending.kind);
-    } else setMode("idle");
+    if (hit && hit.role === "node") { dropOnNode(S.pending, hit); return; }
+    setMode("idle");
     return;
   }
   if (hit) {
@@ -435,8 +423,13 @@ canvas.addEventListener("pointermove", (e) => {
     const v = pinch.view;
     const w = clamp(v.w * f, 200, 20000), h = v.h * (w / v.w);
     const p = toPage(mid.x, mid.y);
+    S.touched = true;
     setView({x: p.x - (p.x - v.x) * (w / v.w), y: p.y - (p.y - v.y) * (h / v.h), w, h});
     return;
+  }
+  if (S.mode === "connect" && !drag) {
+    const from = nodeById(S.pending.fromId);
+    if (from && from.at) rubber({x: from.at[0], y: from.at[1]}, toPage(e.clientX, e.clientY));
   }
   if (!drag) { hover(e.target); return; }
   const p = toPage(e.clientX, e.clientY);
@@ -454,9 +447,6 @@ canvas.addEventListener("pointermove", (e) => {
   } else if (drag.kind === "via") {
     element(drag.sel).via[drag.i] = [snap(drag.orig[0] + dx), snap(drag.orig[1] + dy)];
     refresh();
-  } else if (drag.kind === "connect") {
-    rubber(drag.start, p);
-    hover(e.target);
   }
 });
 
@@ -477,41 +467,37 @@ canvas.addEventListener("pointerup", (e) => {
       afterEdit();
       select(d.sel, false);
     } else {
+      // a second tap on the same node within a moment is a double-tap: the
+      // touch form of the double-click that starts a connection
+      const now = performance.now();
+      if (e.pointerType !== "mouse" && lastTap && lastTap.role === d.sel.role && lastTap.index === d.sel.index
+          && now - lastTap.t < 400 && Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) < 20) {
+        lastTap = null;
+        if (d.sel.role === "node") { startConnect(element(d.sel).id, "cond"); return; }
+      }
+      lastTap = {role: d.sel.role, index: d.sel.index, t: now, x: e.clientX, y: e.clientY};
       select(d.sel, true);
     }
     return;
   }
   if (d.kind === "via") {
     if (d.moved) { S.undo.push(d.snapshot); S.redo.length = 0; afterEdit(); }
-    return;
-  }
-  if (d.kind === "connect") {
-    ui.querySelectorAll(".ed-rubber").forEach((r) => r.remove());
-    const hit = hitAt(document.elementFromPoint(e.clientX, e.clientY));
-    if (hit && hit.role === "node" && element(hit).id !== d.from) {
-      finishConnect(d.from, element(hit).id, "cond");
-    } else if (railNear(p)) {
-      finishConnect(d.from, "rail", "cap");
-    } else if (!d.moved) {
-      // a tap on the handle: connect by tapping the other node next
-      setMode("connect", {fromId: d.from, kind: "cond"});
-      toast("Now tap the node to connect to.");
-    }
   }
 });
 canvas.addEventListener("pointercancel", (e) => { pointers.delete(e.pointerId); drag = null; pinch = null; canvas.classList.remove("ed-pan"); });
 
-function railNear(p) {
-  const r = S.data.rail;
-  if (!r) return false;
-  const y = r.y != null ? r.y : railY();
-  return y != null && Math.abs(p.y - y) < 12 * unitsPerPixel();
-}
-function railY() {
-  // the library drops an unstated rail 222 below the lowest node
-  const ys = S.data.nodes.filter((n) => n.at).map((n) => n.at[1]);
-  return ys.length ? Math.max(...ys) + 222 : null;
-}
+// the double-click that starts a connection
+canvas.addEventListener("dblclick", (e) => {
+  if (S.present) return;
+  // the pointer was captured on the way down, so the event's target is the
+  // canvas; what is under the pointer is what was double-clicked
+  const hit = hitAt(document.elementFromPoint(e.clientX, e.clientY));
+  drag = null;
+  if (hit && hit.role === "node") {
+    e.preventDefault();
+    startConnect(element(hit).id, "cond");
+  }
+});
 
 function rubber(a, b) {
   let l = ui.querySelector(".ed-rubber");
@@ -534,6 +520,7 @@ canvas.addEventListener("wheel", (e) => {
     zoomAt(e.clientX, e.clientY, Math.exp(e.deltaY * 0.0015));
   } else {
     const upp = unitsPerPixel();
+    S.touched = true;
     setView({...S.view, x: S.view.x + e.deltaX * upp, y: S.view.y + e.deltaY * upp});
   }
 }, {passive: false});
@@ -541,14 +528,46 @@ canvas.addEventListener("wheel", (e) => {
 function select(sel, popover = true) {
   S.sel = sel;
   drawSelection();
+  $("ed-delete").disabled = !sel;
   if (sel && popover) openPopover(sel); else closePopover();
 }
 
+// ------------------------------------------------------------------ modes
+// What the drawing is waiting for, said in a pill at the top of the stage.
 function setMode(mode, pending = null) {
   S.mode = mode; S.pending = pending;
-  canvas.classList.toggle("ed-place", mode !== "idle");
+  canvas.classList.toggle("ed-place", mode === "place");
+  canvas.classList.toggle("ed-connect", mode === "connect");
   document.querySelectorAll(".ed-card").forEach((c) => c.setAttribute("aria-pressed",
     String(mode === "place" && pending && c.dataset.key === pending.key)));
+  hitsG.querySelectorAll(".ed-from").forEach((r) => r.classList.remove("ed-from"));
+  ui.querySelectorAll(".ed-rubber").forEach((r) => r.remove());
+  const pill = $("ed-mode");
+  let text = "";
+  if (mode === "connect") {
+    const from = nodeById(pending.fromId);
+    text = `Connecting from <b>${escapeHtml((from && from.label) || pending.fromId)}</b> with ${escapeHtml(kindName("branch", pending.kind).toLowerCase())}: click the node it joins`;
+    markFrom();
+  } else if (mode === "place" && pending) {
+    text = pending.role === "node" ? `Click where the ${escapeHtml(kindName("node", pending.kind).toLowerCase())} goes`
+         : pending.role === "source" ? `Click the node this ${escapeHtml(kindName("source", pending.kind).toLowerCase())} joins`
+         : `Click the node this ${escapeHtml(kindName("branch", pending.kind).toLowerCase())} leaves from, then the node it reaches`;
+  }
+  pill.innerHTML = text ? `<span>${text}</span><button type="button" id="ed-mode-cancel">Cancel (Esc)</button>` : "";
+  pill.hidden = !text;
+  if (text) $("ed-mode-cancel").addEventListener("click", () => setMode("idle"));
+}
+
+function markFrom() {
+  if (S.mode !== "connect") return;
+  const idx = S.data.nodes.findIndex((n) => n.id === S.pending.fromId);
+  hitsOf({role: "node", index: idx}).forEach((r) => r.classList.add("ed-from"));
+}
+
+function startConnect(fromId, kind) {
+  closePopover();
+  select(null);
+  setMode("connect", {fromId, kind});
 }
 
 // ------------------------------------------------------------ adding
@@ -563,14 +582,12 @@ function placeNode(kind, p) {
   select({role: "node", index: S.data.nodes.length - 1});
 }
 
-function startPendingOn(hit) {
+// A path or a source dropped on a node: a source attaches there; a path
+// starts a connection from there, with its kind, and waits for the other end.
+function dropOnNode(entry, hit) {
   const id = element(hit).id;
-  if (S.pending.role === "source") {
-    attachSource(S.pending.kind, id);
-  } else if (S.pending.role === "branch") {
-    setMode("connect", {fromId: id, kind: S.pending.kind});
-    toast(`Now tap the node this ${kindName("branch", S.pending.kind).toLowerCase()} goes to.`);
-  }
+  if (entry.role === "source") attachSource(entry.kind, id);
+  else if (entry.role === "branch") startConnect(id, entry.kind);
 }
 
 // Which way a new source should arrive: the side of the node with nothing
@@ -579,21 +596,20 @@ function startPendingOn(hit) {
 // are known, so the emptiest of the four sides wins, above first.
 function freeSide(nodeId) {
   const d = S.data;
-  const node = d.nodes.find((n) => n.id === nodeId);
+  const node = nodeById(nodeId);
   if (!node || !node.at) return 0;
   const taken = [];
   const other = (a, b) => (a === nodeId ? b : a);
   for (const b of d.branches) {
     if (b.from !== nodeId && b.to !== nodeId) continue;
     const id = other(b.from, b.to);
-    const n = d.nodes.find((x) => x.id === id);
+    const n = nodeById(id);
     const to = b.via && b.via.length ? (b.from === nodeId ? b.via[0] : b.via[b.via.length - 1]) : (n && n.at);
     if (id === "rail") taken.push(90);
     else if (to) taken.push((Math.atan2(to[1] - node.at[1], to[0] - node.at[0]) * 180 / Math.PI + 360) % 360);
   }
   for (const s of d.sources) if ((s.to || s.from) === nodeId) taken.push(((s.angle || 0) + (s.from ? 0 : 180)) % 360);
   if (node.kind === "fixed" || node.kind === "break") taken.push({down: 90, up: 270, left: 180, right: 0}[node.wall || "down"]);
-  // a source at `angle` sits on the side at angle+180 for an inbound one
   const candidates = [90, 0, 270, 180];   // above, left, below, right
   const gap = (a) => Math.min(...taken.map((t) => { const dd = Math.abs(((a + 180) % 360) - t) % 360; return Math.min(dd, 360 - dd); }), 999);
   return candidates.reduce((best, a) => (gap(a) > gap(best) ? a : best), candidates[0]);
@@ -612,13 +628,13 @@ function attachSource(kind, nodeId) {
 }
 
 function finishConnect(fromId, toId, kind) {
-  if (fromId === toId) { setMode("idle"); toast("A path needs two different nodes."); return; }
+  setMode("idle");
+  if (fromId === toId) { toast("A path needs two different nodes."); return; }
   edit((d) => {
     const b = {from: fromId, to: toId};
     if (kind !== "cond") b.kind = kind;
     d.branches.push(b);
   });
-  setMode("idle");
   select({role: "branch", index: S.data.branches.length - 1});
 }
 
@@ -642,15 +658,19 @@ document.querySelectorAll(".ed-card").forEach((card) => {
     }
     cardDrag.ghost.style.left = (e.clientX - 55) + "px";
     cardDrag.ghost.style.top = (e.clientY - 30) + "px";
+    // the node under the ghost lights up when a path or a source can land on it
+    const over = document.elementFromPoint(e.clientX, e.clientY);
+    hover(entry.role === "node" ? null : over);
   });
   const finish = (e) => {
     if (!cardDrag) return;
     const d = cardDrag; cardDrag = null;
     if (d.ghost) d.ghost.remove();
+    hover(null);
     if (!d.moved) {
       // a tap arms the card; a second tap disarms it
       if (S.mode === "place" && S.pending && S.pending.key === d.entry.key) setMode("idle");
-      else { setMode("place", d.entry); toast(d.entry.role === "node" ? "Tap the drawing to place it." : d.entry.role === "source" ? "Tap the node it joins." : "Tap the node it leaves from."); }
+      else setMode("place", d.entry);
       return;
     }
     const over = document.elementFromPoint(e.clientX, e.clientY);
@@ -658,11 +678,11 @@ document.querySelectorAll(".ed-card").forEach((card) => {
     const p = toPage(e.clientX, e.clientY);
     const hit = hitAt(over);
     if (d.entry.role === "node") placeNode(d.entry.kind, p);
-    else if (hit && hit.role === "node") { S.pending = d.entry; startPendingOn(hit); }
-    else { setMode("place", d.entry); toast(d.entry.role === "source" ? "Drop it on a node, or tap the node it joins." : "Tap the node it leaves from."); }
+    else if (hit && hit.role === "node") dropOnNode(d.entry, hit);
+    else { setMode("place", d.entry); toast(d.entry.role === "source" ? "A source joins a node: drop it on one, or click the node." : "A path joins two nodes: drop it on the first, or click it."); }
   };
   card.addEventListener("pointerup", finish);
-  card.addEventListener("pointercancel", () => { if (cardDrag && cardDrag.ghost) cardDrag.ghost.remove(); cardDrag = null; });
+  card.addEventListener("pointercancel", () => { if (cardDrag && cardDrag.ghost) cardDrag.ghost.remove(); cardDrag = null; hover(null); });
 });
 
 // quick add: tap empty space, type a name
@@ -713,7 +733,7 @@ function chooseQuick(it) {
   const p = quickAt;
   closeQuick();
   if (it.role === "node") placeNode(it.kind, p);
-  else { setMode("place", it); toast(it.role === "source" ? "Tap the node it joins." : "Tap the node it leaves from."); }
+  else setMode("place", it);
 }
 
 // ------------------------------------------------------------- popover
@@ -749,7 +769,7 @@ function openPopover(sel) {
     h += field("Label angle", num("angle", el.angle || 0, 45));
     h += field("Label side", selectBox("side", el.side || "auto", SIDES));
     h += `</details>`;
-    h += `<div class="ed-row"><button type="button" data-act="connect">Connect from here</button><button type="button" data-act="delete" class="ed-danger">Delete</button></div>`;
+    h += `<div class="ed-row"><button type="button" data-act="connect" title="Then click the node it joins">Connect to…</button><button type="button" data-act="delete" class="ed-danger">Delete</button></div>`;
   } else if (sel.role === "branch") {
     const kind = el.kind || "cond";
     h += `<h4>${escapeHtml(kindName("branch", kind))} <code>${escapeHtml(el.from)} → ${escapeHtml(el.to)}</code></h4>`;
@@ -841,7 +861,7 @@ pop.addEventListener("click", (e) => {
   if (!act || !S.sel) return;
   const sel = S.sel, el = element(sel);
   if (act === "delete") { edit(() => removeElement(sel)); select(null); return; }
-  if (act === "connect") { setMode("connect", {fromId: el.id, kind: "cond"}); closePopover(); toast("Tap the node to connect to."); return; }
+  if (act === "connect") { startConnect(el.id, "cond"); return; }
   if (act === "swap") { edit(() => { [el.from, el.to] = [el.to, el.from]; }); openPopover(sel); return; }
   if (act === "unpin") { edit(() => { delete el.at; }); return; }
   if (act === "via-add") {
@@ -857,7 +877,6 @@ pop.addEventListener("click", (e) => {
 // A field edit while typing coalesces into one undo step per field.
 let typing = null;
 function applyField(sel, f, raw, live = false) {
-  const el = element(sel);
   const value = raw === "" ? null : raw;
   const apply = (d) => {
     const e = element(sel);
@@ -908,7 +927,7 @@ $("ed-settings").addEventListener("click", () => {
   select(null);
   const d = S.data, u = d.units || {};
   const T = typeof u.T === "object" && u.T ? u.T : {unit: u.T || "", scale: ""};
-  let h = `<h4>Diagram</h4>`;
+  let h = `<h4>Title &amp; units</h4>`;
   h += field("Title", text("title", d.title, "shown on the page"));
   for (const q of ["R", "C", "P", "q", "q″"]) h += field(`Unit of ${q}`, text(`unit:${q}`, u[q], q === "R" ? "K/W" : ""));
   h += field("Unit of T", text("unit:T", T.unit, "°C or K"));
@@ -917,7 +936,7 @@ $("ed-settings").addEventListener("click", () => {
   h += field("Reference", selectBox("rail:reference", d.rail ? d.rail.reference : "", ["", ...d.nodes.map((n) => n.id)], {"": "(no rail)"}));
   h += field("Rail y", num("rail:y", d.rail && d.rail.y, 10));
   h += `</details>`;
-  h += `<div class="ed-row"><button type="button" data-act="solve">Place unplaced nodes</button></div>`;
+  h += `<div class="ed-row"><button type="button" data-act="solve" title="Give every node without a place one, along a chain">Place unplaced nodes</button></div>`;
   pop.innerHTML = h;
   pop.hidden = false;
   pop.style.left = "12px"; pop.style.top = "12px";
@@ -976,15 +995,11 @@ function save() {
   }
 }
 
-function newFile(name, data) {
-  const id = Math.random().toString(36).slice(2, 10);
-  S.file = {id, name};
-  S.data = data;
+function showFile() {
   S.undo.length = 0; S.redo.length = 0;
   S.scene = null;
   select(null);
   setMode("idle");
-  save();
   updateChrome();
   drawing.innerHTML = ""; hitsG.innerHTML = "";
   S.touched = false;
@@ -993,23 +1008,22 @@ function newFile(name, data) {
   renderFiles();
 }
 
+function newFile(name, data) {
+  const id = Math.random().toString(36).slice(2, 10);
+  S.file = {id, name};
+  S.data = data;
+  save();
+  showFile();
+}
+
 function openFile(id) {
   const raw = localStorage.getItem(STORE.file(id));
   const ix = readIndex().find((f) => f.id === id);
   if (!raw || !ix) return false;
   S.file = {id, name: ix.name};
   S.data = JSON.parse(raw);
-  S.undo.length = 0; S.redo.length = 0;
-  S.scene = null;
-  select(null);
-  setMode("idle");
   localStorage.setItem(STORE.last, id);
-  updateChrome();
-  drawing.innerHTML = ""; hitsG.innerHTML = "";
-  S.touched = false;
-  refresh();
-  setTimeout(() => fit(), 60);
-  renderFiles();
+  showFile();
   return true;
 }
 
@@ -1031,36 +1045,38 @@ function deleteFile(id) {
   }});
 }
 
+function renameFile(id) {
+  const ix = readIndex();
+  const f = ix.find((x) => x.id === id);
+  const name = prompt("Name this diagram", f.name);
+  if (!name) return;
+  f.name = name; writeIndex(ix);
+  if (S.file && S.file.id === id) { S.file.name = name; updateChrome(); }
+  renderFiles();
+}
+
 function renderFiles() {
   const ul = $("ed-files");
   const ix = readIndex().sort((a, b) => b.updated - a.updated);
-  ul.innerHTML = ix.map((f) => `<li data-id="${f.id}" class="${S.file && S.file.id === f.id ? "ed-current" : ""}">
+  ul.innerHTML = ix.map((f) => `<li data-id="${f.id}" class="${S.file && S.file.id === f.id ? "ed-current" : ""}" title="Open “${escapeHtml(f.name)}”">
     <span class="ed-fname">${escapeHtml(f.name)}</span><small>${new Date(f.updated).toLocaleDateString()}</small>
-    <button type="button" data-act="rename">Rename</button><button type="button" data-act="dup">Copy</button><button type="button" data-act="del">Delete</button></li>`).join("");
+    <button type="button" class="ed-more" data-act="more" title="Rename, copy, delete">⋯</button></li>`).join("");
 }
 $("ed-files").addEventListener("click", (e) => {
   const li = e.target.closest("li"); if (!li) return;
-  const id = li.dataset.id, act = e.target.dataset.act;
-  if (act === "del") { deleteFile(id); return; }
-  if (act === "rename") {
-    const name = prompt("Name", readIndex().find((f) => f.id === id).name);
-    if (name) { const ix = readIndex(); ix.find((f) => f.id === id).name = name; writeIndex(ix); if (S.file && S.file.id === id) { S.file.name = name; updateChrome(); } renderFiles(); }
+  const id = li.dataset.id;
+  if (e.target.dataset.act === "more") {
+    const r = e.target.getBoundingClientRect(), st = $("ed-stage").getBoundingClientRect();
+    menu.innerHTML = `<button data-f="rename">Rename</button><button data-f="dup">Make a copy</button><hr><button data-f="del" class="ed-danger">Delete</button>`;
+    menu.dataset.file = id;
+    menu.style.left = clamp(r.right - st.left + 4, 8, st.width - 230) + "px";
+    menu.style.top = clamp(r.top - st.top, 8, st.height - 140) + "px";
+    menu.hidden = false;
     return;
   }
-  if (act === "dup") {
-    const src = readIndex().find((f) => f.id === id);
-    newFile(src.name + " (copy)", JSON.parse(localStorage.getItem(STORE.file(id))));
-    return;
-  }
-  openFile(id); closeDrawer();
+  openFile(id); closeFiles();
 });
-
-const drawer = $("ed-drawer");
-function openDrawer() { renderFiles(); drawer.hidden = false; $("ed-examples").hidden = true; }
-function closeDrawer() { drawer.hidden = true; }
-$("ed-file").addEventListener("click", openDrawer);
-$("ed-drawer-close").addEventListener("click", closeDrawer);
-$("ed-new").addEventListener("click", () => { newFile("Untitled", BLANK()); closeDrawer(); });
+$("ed-new").addEventListener("click", () => { newFile("Untitled", BLANK()); closeFiles(); });
 $("ed-open-example").addEventListener("click", async () => {
   const ul = $("ed-examples");
   if (!ul.children.length) {
@@ -1068,43 +1084,49 @@ $("ed-open-example").addEventListener("click", async () => {
     ul.innerHTML = ex.map((e) => `<li data-path="${escapeHtml(e.path)}">${escapeHtml(e.title)}</li>`).join("");
   }
   ul.hidden = !ul.hidden;
+  $("ed-open-example").setAttribute("aria-expanded", String(!ul.hidden));
 });
 $("ed-examples").addEventListener("click", async (e) => {
   const li = e.target.closest("li"); if (!li) return;
   const data = await (await fetch(li.dataset.path)).json();
   newFile(data.title ? data.title.slice(0, 60) : li.textContent, data);
-  closeDrawer();
+  $("ed-examples").hidden = true;
+  $("ed-open-example").setAttribute("aria-expanded", "false");
+  closeFiles();
 });
 $("ed-import").addEventListener("change", async (e) => {
   const f = e.target.files[0]; if (!f) return;
   try {
     const data = JSON.parse(await f.text());
     newFile(f.name.replace(/\.json$/i, ""), data);
-    closeDrawer();
+    closeFiles();
   } catch { toast("That file is not JSON."); }
   e.target.value = "";
 });
+// on a narrow screen the files panel is an overlay
+const filesPanel = $("ed-files-panel");
+function closeFiles() { filesPanel.classList.remove("ed-open"); }
+$("ed-files-toggle").addEventListener("click", () => filesPanel.classList.toggle("ed-open"));
+$("ed-files-close").addEventListener("click", closeFiles);
+$("ed-file").addEventListener("click", () => { if (S.file) renameFile(S.file.id); });
 
-// ---------------------------------------------------------------- export
+// ---------------------------------------------------------------- menus
 const menu = $("ed-menu");
-function closeMenu() { menu.hidden = true; }
-$("ed-export").addEventListener("click", (e) => {
-  const r = e.target.getBoundingClientRect(), st = $("ed-stage").getBoundingClientRect();
-  menu.innerHTML = `
-    <button data-x="svg">SVG, follows light and dark</button>
-    <button data-x="svg-light">SVG, light, for Word and slides</button>
-    <button data-x="svg-dark">SVG, dark</button>
-    <button data-x="png-light">PNG, light, 2×</button>
-    <button data-x="png-dark">PNG, dark, 2×</button>
-    <hr><button data-x="page">HTML page with controls</button>
-    <button data-x="json">JSON, the diagram itself</button>`;
-  menu.style.left = clamp(r.left - st.left, 8, st.width - 240) + "px";
-  menu.style.top = "8px";
-  menu.hidden = false;
-});
+function closeMenu() { menu.hidden = true; delete menu.dataset.file; }
 menu.addEventListener("click", async (e) => {
-  const x = e.target.dataset.x; if (!x) return;
+  const f = e.target.dataset.f, x = e.target.dataset.x;
+  const id = menu.dataset.file;
   closeMenu();
+  if (f && id) {
+    if (f === "rename") renameFile(id);
+    if (f === "del") deleteFile(id);
+    if (f === "dup") {
+      const src = readIndex().find((y) => y.id === id);
+      newFile(src.name + " (copy)", JSON.parse(localStorage.getItem(STORE.file(id))));
+    }
+    return;
+  }
+  if (!x) return;
   const base = (S.file ? S.file.name : "diagram").replace(/[^\w.-]+/g, "-");
   try {
     if (x === "json") return download(`${base}.json`, await rpc.call("export", S.data, "json"), "application/json");
@@ -1115,9 +1137,22 @@ menu.addEventListener("click", async (e) => {
     }
     const mode = x.slice(4);
     const svg = await rpc.call("export", S.data, "svg", mode, S.notation);
-    const png = await rasterise(svg, 2, mode);
-    download(`${base}-${mode}.png`, png, "image/png");
+    download(`${base}-${mode}.png`, await rasterise(svg, 2, mode), "image/png");
   } catch (err) { toast("Export failed: " + err.message); }
+});
+$("ed-export").addEventListener("click", (e) => {
+  const r = e.target.getBoundingClientRect(), st = $("ed-stage").getBoundingClientRect();
+  menu.innerHTML = `
+    <button data-x="svg">SVG that follows light and dark</button>
+    <button data-x="svg-light">SVG, light, for Word and slides</button>
+    <button data-x="svg-dark">SVG, dark</button>
+    <button data-x="png-light">PNG, light, 2×</button>
+    <button data-x="png-dark">PNG, dark, 2×</button>
+    <hr><button data-x="page">HTML page with its controls</button>
+    <button data-x="json">JSON, the diagram itself</button>`;
+  menu.style.left = clamp(r.left - st.left, 8, st.width - 240) + "px";
+  menu.style.top = "8px";
+  menu.hidden = false;
 });
 
 function download(name, content, type) {
@@ -1198,7 +1233,7 @@ async function openShared() {
 function setPresent(on) {
   S.present = on;
   document.body.classList.toggle("ed-present", on);
-  closePopover(); closeQuick(); closeMenu(); closeDrawer();
+  closePopover(); closeQuick(); closeMenu(); closeFiles(); setHelp(false);
   const lbl = $("ed-present-label");
   lbl.hidden = !on;
   lbl.textContent = on ? ((S.data && S.data.title) || (S.file && S.file.name) || "") : "";
@@ -1220,40 +1255,56 @@ function stepFile(delta) {
   $("ed-present-label").textContent = (S.data && S.data.title) || S.file.name;
 }
 
+// ------------------------------------------------------------------ help
+function setHelp(on) {
+  $("ed-help-panel").hidden = !on;
+  $("ed-help").setAttribute("aria-expanded", String(on));
+}
+$("ed-help").addEventListener("click", () => setHelp($("ed-help-panel").hidden));
+$("ed-help-close").addEventListener("click", () => setHelp(false));
+
 // ----------------------------------------------------------------- chrome
 function updateChrome() {
   $("ed-file").textContent = S.file ? S.file.name : "Untitled";
   $("ed-undo").disabled = !S.undo.length;
   $("ed-redo").disabled = !S.redo.length;
+  $("ed-delete").disabled = !S.sel;
+  $("ed-notation").textContent = `Notation: ${S.notation}`;
+  $("ed-notation").setAttribute("aria-pressed", String(S.notation === "zigzags"));
+  $("ed-physics").textContent = `Physics: ${S.physics ? "on" : "off"}`;
+  $("ed-physics").setAttribute("aria-pressed", String(S.physics));
+  $("ed-theme").textContent = `Theme: ${currentTheme()}`;
   document.title = `${S.file ? S.file.name : "Editor"} · ThermoDraw ${BUILD.version}`;
 }
 $("ed-undo").addEventListener("click", undo);
 $("ed-redo").addEventListener("click", redo);
+$("ed-delete").addEventListener("click", () => { if (S.sel) { const sel = S.sel; edit(() => removeElement(sel)); select(null); } });
 $("ed-fit").addEventListener("click", () => { S.touched = false; fit(); });
 $("ed-notation").addEventListener("click", () => {
   S.notation = S.notation === "boxes" ? "zigzags" : "boxes";
-  $("ed-notation").setAttribute("aria-pressed", String(S.notation === "zigzags"));
+  updateChrome();
   refresh();
 });
 $("ed-physics").addEventListener("click", () => {
   S.physics = !S.physics;
-  $("ed-physics").setAttribute("aria-pressed", String(S.physics));
+  updateChrome();
   refresh();
 });
 $("ed-findings-toggle").addEventListener("click", () => {
   const l = $("ed-findings-list");
   l.hidden = !l.hidden;
   $("ed-findings-toggle").setAttribute("aria-expanded", String(!l.hidden));
+  $("ed-findings-toggle").querySelector(".ed-findings-more").textContent = l.hidden ? "▾" : "▴";
 });
 
-function setTheme(mode) {
-  document.documentElement.dataset.theme = mode;
-  $("ed-theme").textContent = mode === "dark" ? "Light" : "Dark";
-  try { localStorage.setItem(STORE.theme, mode); } catch {}
-}
 function currentTheme() {
   return document.documentElement.dataset.theme
     || (matchMedia("(prefers-color-scheme:dark)").matches ? "dark" : "light");
+}
+function setTheme(mode) {
+  document.documentElement.dataset.theme = mode;
+  try { localStorage.setItem(STORE.theme, mode); } catch {}
+  updateChrome();
 }
 $("ed-theme").addEventListener("click", () => setTheme(currentTheme() === "dark" ? "light" : "dark"));
 
@@ -1271,9 +1322,11 @@ document.addEventListener("keydown", (e) => {
   const typingInField = ["INPUT", "SELECT", "TEXTAREA"].includes(e.target.tagName);
   if (e.key === "Escape") {
     if (S.present) { setPresent(false); return; }
+    if (!$("ed-help-panel").hidden) { setHelp(false); return; }
     if (!quick.hidden) { closeQuick(); return; }
+    if (!menu.hidden) { closeMenu(); return; }
     if (!pop.hidden) { closePopover(); return; }
-    if (!drawer.hidden) { closeDrawer(); return; }
+    if (filesPanel.classList.contains("ed-open")) { closeFiles(); return; }
     if (S.mode !== "idle") { setMode("idle"); return; }
     select(null);
     return;
@@ -1289,7 +1342,7 @@ document.addEventListener("keydown", (e) => {
     if (e.key === "ArrowRight") stepFile(1);
     if (e.key === "ArrowLeft") stepFile(-1);
   }
-  if (e.key === "f" || e.key === "F") fit();
+  if (e.key === "f" || e.key === "F") { S.touched = false; fit(); }
   if (e.key === "z" || e.key === "Z") $("ed-notation").click();
   if (e.key === "d" || e.key === "D") $("ed-theme").click();
   if (e.key === "p" || e.key === "P") $("ed-physics").click();
@@ -1297,13 +1350,14 @@ document.addEventListener("keydown", (e) => {
 
 document.addEventListener("pointerdown", (e) => {
   if (!pop.hidden && !pop.contains(e.target) && !e.target.closest("#ed-hits") && !e.target.closest("#ed-ui") && e.target.id !== "ed-settings") closePopover();
-  if (!menu.hidden && !menu.contains(e.target) && e.target.id !== "ed-export") closeMenu();
+  if (!menu.hidden && !menu.contains(e.target) && e.target.id !== "ed-export" && e.target.dataset.act !== "more") closeMenu();
+  if (!$("ed-help-panel").hidden && !$("ed-help-panel").contains(e.target) && e.target.id !== "ed-help") setHelp(false);
 });
 window.addEventListener("resize", () => { if (S.sel) placePopover(S.sel); });
 
 // ------------------------------------------------------------------- boot
 (async function boot() {
-  try { const t = localStorage.getItem(STORE.theme); if (t) setTheme(t); else $("ed-theme").textContent = matchMedia("(prefers-color-scheme:dark)").matches ? "Light" : "Dark"; } catch {}
+  try { const t = localStorage.getItem(STORE.theme); if (t) document.documentElement.dataset.theme = t; } catch {}
   rpc.on("progress", (m) => { $("ed-loading-text").textContent = m.text; });
   rpc.on("failed", (m) => { $("ed-loading-text").textContent = "The library could not start: " + m.text; });
   rpc.on("ready", (m) => {
@@ -1325,5 +1379,6 @@ window.addEventListener("resize", () => { if (S.sel) placePopover(S.sel); });
     }
   }
   updateChrome();
+  renderFiles();
   fit();
 })();

@@ -14,8 +14,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   drawing: the wheel runs through Pyodide in a worker, the canvas shows
   `compose`'s parts, a click lands on a hit built from the same placements
   the checker grades, and every export is `Diagram.svg`, `Diagram.page` or
-  `to_json`. Drag symbols on or tap empty space and type a name; connect
-  nodes by dragging a handle; edit fields in a popover beside the element;
+  `to_json`. Your files on the left, the components on the right. Drag
+  components on or tap empty space and type a name; double-click a node to
+  connect it to another; edit fields in a popover beside the element; a
+  help panel says what every control does;
   findings in a strip at the bottom with a physics toggle; files in the
   browser with import and export as SVG, PNG, HTML page or JSON; New from
   a blank canvas or any diagram on the site; a share link that carries the
