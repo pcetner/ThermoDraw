@@ -114,6 +114,26 @@ jobs:
       - name: They match what is committed
         run: git diff --exit-code -- docs/assets examples/gallery
 
+  editor:
+    name: the editor runs in a browser
+    # tests/test_editor_ui.py drives the built site in headless Chromium:
+    # boots the library through Pyodide from the CDN, adds two nodes both
+    # ways, connects them, drags one, exports, shares. One platform is the
+    # point; the bridge and the site have ordinary tests in the matrix.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]" playwright
+          python -m playwright install --with-deps chromium
+      - name: Drive it
+        run: python -m pytest -q tests/test_editor_ui.py
+
   types:
     name: the py.typed promise holds
     runs-on: ubuntu-latest

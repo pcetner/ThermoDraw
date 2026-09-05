@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The editor.** https://pcetner.github.io/ThermoDraw/editor/ draws a
+  thermal network by hand, in the browser, with this library doing the
+  drawing: the wheel runs through Pyodide in a worker, the canvas shows
+  `compose`'s parts, a click lands on a hit built from the same placements
+  the checker grades, and every export is `Diagram.svg`, `Diagram.page` or
+  `to_json`. Drag symbols on or tap empty space and type a name; connect
+  nodes by dragging a handle; edit fields in a popover beside the element;
+  findings in a strip at the bottom with a physics toggle; files in the
+  browser with import and export as SVG, PNG, HTML page or JSON; New from
+  a blank canvas or any diagram on the site; a share link that carries the
+  diagram in its fragment; a present mode; undo and redo; mouse and touch.
+  `thermodraw._editor` is the bridge, private; `Placement.index` is new
+  and listed in `docs/stability.md`. `tests/test_editor_ui.py` drives the
+  built site in headless Chromium, in its own CI job.
+- `docs/site.css`, shared by the site's index, the gallery and the editor.
+  The dictionary keeps its own copy, being one file at the root.
 - **A new hero.** `examples/raptor.json` is one square centimetre of a
   regeneratively cooled methalox throat wall at Raptor-class conditions,
   combustion gas to methane coolant: convection and radiation in parallel,

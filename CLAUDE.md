@@ -29,6 +29,7 @@ src/thermodraw/
   _physics.py  do the numbers agree with each other? behind --physics
   _describe.py is it the drawing you meant? placements -> prose, no SVG
   _page.py     the same SVG inline in HTML, with its controls
+  _editor.py   what the browser editor asks, JSON in and out; private
   __main__.py  the command line: `check`, `describe`, `render`, `page`, `solve`
   symbols.py   the eighteen symbols, plus sheet renderers
   theme.py     CSS variables for web, baked literals and fonts for Word/slides
@@ -54,6 +55,8 @@ docs/
   schema.md              the format, written to be pasted into a prompt
   design-record.md       why each decision below was made — read before changing one
   site.template.html     the site's index; everything else on the site is generated
+  site.css               what the index, the gallery and the editor share; the dictionary keeps its own
+  editor/                the editor: a template, a stylesheet, a script, a worker; the library runs in Pyodide
   notation-test/         the two thumbnails that would settle the boxes-vs-zigzags bet
   symbol-reference.html  every symbol at eight orientations, with notes (generated)
 Dictionary.html          what each symbol means, and when (generated)
@@ -90,6 +93,15 @@ sentence after it says what would overturn it.
   turned to arrive from above. Anything else is refused naming the node,
   never drawn badly in silence. Explicit `at` is kept and measured from.
 - Rendering is a pure function of its input; element ids are content-addressed.
+- **The editor is the library in the browser.** `docs/editor/` runs the
+  wheel through Pyodide in a worker and calls `_editor.py`, JSON both ways:
+  the canvas shows `compose`'s parts, a click lands on a hit built from the
+  same placements and label rectangles the checker grades, and every export
+  is `Diagram.svg`, `Diagram.page` or `to_json`. It cannot draw what the
+  library cannot. `Placement.index` exists for it: `ref` says the element's
+  position in prose and a pair between one node pair share every other
+  field. No port, no server; `tests/test_editor_ui.py` drives the built
+  site in Chromium.
 - **What 1.0 promises is written down**, in `docs/stability.md`, and
   `tests/test_stability.py` holds it to the code: the schema, the finding
   codes and both JSON reports, the exit codes, `Placement`'s fields and

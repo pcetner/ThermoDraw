@@ -207,6 +207,7 @@ function refresh() {
   if (S.inflight) { S.dirty = true; return; }
   S.inflight = true;
   S.dirty = false;
+  document.body.dataset.busy = "1";   // a test waits for this to clear
   rpc.call("scene", S.data, S.notation, S.physics).then((scene) => {
     S.inflight = false;
     if (scene.error) {
@@ -220,9 +221,10 @@ function refresh() {
       if (!S.dirty && S.data.nodes.some((n) => !n.at)) bake();
     }
     $("ed-empty").hidden = S.data.nodes.length > 0;
-    if (S.dirty) refresh();
+    if (S.dirty) refresh(); else delete document.body.dataset.busy;
   }).catch((err) => {
     S.inflight = false;
+    delete document.body.dataset.busy;
     showError(String(err));
   });
 }
