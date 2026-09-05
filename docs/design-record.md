@@ -929,3 +929,41 @@ latent energy is spent and then knees hard, and the time to that knee is
 usually the reason the diagram was drawn. Saying it needs an energy beside a
 temperature — a second quantity on a node kind that has one, which is a
 schema change. Until then the limit is prose.
+
+## The README hero
+
+The picture at the top of the README was the power-device ladder in
+`examples/hero.json` for every release before this. It is a good worked
+example and it stays one: the schema quotes it in full with its `describe`
+output, a dozen tests read it, and the clean-room builder knows how to
+strip it. It was a weak hero. A junction-to-air ladder is the first
+diagram anyone in electronics thermal design draws, so it says "this can
+draw the obvious thing", which is not the claim 1.0 makes.
+
+The hero since 1.0.1 is `examples/raptor.json`: one square centimetre of a
+regeneratively cooled methalox throat wall at the conditions SpaceX has
+stated publicly for Raptor 3, drawn from combustion gas to methane coolant.
+It was chosen for three things at once. It is a diagram whose numbers were
+solved before it was drawn, so `--physics` is silent on it and a wrong
+number is caught, which the README shows. It carries no coordinate, so the
+picture is the solver's, which is the thing 1.0 shipped. And a reader
+recognises the subject, which a power device on a heatsink does not
+earn.
+
+The cost is a claim about a real engine, and the record is careful about
+it. SpaceX has published a chamber pressure and a cooling architecture and
+nothing else a thermal network needs. Every temperature, resistance and
+heat rate in the file is an engine-class estimate, from the open literature
+on high-pressure liquid engines, and `examples/raptor.md` says which figure
+is a public statement, which is an estimate, and where each came from. The
+diagram's title says so too, in the file, so no render of it can lose the
+disclaimer. Nothing is presented as SpaceX data, and nothing should be.
+
+A capacitance for the liner was drawn and removed. The title says steady
+state, a 0.8 mm copper liner settles in well under a second, and the rail
+it hung on ended under the coolant node without meeting it, because the
+solver drops a rail 222 below the chain and a rail's reference is stated,
+not drawn. That last is a solver fact worth a sentence of its own: a
+solved diagram with a rail reads better when the rail's reference is the
+cold end of the chain and the rail is left out unless something hangs on
+it.

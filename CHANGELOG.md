@@ -7,7 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- **A new hero.** `examples/raptor.json` is one square centimetre of a
+  regeneratively cooled methalox throat wall at Raptor-class conditions,
+  combustion gas to methane coolant: convection and radiation in parallel,
+  conduction through a copper-alloy liner, convection into the channel,
+  and the heat carried to the injector. It holds no coordinate and
+  `check --physics` reports nothing. Every number is an estimate from
+  public figures for this class of engine, sourced with the arithmetic in
+  `examples/raptor.md`, and the title says none of it is SpaceX data.
+  `tests/test_raptor.py` holds the file to those claims. `hero.json` stays
+  the schema's worked example and the tests' fixture.
+- **A site.** `tools/build_site.py` assembles what GitHub Pages serves at
+  https://pcetner.github.io/ThermoDraw/ from the checkout: `Dictionary.html`
+  and `docs/symbol-reference.html` copied, the hero and all fifteen gallery
+  diagrams as the library's own `page`, and one hand-written index in
+  `docs/site.template.html`. `pages.yml` deploys it on every push to `main`;
+  CI builds it on both platforms; `tests/test_site.py` reads it back.
+- **A GitHub Release on each tag.** `release.yml` ends by creating one with
+  the changelog's own section as its notes, printed by
+  `tools/release_notes.py`, and the wheel and sdist attached. v1.0.0's was
+  made the same way by hand.
+- `[project.urls]` in `pyproject.toml`: the site, the repository, the
+  changelog. PyPI shows them from the next release.
+- `tests/test_readme.py`: the README's three quoted outputs are the real
+  ones, word for word, and every link and image on the page resolves.
+
+### Changed
+
+- **The README.** Badges, the new hero with its caption and disclaimer,
+  Install on the first screen, `check --physics` on the hero and what it
+  says when one number is wrong, the vocabulary sheet below the fold, one
+  paragraph on where this sits, and the docs as a list. The old page's
+  quoted `check` output had been stale for a release and nothing tested
+  it. The rosette and the old hero's README render leave `docs/assets`;
+  `render_demo.py` writes the two images the page shows.
+- `docs/schema.md` no longer says `hero.json` renders the README's
+  diagram; it is the worked example the page and the tests use.
+  `tools/clean_room.py` edits the same sentence and was updated with it.
 
 ## [1.0.0] - 2026-09-03
 

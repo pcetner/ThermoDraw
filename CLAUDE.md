@@ -41,14 +41,19 @@ tools/
   gen_dictionary.py  regenerates Dictionary.html — the prose lives here
   golden_diff.py     what actually changed in a golden, element by element
   clean_room.py      a sibling room, --profile gallery or review
+  build_site.py      the site Pages serves: the two generated pages, the hero and the gallery as `page`
+  release_notes.py   one version's changelog section, for the GitHub Release
 examples/
-  hero.json              the README diagram, as data
-  render_demo.py         the three README images
+  hero.json              the schema's worked example, as data; the tests' fixture
+  raptor.json            the README hero: a Raptor-class throat wall from public figures, no coordinates
+  raptor.md              its sources and arithmetic — nothing in it is SpaceX data
+  render_demo.py         the two README images
   render_reference.py    renders every symbol at every 45°
   gallery/               five networks from five domains, drawn twice; FINDINGS.md is the clean run
 docs/
   schema.md              the format, written to be pasted into a prompt
   design-record.md       why each decision below was made — read before changing one
+  site.template.html     the site's index; everything else on the site is generated
   notation-test/         the two thumbnails that would settle the boxes-vs-zigzags bet
   symbol-reference.html  every symbol at eight orientations, with notes (generated)
 Dictionary.html          what each symbol means, and when (generated)
@@ -262,6 +267,13 @@ sentence after it says what would overturn it.
   `wall` and `scale`, were found from the schema. Seventeen of eighteen
   symbols were drawn; `break` as a node kind was not, for the fourth time,
   its agent choosing a `fixed` mount with `wall: "up"` and a `break` branch.
+- **The README hero is solver-placed and `--physics`-clean.**
+  `examples/raptor.json` holds no coordinate, `check --physics` reports
+  nothing, and `tests/test_raptor.py` holds both, along with the wrong
+  number the README shows being caught. Its figures are public statements
+  or engine-class estimates, sourced in `examples/raptor.md`, and the title
+  says none of it is SpaceX data. `hero.json` stays the schema's worked
+  example; `tests/test_readme.py` keeps the page's quoted output real.
 
 ## Sharp edges
 
