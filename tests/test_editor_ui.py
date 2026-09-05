@@ -112,19 +112,17 @@ def test_the_editor_draws_what_is_drawn_into_it(served):
         assert all(v % 10 == 0 for n in d["nodes"] for v in n["at"])
         assert d["nodes"][0]["label"] == "Ambient"
 
-        # connect: select the free node, drag its handle onto the fixed one
+        # connect: double-click the free node, then click the fixed one
         free_at, fixed_at = d["nodes"][1]["at"], d["nodes"][0]["at"]
         fx, fy = canvas_point(page, *free_at)
-        page.mouse.click(fx, fy)
-        settled(page)
-        page.wait_for_selector("#ed-ui .ed-handle")
-        handle = page.locator("#ed-ui .ed-handle").bounding_box()
-        page.mouse.move(handle["x"] + handle["width"] / 2,
-                        handle["y"] + handle["height"] / 2)
-        page.mouse.down()
+        page.mouse.dblclick(fx, fy)
+        page.wait_for_selector("#ed-mode:not([hidden])")
+        assert "Connecting from" in page.text_content("#ed-mode")
         tx, ty = canvas_point(page, *fixed_at)
-        page.mouse.move(tx, ty, steps=10)
-        page.mouse.up()
+        page.mouse.move(tx, ty, steps=6)
+        assert page.locator("#ed-ui .ed-rubber").count() == 1
+        page.mouse.click(tx, ty)
+        page.wait_for_selector("#ed-mode", state="hidden")
         page.wait_for_selector("#ed-popover:not([hidden])")
         page.fill('#ed-popover input[data-field="value"]', "0.5")
         page.keyboard.press("Escape")
@@ -150,6 +148,13 @@ def test_the_editor_draws_what_is_drawn_into_it(served):
         # the findings strip reports what the checker says, in its words
         summary = page.text_content("#ed-findings-count")
         assert "labels placed" in summary
+
+        # the files panel lists the file, and the help panel opens
+        assert page.locator("#ed-files li.ed-current").count() == 1
+        page.click("#ed-help")
+        assert page.is_visible("#ed-help-panel")
+        page.keyboard.press("Escape")
+        assert not page.is_visible("#ed-help-panel")
 
         # export is the library's own SVG, with both labels in it
         with page.expect_download() as dl:
