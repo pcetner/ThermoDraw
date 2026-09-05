@@ -28,6 +28,12 @@ classifiers = [
 ]
 dependencies = []
 
+[project.urls]
+Homepage = "https://pcetner.github.io/ThermoDraw/"
+Documentation = "https://pcetner.github.io/ThermoDraw/"
+Repository = "https://github.com/pcetner/ThermoDraw"
+Changelog = "https://github.com/pcetner/ThermoDraw/blob/main/CHANGELOG.md"
+
 [project.scripts]
 # `thermodraw check` is the point of having a script at all: it turns
 # "render it, serve it, open a browser, screenshot it, look" into one command
