@@ -1,42 +1,26 @@
 <h1 align="center">ThermoDraw</h1>
 
+<p align="center">Thermal network diagrams for Python. Emits SVG. No runtime dependencies.</p>
+
 <p align="center">
-  Thermal network diagrams for Python.<br>
-  Emits SVG. No runtime dependencies.
+  <a href="https://pypi.org/project/thermodraw/"><img src="https://img.shields.io/pypi/v/thermodraw" alt="PyPI version"></a>
+  <a href="https://github.com/pcetner/ThermoDraw/actions/workflows/ci.yml"><img src="https://github.com/pcetner/ThermoDraw/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://pypi.org/project/thermodraw/"><img src="https://img.shields.io/pypi/pyversions/thermodraw" alt="Python versions"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/pypi/l/thermodraw" alt="MIT licence"></a>
 </p>
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/hero-dark.svg">
-    <img src="docs/assets/hero-light.svg" alt="A power device from junction to still air: conduction, contact and a parallel convection and radiation path, with two capacitances on the reference rail" width="960">
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/raptor-dark.svg">
+    <img src="docs/assets/raptor-light.svg" alt="One square centimetre of a regeneratively cooled methalox throat wall: combustion gas, convection and radiation in parallel, a copper-alloy liner, convection into the coolant channel, and the heat carried to the injector" width="960">
   </picture>
 </p>
 
-<p align="center"><sub>Junction to still air — conduction, contact, then convection and radiation in parallel.</sub></p>
+<p align="center"><em>One square centimetre of a regeneratively cooled methalox throat wall at Raptor-class conditions, from combustion gas to coolant. The numbers are estimates from public figures, not SpaceX data, and <code>thermodraw check --physics</code> confirms they agree with each other.</em></p>
 
-<br>
-
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/vocabulary-dark.svg">
-    <img src="docs/assets/vocabulary-light.svg" alt="The eighteen symbols" width="800">
-  </picture>
-</p>
-
-<p align="center"><sub>Eighteen symbols. Mechanism is carried by the interior texture, not by the outline.</sub></p>
-
-<br>
-
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/rosette-dark.svg">
-    <img src="docs/assets/rosette-light.svg" alt="One node losing heat by twelve parallel paths, each drawn at a different angle" width="460">
-  </picture>
-</p>
-
-<p align="center"><sub>The four box textures at twelve angles. A texture belongs to its block and turns with it.</sub></p>
-
-<br>
+That file is [`examples/raptor.json`](examples/raptor.json). It holds no
+coordinates: the solver placed every node. The sources and the arithmetic
+are in [`examples/raptor.md`](examples/raptor.md).
 
 ## Install
 
@@ -44,31 +28,19 @@
 pip install thermodraw
 ```
 
-Python 3.10 or later, no dependencies. From a checkout, `pip install -e .`.
+Python 3.10 or later. No dependencies. From a checkout, `pip install -e .`.
 
 ## Use
 
-A diagram is data. Write it, or have a model write it, and render it:
+A diagram is data. Write it, or have a model write it, then render it:
 
 ```python
 from thermodraw import Diagram, save
 
-d = Diagram.from_json(open("hero.json", encoding="utf-8").read())
+d = Diagram.from_json(open("examples/raptor.json", encoding="utf-8").read())
 
-save(d.svg(), "web.svg")          # follows the reader's light/dark
-save(d.svg("light"), "word.svg")  # colours and font resolved, for Word and slides
-```
-
-The stages are there if you want them — `render(layout(d))` is the SVG
-before the theme, `theme.with_variables` and `theme.bake` are the two ways
-to finish it — and a notebook shows a `Diagram` as its drawing. If your
-readers know circuit notation, `d.svg(notation="zigzags")` draws every
-resistance as a zigzag instead of a textured box; nothing else moves. A PNG needs a
-rasteriser, which the library does not carry:
-
-```python
-import cairosvg
-cairosvg.svg2png(bytestring=d.svg("light").encode("utf-8"), write_to="out.png")
+save(d.svg(), "web.svg")          # follows the reader's light and dark setting
+save(d.svg("light"), "word.svg")  # colours and fonts resolved, for Word and slides
 ```
 
 Or build it in Python:
@@ -84,94 +56,124 @@ d = (DiagramBuilder(R="K/W", T="°C", P="W")
 open("out.svg", "w", encoding="utf-8").write(d.svg("light"))
 ```
 
-Then find out whether it is any good, without opening it:
+A notebook shows a `Diagram` as its drawing. If your readers know circuit
+notation, `d.svg(notation="zigzags")` draws every resistance as a zigzag
+instead of a textured box, and nothing else moves. A PNG needs a rasteriser,
+which the library does not carry:
+
+```python
+import cairosvg
+cairosvg.svg2png(bytestring=d.svg("light").encode("utf-8"), write_to="out.png")
+```
+
+## Check
+
+Find out whether the drawing is any good without opening it:
 
 ```bash
-thermodraw check hero.json
+thermodraw check --physics examples/raptor.json
 ```
 
 ```
-hero.json: 11 labels placed, 0 errors, 0 warnings, 1 note
-note: [parallel-pair-same-side] branch 2 s->amb and branch 3 s->amb run
-      between the same two nodes and both labels went to the same side
-      -> set `side` to "down" on the lower of the two
+examples/raptor.json: 9 labels placed, 0 errors, 0 warnings, 0 notes
 ```
 
-Twelve checks on how the drawing reads — text over text, a label shoved out
-past the thing it names, a wire through a symbol, ink off the page. Exit 0
-clean, 1 on a warning or an error, 2 when the file could not be read. A note
-is advice and does not fail the run — the report above exits 0 — unless you
-pass `--strict`. Every finding names the schema field that fixes it.
+Twelve checks look at how the drawing reads: text over text, a label pushed
+away from the thing it names, a wire through a symbol, ink off the page.
+`--physics` asks a different question, whether the numbers agree with each
+other at every node. Change the gas-side convection in that file from 0.283
+to 0.20 and run it again:
 
-`--physics` asks a different question: whether the numbers agree with each
-other — what arrives at each node against what its temperatures and
-resistances say leaves. It is opt-in, because a sketch with placeholder
-numbers is a diagram too; ask for it when you believe the numbers.
+```
+examples/raptor.json: 9 labels placed, 0 errors, 2 warnings, 0 notes
+warning: [node-does-not-balance] node 'hw': 1.38e+04 W arrives and 1e+04 W
+         leaves at the stated values: 1.3e+04 W in by branch 0 gas->hw
+         (2.6e+03 K over 0.2 K/W); 800 W in by branch 1 gas->hw (2.6e+03 K
+         over 3.25 K/W); 1e+04 W out by branch 2 hw->cw (250 K over
+         0.025 K/W)
+         -> check the values. If one box stands for several identical paths,
+         give it `count` and `arrangement`; if a temperature is a limit
+         rather than a result, or a flow is a capacity rather than a load,
+         say so in the `label`
+warning: [rate-does-not-match] branch 0 gas->hw says it carries 9.2e+03 W,
+         and its ends imply 1.3e+04 W (2.6e+03 K over 0.2 K/W)
+         -> one of `rate`, `value` or an end temperature is wrong
+```
+
+Every finding names the schema field that fixes it. Exit 0 is clean, 1 is a
+warning or an error, and 2 means the file could not be read. A note is
+advice and does not fail the run unless you pass `--strict`. `--physics` is
+opt-in, because a sketch with placeholder numbers is a diagram too.
+
+## Describe
 
 A clean report is not the same as the right diagram, so there is a second
 question:
 
 ```bash
-thermodraw describe hero.json
+thermodraw describe examples/raptor.json
 ```
 
 ```
-hero.json: canvas 1042 x 431, 11 labels
+examples/raptor.json: canvas 1119 x 354, 9 labels
 
-placements: ground x1, node x4, symbol/cap x2, symbol/cond x1,
-            symbol/contact x1, symbol/conv x1, symbol/diss x1, symbol/rad x1,
-            wire x15
+placements: ground x2, node x4, symbol/cond x1, symbol/conv x2,
+            symbol/flow x1, symbol/rad x1, wire x11
 ```
 
-...then every node with its kind and place, and every label with the direction
-it went. `check` grades the drawing; this says what is in it.
-`thermodraw render` writes the SVG. `thermodraw page` writes the same drawing
-as a self-contained HTML page with its controls — a repeated group of sixteen
-draws two and an ellipsis, and the page lets a reader expand it without
-anything being rebuilt. `thermodraw solve` writes a diagram back with every
-node placed, to edit from: write the network without coordinates, solve it,
-move what you would have put elsewhere. All five work as `python -m
-thermodraw` from a checkout.
+Then every node with its kind and place, and every label with the side it
+went to. `check` grades the drawing; `describe` says what is in it.
 
-```bash
-python examples/render_demo.py       # the three images above
-python examples/render_reference.py  # every symbol at every 45°
-pytest
-```
+Three more commands. `thermodraw render` writes the SVG. `thermodraw page`
+writes the same drawing as a self-contained HTML page with its controls.
+`thermodraw solve` writes the diagram back with every node placed, so you
+can write a network without coordinates, solve it, and move only what you
+would have put elsewhere.
+
+## The symbols
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/vocabulary-dark.svg">
+    <img src="docs/assets/vocabulary-light.svg" alt="The eighteen symbols" width="800">
+  </picture>
+</p>
+
+<p align="center"><em>Eighteen symbols. The mechanism is carried by the interior texture, not by the outline.</em></p>
+
+The [symbol dictionary](https://pcetner.github.io/ThermoDraw/dictionary.html)
+says what each one means and when to use it. The
+[symbol reference](https://pcetner.github.io/ThermoDraw/symbol-reference.html)
+shows every one at eight orientations, with the reasoning.
 
 ## Where this sits
 
-Drawing schematics from Python is not an empty field, and laying out a graph
-is a solved problem — Graphviz, D2 and Mermaid will place an arbitrary network
-for you, and schemdraw will draw it in circuit notation with a resistor
-zigzag for every path. What none of them does is the thing this exists for:
-say *which mechanism* each path is, in a notation a thermal engineer reads,
-and then say whether the drawing reads well and whether its numbers agree
-with each other.
+Graphviz, D2 and Mermaid will place an arbitrary network for you, and
+schemdraw will draw it in circuit notation. None of them says which
+mechanism each path is, in a notation a thermal engineer reads, and none
+says whether the drawing reads well or whether its numbers agree. That is
+what this is for. The parts that are ThermoDraw's own are the
+eighteen-symbol vocabulary, the label solver, `check`, `describe` and
+`--physics`. Coordinates are solved for a chain of nodes, which is what
+nearly every network in this notation is. Anything else still takes its
+coordinates from you, and says so by name.
 
-So the parts that are ThermoDraw's own are the eighteen-symbol vocabulary and
-the rule behind it, the label solver, `check`, `describe` and `--physics`.
-Node coordinates are solved for a chain of nodes, which is what nearly every
-network in this notation is. A general placer for anything else is the part
-most likely to be someone else's solved problem, and the design record says
-which of the twelve checks it must satisfy, which it minimises, and which it
-makes redundant.
+If you want circuit notation, use schemdraw. If you want a graph laid out
+and do not care what the boxes mean, use Graphviz. If you want a thermal
+network that a reviewer can read from the picture, this.
 
-If you want circuit notation, use schemdraw. If you want a graph laid out and
-do not care what the boxes mean, use Graphviz. If you want a thermal network
-that a reviewer can read from the picture, this.
+## Docs
 
-## More
+- [The site](https://pcetner.github.io/ThermoDraw/): the symbol dictionary,
+  the symbol reference, and the [gallery](https://pcetner.github.io/ThermoDraw/gallery/)
+  of fifteen networks drawn by agents from the schema alone.
+- [`docs/schema.md`](docs/schema.md): the whole format, written to be pasted
+  into a prompt.
+- [`docs/stability.md`](docs/stability.md): what 1.0 promises to keep, and
+  what it does not.
+- [`CHANGELOG.md`](CHANGELOG.md): every release.
+- [`CLAUDE.md`](CLAUDE.md): the decisions, one line each, and
+  [`docs/design-record.md`](docs/design-record.md): the argument behind each.
 
-[`docs/schema.md`](docs/schema.md) — the whole format, written to be pasted into a prompt.
-[`docs/stability.md`](docs/stability.md) — what 1.0 promises to keep, and what it does not.
-[`docs/symbol-reference.html`](docs/symbol-reference.html) — every symbol at eight orientations, with the reasoning.
-[`CLAUDE.md`](CLAUDE.md) — the decisions, one line each.
-[`docs/design-record.md`](docs/design-record.md) — the argument behind each one.
-
-The symbol vocabulary is settled; labels, wire runs, canvas size and, for a
-chain of nodes, the coordinates are solved for you, and `thermodraw check`
-reports what a reader would notice. A network that is not a chain still takes
-its coordinates from you, and says so by name.
-
-MIT. The bundled subset of IBM Plex Sans is [OFL-1.1](src/thermodraw/fonts/OFL.txt).
+MIT. The bundled subset of IBM Plex Sans is
+[OFL-1.1](src/thermodraw/fonts/OFL.txt).
