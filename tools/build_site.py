@@ -133,9 +133,13 @@ def _palette_markup() -> str:
 def _wheel(into: pathlib.Path) -> None:
     """Build the wheel the editor loads, from this checkout."""
     with tempfile.TemporaryDirectory() as tmp:
-        subprocess.run([sys.executable, "-m", "build", "--wheel",
-                        "--outdir", tmp, str(ROOT)],
-                       check=True, capture_output=True)
+        run = subprocess.run([sys.executable, "-m", "build", "--wheel",
+                              "--outdir", tmp, str(ROOT)],
+                             capture_output=True, text=True)
+        if run.returncode:
+            sys.exit("the wheel did not build (is `build` installed? it is "
+                     "in the dev extra):
+" + run.stdout + run.stderr)
         built = pathlib.Path(tmp) / WHEEL
         if not built.exists():
             sys.exit(f"build made no {WHEEL} in {tmp}: "
