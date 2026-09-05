@@ -114,6 +114,13 @@ class Placement:
     count: Optional[int] = None
     arrangement: Optional[str] = None
     outward: Optional[bool] = None
+    # Where in the diagram's own list the element sits: `nodes[index]`,
+    # `branches[index]` or `sources[index]`, by `role`. `ref` carries the
+    # same number for a branch, but as prose, and a pair of branches
+    # between one node pair share everything else a placement says about
+    # them. An editor that maps a click back to a field needs the number
+    # as a number. None on the rail.
+    index: Optional[int] = None
 
 
 def _angle(a, b):
@@ -234,12 +241,12 @@ def _centred(n, pitch):
 
 
 def _form(b, ref, sym, source, target, centre, angle, label, n, variant,
-          shown):
+          shown, index=None):
     """One complete drawing of a repeated group: copies, wire, label, dots."""
     out = []
     tag = {"variant": variant, "shown": shown,
            "role": "branch", "ends": (b.source, b.target),
-           "count": b.count, "arrangement": b.arrangement}
+           "count": b.count, "arrangement": b.arrangement, "index": index}
     dots = variant == "condensed"
 
     if b.arrangement == "series":
@@ -283,7 +290,7 @@ def _form(b, ref, sym, source, target, centre, angle, label, n, variant,
     return out
 
 
-def _repeat(b, ref, sym, source, target, centre, angle, label):
+def _repeat(b, ref, sym, source, target, centre, angle, label, index=None):
     """Both forms of a repeated branch, one shown and one hidden.
 
     Above `CONDENSE_ABOVE` the condensed form is the default. At or below it
@@ -293,11 +300,11 @@ def _repeat(b, ref, sym, source, target, centre, angle, label):
     n, condensed = b.count, b.condensed
     if not condensed:
         return _form(b, ref, sym, source, target, centre, angle, label, n,
-                     None, True)
+                     None, True, index)
     return (_form(b, ref, sym, source, target, centre, angle, label, n,
-                  "full", False)
+                  "full", False, index)
             + _form(b, ref, sym, source, target, centre, angle, label, 2,
-                    "condensed", True))
+                    "condensed", True, index))
 
 
 def _source_offset(sym):
@@ -386,7 +393,8 @@ def layout(diagram) -> List[Placement]:
                       half=sym.half, half_len=sym.half_len,
                       side=b.side)
         if b.repeated:
-            out += _repeat(b, ref, sym, source, target, centre, angle, label)
+            out += _repeat(b, ref, sym, source, target, centre, angle, label,
+                           index=i)
             continue
         # `Dict[str, Any]`, and it has to be. These are the
         # provenance fields spread into every `Placement` for
@@ -397,7 +405,7 @@ def layout(diagram) -> List[Placement]:
         # 87 of the 91 errors the public annotations
         # surfaced.
         who: Dict[str, Any] = {"role": "branch", "ends": (b.source, b.target),
-               "via": tuple(tuple(p) for p in b.via)}
+               "via": tuple(tuple(p) for p in b.via), "index": i}
         for run in _split(route, index, centre, sym.half_len):
             out.append(Placement("wire", points=run, ref=ref, **who))
         out.append(Placement(
@@ -430,7 +438,7 @@ def layout(diagram) -> List[Placement]:
         centre = tuple(s.at) if s.at else (tip[0] + along[0] * step,
                                            tip[1] + along[1] * step)
         who = {"role": "source", "ends": (s.node,), "outward": s.outward,
-               "count": s.count}
+               "count": s.count, "index": i}
         out.append(Placement(
             "symbol", at=centre, angle=s.angle, symbol=sym, ref=ref,
             label=Label(user=s.label,
@@ -448,7 +456,7 @@ def layout(diagram) -> List[Placement]:
         if _length(end, edge) > 0.5:
             out.append(Placement("wire", points=[end, edge], ref=ref, **who))
 
-    for n in diagram.nodes:
+    for i, n in enumerate(diagram.nodes):
         ref = f"node '{n.id}'"
         at = tuple(n.at)
         # A fixed node reaches down to its boundary wall, so the label has to
@@ -471,7 +479,7 @@ def layout(diagram) -> List[Placement]:
         # meaningful — a diagram may be symbolic throughout — but a bare T
         # is not.
         names = n.value is not None or bool(n.sub)
-        who = {"role": "node", "ends": (n.id,)}
+        who = {"role": "node", "ends": (n.id,), "index": i}
         # The automatic side is above, and with the wall below that is
         # away from it. With the wall above, away is below: a label that
         # took the automatic side would sit beyond the hatching, which is
