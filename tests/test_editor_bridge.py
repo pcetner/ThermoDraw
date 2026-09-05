@@ -10,7 +10,7 @@ import pathlib
 
 import pytest
 
-from thermodraw import Diagram, DiagramBuilder, layout
+from thermodraw import Diagram, DiagramBuilder, layout, symbols
 from thermodraw import _editor as E
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -62,6 +62,24 @@ def test_the_scene_is_json_and_its_hits_hold_their_anchors(path):
         lists = {"node": data["nodes"], "branch": data["branches"],
                  "source": data.get("sources", [])}
         assert 0 <= h["index"] < len(lists[h["role"]])
+
+
+@pytest.mark.parametrize("path", FILES, ids=lambda p: p.parent.name)
+def test_a_symbol_hit_says_how_long_it_is(path):
+    """The editor routes a wire around a dragged symbol, and the ink in
+    `bounds` is not the measurement that does it: a box symbol's leads
+    reach 62 for a half-length of 42."""
+    by_key = {s.key: s for s in symbols.SYMBOLS}
+    seen = 0
+    for h in E.scene(load(path))["hits"]:
+        # a hit knows its length exactly when it knows its symbol: the two
+        # come from the same placement, and a label's owner is one of them
+        assert ("half_len" in h) == ("kind" in h)
+        if "kind" not in h:
+            continue
+        assert h["half_len"] == float(by_key[h["kind"]].half_len)
+        seen += h["element"] == "symbol"
+    assert seen, "every diagram in the suite draws at least one symbol"
 
 
 def test_a_pair_between_one_node_pair_is_two_hits():

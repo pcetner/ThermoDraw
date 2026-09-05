@@ -102,6 +102,29 @@ sentence after it says what would overturn it.
   position in prose and a pair between one node pair share every other
   field. No port, no server; `tests/test_editor_ui.py` drives the built
   site in Chromium.
+- **An editor gesture must not write a diagram the checker condemns.** A
+  branch's `at` is used by `layout` exactly as written and is never
+  projected onto the run, so a dropped symbol used to grow a diagonal jog
+  and a `symbol-off-its-run` warning against the reader. Dragging a path
+  slides it along the run when it lands within 12 units, quantised **along
+  the run** — the checker's tolerance is `OFF_RUN = 1.0` and the page grid
+  is 10, so snapping a point on a diagonal is itself the fault — and
+  otherwise writes a `via` either side of the box, spliced into the leg
+  the drop landed on. The pair is recognised again by its shape, a
+  midpoint that is the symbol, since nothing in the file marks one.
+  `half_len` is on the symbol hit for this: `bounds` is the ink, 62 where
+  `half_len` is 42, because of the leads.
+- **A diagram is named once.** The top bar names the file, and a checkbox
+  there says whether the name also goes in as `title`. Nothing draws a
+  title — `title` is what an exported page is called and what names the
+  copy at the far end of a share link — so the checkbox says that and not
+  something prettier. There were two names in two menus, and no way to
+  tell which one you were editing.
+- **The first visit is taught by doing.** Four steps on a scratch file,
+  each finished by making the move rather than by clicking Next; skipping
+  leaves nothing behind, finishing keeps the drawing. Escape ends it only
+  when nothing else is open, and the card the step asks you to type into
+  stops its own Escape from reaching the tour.
 - **What 1.0 promises is written down**, in `docs/stability.md`, and
   `tests/test_stability.py` holds it to the code: the schema, the finding
   codes and both JSON reports, the exit codes, `Placement`'s fields and

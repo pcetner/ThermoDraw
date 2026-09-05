@@ -153,6 +153,9 @@ function setView(v) {
   S.view = v;
   canvas.setAttribute("viewBox", `${v.x} ${v.y} ${v.w} ${v.h}`);
   if (S.sel) drawSelection();
+  // a step points at something on the drawing, and the drawing refits
+  // itself after every addition: the card has to follow it
+  if (tour) drawTour();
 }
 
 function stageSize() {
@@ -222,10 +225,15 @@ function refresh() {
       buildHits(scene.hits);
       showFindings(scene.findings);
       if (S.sel) drawSelection();
+      // A new element's card opens before its hit rectangle exists, so it
+      // had nothing to sit beside and went to the corner. It gets its
+      // place the moment the drawing arrives.
+      if (S.sel && !pop.hidden) placePopover(S.sel);
       if (S.mode === "connect") markFrom();
       if (!S.dirty && S.data.nodes.some((n) => !n.at)) bake();
     }
-    $("ed-empty").hidden = S.data.nodes.length > 0;
+    $("ed-empty").hidden = S.data.nodes.length > 0 || tourRunning();
+    tourCheck();
     if (S.dirty) refresh(); else delete document.body.dataset.busy;
   }).catch((err) => {
     S.inflight = false;
@@ -308,24 +316,49 @@ function drawSelection() {
 }
 
 // -------------------------------------------------------------- findings
+const plural = (n, one, many) => `${n} ${n === 1 ? one : many || one + "s"}`;
+
 function showFindings(findings) {
   const list = $("ed-findings-list");
   list.innerHTML = "";
+  // `--physics` reports what it could not check as a finding of its own.
+  // That is right on a command line and wrong here, where it fires on
+  // every sketch with no numbers in it yet and reads as a complaint. It
+  // becomes the one line above the list that says how the check went.
+  const skipped = S.physics
+    ? findings.find((f) => f.code === "physics-not-checked") : null;
+  const shown = findings.filter((f) => f !== skipped);
   const counts = {error: 0, warning: 0, note: 0};
-  for (const f of findings) counts[f.severity] = (counts[f.severity] || 0) + 1;
+  for (const f of shown) counts[f.severity] = (counts[f.severity] || 0) + 1;
   const parts = [];
-  if (counts.error) parts.push(`<span class="ed-count-error">${counts.error} error${counts.error > 1 ? "s" : ""}</span>`);
-  if (counts.warning) parts.push(`<span class="ed-count-warning">${counts.warning} warning${counts.warning > 1 ? "s" : ""}</span>`);
-  if (counts.note) parts.push(`${counts.note} note${counts.note > 1 ? "s" : ""}`);
-  const labels = S.scene ? `${S.scene.labels} labels placed` : "";
-  $("ed-findings-count").innerHTML = parts.length ? `${labels}, ${parts.join(", ")}` : `${labels}, nothing to report`;
-  for (const f of findings) {
+  if (counts.error) parts.push(`<span class="ed-count-error">${plural(counts.error, "error")}</span>`);
+  if (counts.warning) parts.push(`<span class="ed-count-warning">${plural(counts.warning, "warning")}</span>`);
+  if (counts.note) parts.push(plural(counts.note, "note"));
+  const labels = S.scene ? plural(S.scene.labels, "label") + " placed" : "";
+  const first = shown.length ? `<span class="ed-first">${escapeHtml(shown[0].message)}</span>` : "";
+  $("ed-findings-count").innerHTML = parts.length
+    ? `${labels} · ${parts.join(", ")}${first}` : `${labels} · nothing to report`;
+  $("ed-physics-said").textContent = !S.physics ? ""
+    : skipped ? skipped.message
+    : "The numbers agree at every node the diagram states.";
+  $("ed-physics-said").hidden = !S.physics;
+  for (const f of shown) {
     const li = document.createElement("li");
     li.className = `ed-sev-${f.severity}`;
     li.innerHTML = `<span class="ed-code">${f.severity}: ${escapeHtml(f.code)}</span><span>${escapeHtml(f.message)}<span class="ed-remedy">${escapeHtml(f.remedy)}</span></span>`;
     li.addEventListener("click", () => pointAt(f));
     list.appendChild(li);
   }
+  // something is wrong with the drawing: say what, without being asked
+  if (counts.error || counts.warning) openFindings(true);
+}
+
+function openFindings(on) {
+  const l = $("ed-findings-list"), t = $("ed-findings-toggle");
+  if (on && !t.dataset.closed) l.hidden = false;
+  else if (!on) l.hidden = true;
+  t.setAttribute("aria-expanded", String(!l.hidden));
+  t.querySelector(".ed-findings-more").textContent = l.hidden ? "▾" : "▴";
 }
 
 function pointAt(f) {
@@ -360,6 +393,7 @@ let drag = null;  // {kind: element|pan|via, ...}
 const pointers = new Map();
 let pinch = null;
 let lastTap = null;   // {sel, t, x, y} for a double-tap on touch
+let lastPointer = {x: 0, y: 0};   // where a card with nothing to sit beside goes
 
 function hitAt(target) {
   const r = target && target.closest ? target.closest("#ed-hits rect") : null;
@@ -368,6 +402,7 @@ function hitAt(target) {
 
 canvas.addEventListener("pointerdown", (e) => {
   if (S.present) return;
+  lastPointer = {x: e.clientX, y: e.clientY};
   pointers.set(e.pointerId, {x: e.clientX, y: e.clientY});
   if (pointers.size === 2) {
     const [a, b] = [...pointers.values()];
@@ -413,6 +448,99 @@ function currentAt(hit) {
   return hit.rect.dataset.at.split(",").map(Number);
 }
 
+// ------------------------------------------------- a path takes its wire
+// `at` on a branch is used by the library exactly as written and is never
+// projected onto the run, so a symbol dropped beside its wire makes the
+// wire jog diagonally out to meet it and back, and the checker says so.
+// A drag near the run therefore slides the symbol along it; a drag away
+// from it bends the run to follow, with a waypoint either side of the
+// symbol so the wire arrives at the box and leaves it.
+const OFF_RUN = 12;     // nearer than this to the run and the box just slides
+const DETOUR_PAD = 6;   // how far past the box the wire straightens again
+
+const tidy = (v) => Math.round(v * 1000) / 1000;
+
+function symbolHit(sel) {
+  const hits = (S.scene && S.scene.hits) || [];
+  return hits.find((h) => h.role === sel.role && h.index === sel.index
+                          && h.element === "symbol") || null;
+}
+
+function routeOf(el) {
+  // what the library routes: [source, *via, target]. Null when an end is
+  // the rail or a node the solver has not placed yet.
+  const ends = [el.from, el.to].map((id) => {
+    const n = nodeById(id);
+    return n && n.at ? [n.at[0], n.at[1]] : null;
+  });
+  if (!ends[0] || !ends[1]) return null;
+  return [ends[0], ...(el.via || []).map((v) => [v[0], v[1]]), ends[1]];
+}
+
+function nearestSegment(route, p) {
+  let best = 0, bestD = Infinity;
+  for (let i = 0; i < route.length - 1; i++) {
+    const [ax, ay] = route[i], [bx, by] = route[i + 1];
+    const dx = bx - ax, dy = by - ay;
+    const len = Math.hypot(dx, dy);
+    if (!len) continue;
+    const t = clamp(((p[0] - ax) * dx + (p[1] - ay) * dy) / (len * len), 0, 1);
+    const d = Math.hypot(p[0] - ax - t * dx, p[1] - ay - t * dy);
+    if (d < bestD) { best = i; bestD = d; }
+  }
+  const [ax, ay] = route[best], [bx, by] = route[best + 1];
+  const len = Math.hypot(bx - ax, by - ay) || 1;
+  const u = [(bx - ax) / len, (by - ay) / len];
+  return {i: best, a: [ax, ay], u, len,
+          along: (p[0] - ax) * u[0] + (p[1] - ay) * u[1],
+          off: (p[0] - ax) * -u[1] + (p[1] - ay) * u[0]};
+}
+
+// The pair this editor wrote around `at` last time, if it is still there.
+// Nothing in the file marks one, so it is recognised by its shape: two
+// waypoints in a row whose midpoint is the symbol. Anything else is the
+// author's and is left where it is.
+function dropBracket(el) {
+  const via = el.via;
+  if (!via || via.length < 2 || !el.at) return;
+  for (let i = 0; i < via.length - 1; i++) {
+    if (Math.abs((via[i][0] + via[i + 1][0]) / 2 - el.at[0]) < 0.02
+        && Math.abs((via[i][1] + via[i + 1][1]) / 2 - el.at[1]) < 0.02) {
+      via.splice(i, 2);
+      if (!via.length) delete el.via;
+      return;
+    }
+  }
+}
+
+// Returns false when the drop was off the run but the run was too short to
+// route around, so the caller can say why the symbol stayed on the wire.
+function placeBranchSymbol(sel, p) {
+  const el = element(sel);
+  dropBracket(el);
+  const route = routeOf(el);
+  if (!route) { el.at = [snap(p[0]), snap(p[1])]; return true; }
+  const seg = nearestSegment(route, p);
+  const hit = symbolHit(sel);
+  const d = (hit && hit.half_len != null ? hit.half_len : 42) + DETOUR_PAD;
+  if (Math.abs(seg.off) <= OFF_RUN || 2 * d > seg.len) {
+    // Along the run, quantised along the run. Snapping to the page grid
+    // instead would throw a point on a diagonal up to 7 units off its own
+    // line, and the checker's tolerance for that is one unit.
+    const t = clamp(snap(seg.along), 0, seg.len);
+    el.at = [tidy(seg.a[0] + seg.u[0] * t), tidy(seg.a[1] + seg.u[1] * t)];
+    return Math.abs(seg.off) <= OFF_RUN;
+  }
+  const c = [snap(p[0]), snap(p[1])];
+  const out = (k) => [tidy(c[0] + seg.u[0] * k * d), tidy(c[1] + seg.u[1] * k * d)];
+  el.via = el.via || [];
+  // into the leg the drop landed on, not onto the end of the list: via[i]
+  // is route[i+1], so the pair belongs at via index i
+  el.via.splice(seg.i, 0, out(-1), out(1));
+  el.at = c;
+  return true;
+}
+
 canvas.addEventListener("pointermove", (e) => {
   if (pointers.has(e.pointerId)) pointers.set(e.pointerId, {x: e.clientX, y: e.clientY});
   if (pinch && pointers.size === 2) {
@@ -442,7 +570,9 @@ canvas.addEventListener("pointermove", (e) => {
     setView({...drag.view, x: drag.view.x - (e.clientX - drag.start.x) * upp, y: drag.view.y - (e.clientY - drag.start.y) * upp});
   } else if (drag.kind === "element" && drag.movable) {
     const el = element(drag.sel);
-    el.at = [snap(drag.orig[0] + dx), snap(drag.orig[1] + dy)];
+    const p = [drag.orig[0] + dx, drag.orig[1] + dy];
+    if (drag.sel.role === "branch") drag.routed = placeBranchSymbol(drag.sel, p);
+    else el.at = [snap(p[0]), snap(p[1])];
     refresh();
   } else if (drag.kind === "via") {
     element(drag.sel).via[drag.i] = [snap(drag.orig[0] + dx), snap(drag.orig[1] + dy)];
@@ -466,6 +596,8 @@ canvas.addEventListener("pointerup", (e) => {
       S.undo.push(d.snapshot); S.redo.length = 0;
       afterEdit();
       select(d.sel, false);
+      if (d.routed === false) toast("These nodes are too close to route "
+                                    + "around, so the box stayed on the wire.");
     } else {
       // a second tap on the same node within a moment is a double-tap: the
       // touch form of the double-click that starts a connection
@@ -525,11 +657,33 @@ canvas.addEventListener("wheel", (e) => {
   }
 }, {passive: false});
 
-function select(sel, popover = true) {
+// `fresh` says the element was just made, and only then is the cursor put
+// in its Label field: the key handler ignores every key typed in a field,
+// so a card that grabs the cursor on a plain click is a card that swallows
+// Delete on everything the reader selects.
+// Removing a node takes every path and source hanging on it, which is
+// what the file requires and not what the reader can see, so it says so.
+function removeSelected() {
+  if (!S.sel) return;
+  const sel = S.sel, el = element(sel);
+  let went = 0;
+  if (sel.role === "node") {
+    const id = el.id;
+    went = S.data.branches.filter((b) => b.from === id || b.to === id).length
+         + S.data.sources.filter((x) => (x.to || x.from) === id).length;
+  }
+  edit(() => removeElement(sel));
+  select(null);
+  if (went) toast(`Deleted, with ${plural(went, "path or source", "paths and sources")} that joined it.`,
+                  {label: "Undo", act: undo});
+}
+
+function select(sel, popover = true, fresh = false) {
   S.sel = sel;
   drawSelection();
   $("ed-delete").disabled = !sel;
-  if (sel && popover) openPopover(sel); else closePopover();
+  if (sel && popover) openPopover(sel, fresh); else closePopover();
+  if (!fresh) canvas.focus({preventScroll: true});
 }
 
 // ------------------------------------------------------------------ modes
@@ -579,7 +733,7 @@ function placeNode(kind, p) {
     d.nodes.push(n);
   });
   setMode("idle");
-  select({role: "node", index: S.data.nodes.length - 1});
+  select({role: "node", index: S.data.nodes.length - 1}, true, true);
 }
 
 // A path or a source dropped on a node: a source attaches there; a path
@@ -624,7 +778,7 @@ function attachSource(kind, nodeId) {
     d.sources.push(s);
   });
   setMode("idle");
-  select({role: "source", index: S.data.sources.length - 1});
+  select({role: "source", index: S.data.sources.length - 1}, true, true);
 }
 
 function finishConnect(fromId, toId, kind) {
@@ -635,7 +789,7 @@ function finishConnect(fromId, toId, kind) {
     if (kind !== "cond") b.kind = kind;
     d.branches.push(b);
   });
-  select({role: "branch", index: S.data.branches.length - 1});
+  select({role: "branch", index: S.data.branches.length - 1}, true, true);
 }
 
 // the palette: tap to arm, drag to drop
@@ -675,6 +829,7 @@ document.querySelectorAll(".ed-card").forEach((card) => {
     }
     const over = document.elementFromPoint(e.clientX, e.clientY);
     if (!over || !over.closest("#ed-stage")) return;
+    lastPointer = {x: e.clientX, y: e.clientY};
     const p = toPage(e.clientX, e.clientY);
     const hit = hitAt(over);
     if (d.entry.role === "node") placeNode(d.entry.kind, p);
@@ -750,8 +905,38 @@ function selectBox(name, value, options, labels = {}) {
   return `<select data-field="${name}">${options.map((o) => `<option value="${o}"${o === value ? " selected" : ""}>${escapeHtml(labels[o] || o)}</option>`).join("")}</select>`;
 }
 const SIDES = ["auto", "up", "down", "left", "right"];
+// The card is rebuilt whenever a field changes its shape -- a kind, a
+// turn -- and a `details` that shuts every time is a field you cannot use.
+let moreOpen = false;
+const more = () => `<details${moreOpen ? " open" : ""}><summary>More</summary>`;
+pop.addEventListener("toggle", (e) => {
+  if (e.target.tagName === "DETAILS") moreOpen = e.target.open;
+}, true);
 
-function openPopover(sel) {
+// An angle field rests at 0 and is never blank, and the two buttons turn
+// it in 45s, snapping whatever is in the box to the nearest 45 on the way.
+// `reset` is the only way back to a branch's "turns with its wire", which
+// is what an absent angle means and no number can say.
+function rotateField(label, value, reset) {
+  return `<label class="ed-rot"><span>${label}</span><span class="ed-rot-c">`
+    + `<button type="button" data-rot="-45" title="Turn 45 degrees anticlockwise">&#8634;</button>`
+    + `<input type="number" data-field="angle" value="${value}" step="45" aria-label="${escapeHtml(label)}">`
+    + `<button type="button" data-rot="45" title="Turn 45 degrees clockwise">&#8635;</button>`
+    + `<button type="button" data-rot="reset" class="ed-rot-reset" title="${escapeHtml(reset)}">reset</button>`
+    + `</span></label>`;
+}
+
+// what a branch is drawn at when it carries no angle of its own: the
+// bearing of the leg its box landed on, which is 0 for the usual left-to-
+// right path and 90 for one running down the page
+function shownAngle(sel, el) {
+  if (el.angle != null) return el.angle;
+  if (sel.role !== "branch") return 0;
+  const h = symbolHit(sel);
+  return h ? Math.round(h.angle) : 0;
+}
+
+function openPopover(sel, fresh = false) {
   const el = element(sel);
   if (!el) return;
   const u = S.data.units || {};
@@ -764,9 +949,9 @@ function openPopover(sel) {
     h += field(`T, ${escapeHtml(u.T && u.T.unit || u.T || "no unit")}`, text("value", el.value, "temperature"));
     h += field("Kind", selectBox("kind", kind, KINDS.node, Object.fromEntries(KINDS.node.map((k) => [k, kindName("node", k)]))));
     if (kind === "fixed" || kind === "break") h += field("Wall faces", selectBox("wall", el.wall || "down", ["down", "up", "left", "right"]));
-    h += `<details><summary>More</summary>`;
+    h += more();
     h += field("Id", text("id", el.id));
-    h += field("Label angle", num("angle", el.angle || 0, 45));
+    h += rotateField("Label angle", shownAngle(sel, el), "back to 0");
     h += field("Label side", selectBox("side", el.side || "auto", SIDES));
     h += `</details>`;
     h += `<div class="ed-row"><button type="button" data-act="connect" title="Then click the node it joins">Connect to…</button><button type="button" data-act="delete" class="ed-danger">Delete</button></div>`;
@@ -781,10 +966,10 @@ function openPopover(sel) {
     }
     if (kind === "cap") h += field("Subscript", text("sub", el.sub, "names the place"));
     if (kind !== "break" && kind !== "flow") h += field(`Rate q, ${escapeHtml(u.q || "no unit")}`, text("rate", el.rate, "optional"));
-    h += `<details><summary>More</summary>`;
+    h += more();
     h += field("Count", num("count", el.count, 1));
     h += field("Arranged", selectBox("arrangement", el.arrangement || "", ["", "parallel", "series"], {"": "(one path)"}));
-    if (kind !== "flow") h += field("Symbol angle", num("angle", el.angle, 45));
+    if (kind !== "flow") h += rotateField("Symbol angle", shownAngle(sel, el), "back to turning with the wire");
     h += field("Label side", selectBox("side", el.side || "auto", SIDES));
     h += `<div class="ed-row"><button type="button" data-act="swap">Swap ends</button><button type="button" data-act="unpin">Let the symbol float</button></div>`;
     h += `<p style="margin:8px 0 4px;font-size:12.5px;color:var(--ink-3)">Bends</p><ul class="ed-vias">`;
@@ -802,9 +987,9 @@ function openPopover(sel) {
     const q = kind === "diss" ? "P" : kind === "flux" ? "q″" : "q";
     h += field(`${q}, ${escapeHtml(u[q] || "no unit")}`, text("value", el.value, "value"));
     if (kind === "flow" || kind === "flux") h += field("Direction", selectBox("direction", outward ? "out" : "in", ["in", "out"], {in: "into the node", out: "leaving the node"}));
-    h += `<details><summary>More</summary>`;
+    h += more();
     h += field("Count", num("count", el.count, 1));
-    h += field("Angle", num("angle", el.angle || 0, 45));
+    h += rotateField("Angle", shownAngle(sel, el), "back to 0");
     h += field("Label side", selectBox("side", el.side || "auto", SIDES));
     h += `<div class="ed-row"><button type="button" data-act="unpin">Let it float</button></div>`;
     h += `</details>`;
@@ -814,32 +999,54 @@ function openPopover(sel) {
   pop.hidden = false;
   placePopover(sel);
   const first = pop.querySelector('input[data-field="label"]');
-  if (first && !first.value) first.focus();
+  if (fresh && first && !first.value) first.focus();
 }
 
 function placePopover(sel) {
-  const b = boundsOf(sel);
   const st = $("ed-stage").getBoundingClientRect();
-  if (!b) { pop.style.left = "12px"; pop.style.top = "12px"; return; }
-  const tl = toScreen(b[0], b[1]), br = toScreen(b[2], b[3]);
   const pw = pop.offsetWidth || 320, ph = pop.offsetHeight || 260;
-  // beside the element first, so its own label stays readable while it is
-  // edited; below it, then above it, when there is no room to the right
-  let left, top;
-  if (br.x + 16 + pw <= st.width - 8) {
-    left = br.x + 16;
-    top = clamp(tl.y - 8, 8, Math.max(8, st.height - ph - 8));
-  } else if (br.y + 12 + ph <= st.height - 8) {
-    left = clamp(tl.x, 8, st.width - pw - 8);
-    top = br.y + 12;
-  } else {
-    left = clamp(tl.x, 8, st.width - pw - 8);
-    top = Math.max(8, tl.y - ph - 12);
+  const b = boundsOf(sel);
+  // The hit rectangles arrive a library round trip after the element does,
+  // so a card opened on something new has nothing to sit beside yet. The
+  // pointer is where the reader is looking; the corner is not. `refresh`
+  // calls this again the moment the rectangles land.
+  if (!b) {
+    pop.style.left = clamp(lastPointer.x - st.left + 20, 8, Math.max(8, st.width - pw - 8)) + "px";
+    pop.style.top = clamp(lastPointer.y - st.top - 20, 8, Math.max(8, st.height - ph - 8)) + "px";
+    return;
   }
-  pop.style.left = left + "px"; pop.style.top = top + "px";
+  const tl = toScreen(b[0], b[1]), br = toScreen(b[2], b[3]);
+  // whichever side of the element has room, widest first, so the element's
+  // own label stays readable while it is edited; then below, then above
+  const right = st.width - br.x - 16, left = tl.x - 16;
+  let x, y;
+  if (Math.max(right, left) >= pw + 8) {
+    x = right >= left ? br.x + 16 : tl.x - 16 - pw;
+    y = clamp(tl.y - 8, 8, Math.max(8, st.height - ph - 8));
+  } else if (br.y + 12 + ph <= st.height - 8) {
+    x = clamp(tl.x, 8, Math.max(8, st.width - pw - 8));
+    y = br.y + 12;
+  } else {
+    x = clamp(tl.x, 8, Math.max(8, st.width - pw - 8));
+    y = Math.max(8, tl.y - ph - 12);
+  }
+  pop.style.left = clamp(x, 8, Math.max(8, st.width - pw - 8)) + "px";
+  pop.style.top = y + "px";
 }
 
-function closePopover() { pop.hidden = true; pop.innerHTML = ""; }
+function closePopover() { pop.hidden = true; pop.innerHTML = ""; delete pop.dataset.rename; }
+
+// A card that belongs to a button in the chrome rather than to something
+// on the drawing: under the button, kept inside the stage.
+function underButton(card, btn) {
+  const st = $("ed-stage").getBoundingClientRect(), b = btn.getBoundingClientRect();
+  const w = card.offsetWidth || 300, h = card.offsetHeight || 220;
+  card.style.left = clamp(b.left - st.left, 8, Math.max(8, st.width - w - 8)) + "px";
+  card.style.top = clamp(b.bottom - st.top + 6, 8, Math.max(8, st.height - h - 8)) + "px";
+}
+// leaving a field must hand the keyboard back, or Delete goes on being
+// swallowed by an input nobody is looking at any more
+function toCanvas() { if (!S.present) canvas.focus({preventScroll: true}); }
 
 pop.addEventListener("change", (e) => {
   const f = e.target.dataset.field;
@@ -853,17 +1060,33 @@ pop.addEventListener("input", (e) => {
   applyField(S.sel, f, e.target.value, true);
 });
 pop.addEventListener("keydown", (e) => {
-  if (e.key === "Enter" && e.target.tagName === "INPUT") { e.preventDefault(); e.target.blur(); closePopover(); }
-  if (e.key === "Escape") closePopover();
+  // the card handles its own keys and says so: the document's Escape
+  // chain would otherwise find the card already shut and go on to close
+  // whatever is behind it
+  if (e.key === "Enter" && e.target.tagName === "INPUT") {
+    e.preventDefault(); e.stopPropagation(); e.target.blur(); closePopover(); toCanvas();
+  }
+  if (e.key === "Escape") { e.stopPropagation(); closePopover(); toCanvas(); }
 });
 pop.addEventListener("click", (e) => {
+  const rot = e.target.dataset.rot;
+  if (rot && S.sel) {
+    if (rot === "reset") { applyField(S.sel, "angle", ""); openPopover(S.sel); return; }
+    const box = pop.querySelector('input[data-field="angle"]');
+    const now = Number(box && box.value) || 0;
+    // whatever is in the box tidies itself to a multiple of 45 on the way
+    const next = ((Math.round(now / 45) * 45 + Number(rot)) % 360 + 360) % 360;
+    applyField(S.sel, "angle", String(next));
+    openPopover(S.sel);
+    return;
+  }
   const act = e.target.dataset.act;
   if (!act || !S.sel) return;
   const sel = S.sel, el = element(sel);
   if (act === "delete") { edit(() => removeElement(sel)); select(null); return; }
   if (act === "connect") { startConnect(el.id, "cond"); return; }
   if (act === "swap") { edit(() => { [el.from, el.to] = [el.to, el.from]; }); openPopover(sel); return; }
-  if (act === "unpin") { edit(() => { delete el.at; }); return; }
+  if (act === "unpin") { edit(() => { dropBracket(el); delete el.at; }); return; }
   if (act === "via-add") {
     const b = boundsOf(sel);
     const at = b ? [snap((b[0] + b[2]) / 2), snap((b[1] + b[3]) / 2)] : [0, 0];
@@ -927,8 +1150,10 @@ $("ed-settings").addEventListener("click", () => {
   select(null);
   const d = S.data, u = d.units || {};
   const T = typeof u.T === "object" && u.T ? u.T : {unit: u.T || "", scale: ""};
-  let h = `<h4>Title &amp; units</h4>`;
-  h += field("Title", text("title", d.title, "shown on the page"));
+  // The diagram's name is not here. It is the one in the top bar, which
+  // names the file and, when the reader says so, is drawn on the page:
+  // two boxes for one name was the confusion this card used to carry.
+  let h = `<h4>Units &amp; rail</h4>`;
   for (const q of ["R", "C", "P", "q", "q″"]) h += field(`Unit of ${q}`, text(`unit:${q}`, u[q], q === "R" ? "K/W" : ""));
   h += field("Unit of T", text("unit:T", T.unit, "°C or K"));
   h += field("T scale", selectBox("scale", T.scale || "", ["", "absolute", "rise"], {"": "(unstated)"}));
@@ -939,7 +1164,7 @@ $("ed-settings").addEventListener("click", () => {
   h += `<div class="ed-row"><button type="button" data-act="solve" title="Give every node without a place one, along a chain">Place unplaced nodes</button></div>`;
   pop.innerHTML = h;
   pop.hidden = false;
-  pop.style.left = "12px"; pop.style.top = "12px";
+  underButton(pop, $("ed-settings"));
   S.sel = null;
 });
 pop.addEventListener("change", (e) => {
@@ -947,7 +1172,6 @@ pop.addEventListener("change", (e) => {
   if (!f || S.sel) return;
   const value = e.target.value === "" ? null : e.target.value;
   edit((d) => {
-    if (f === "title") { if (value) d.title = value; else delete d.title; return; }
     d.units = d.units || {};
     if (f.startsWith("unit:")) {
       const q = f.slice(5);
@@ -977,7 +1201,8 @@ pop.addEventListener("click", async (e) => {
 });
 
 // ---------------------------------------------------------------- files
-const STORE = {index: "thermodraw:index", file: (id) => `thermodraw:file:${id}`, last: "thermodraw:last", theme: "thermodraw:theme"};
+const STORE = {index: "thermodraw:index", file: (id) => `thermodraw:file:${id}`, last: "thermodraw:last", theme: "thermodraw:theme",
+               toured: "thermodraw:toured"};
 function readIndex() { try { return JSON.parse(localStorage.getItem(STORE.index) || "[]"); } catch { return []; } }
 function writeIndex(ix) { localStorage.setItem(STORE.index, JSON.stringify(ix)); }
 
@@ -1045,15 +1270,67 @@ function deleteFile(id) {
   }});
 }
 
-function renameFile(id) {
+// A diagram is named once. The name is the file's, and the checkbox says
+// whether it also goes inside the file as `title`, which is what an
+// exported page is called and what names the copy at the far end of a
+// share link. It is not drawn on the diagram; nothing draws a title.
+// There used to be a second name for this under Title & units, which is
+// why nobody could tell which of the two they were editing.
+function renameFile(id, anchor) {
   const ix = readIndex();
   const f = ix.find((x) => x.id === id);
-  const name = prompt("Name this diagram", f.name);
-  if (!name) return;
-  f.name = name; writeIndex(ix);
-  if (S.file && S.file.id === id) { S.file.name = name; updateChrome(); }
+  if (!f) { toast("That file is not in this browser any more."); return; }
+  const open = S.file && S.file.id === id;
+  const drawn = open && S.data && S.data.title != null;
+  closeMenu();
+  pop.innerHTML = `<h4>Name this diagram</h4>`
+    + field("Name", `<input type="text" data-rn="name" value="${escapeHtml(f.name)}" autocomplete="off">`)
+    + (open ? `<label class="ed-check"><input type="checkbox" data-rn="drawn"${drawn ? " checked" : ""}>`
+              + `<span>Keep this name inside the file</span></label>`
+              + `<p class="ed-hint">Then an exported page is called this, and so is the`
+              + ` copy anyone gets from a share link.</p>`
+            : `<p class="ed-hint">Open this file to choose whether its name travels with it.</p>`)
+    + `<div class="ed-row"><button type="button" data-rn="ok">Rename</button>`
+    + `<button type="button" data-rn="cancel">Cancel</button></div>`;
+  pop.dataset.rename = id;
+  pop.hidden = false;
+  underButton(pop, anchor || $("ed-file"));
+  const box = pop.querySelector('input[data-rn="name"]');
+  box.focus(); box.select();
+  S.sel = null;
+}
+
+function commitRename() {
+  const id = pop.dataset.rename;
+  if (!id) return;
+  const name = (pop.querySelector('input[data-rn="name"]').value || "").trim();
+  const drawnBox = pop.querySelector('input[data-rn="drawn"]');
+  if (!name) { toast("A diagram needs a name."); return; }
+  const ix = readIndex();
+  const f = ix.find((x) => x.id === id);
+  if (f) { f.name = name; writeIndex(ix); }
+  if (S.file && S.file.id === id) {
+    S.file.name = name;
+    if (drawnBox) edit((d) => { if (drawnBox.checked) d.title = name; else delete d.title; });
+    else save();
+    updateChrome();
+  }
+  closeRename();
   renderFiles();
 }
+
+function closeRename() { delete pop.dataset.rename; closePopover(); toCanvas(); }
+
+pop.addEventListener("click", (e) => {
+  const a = e.target.dataset.rn;
+  if (!a || !pop.dataset.rename) return;
+  if (a === "ok") commitRename();
+  if (a === "cancel") closeRename();
+});
+pop.addEventListener("keydown", (e) => {
+  if (!pop.dataset.rename) return;
+  if (e.key === "Enter") { e.preventDefault(); commitRename(); }
+});
 
 function renderFiles() {
   const ul = $("ed-files");
@@ -1108,21 +1385,48 @@ const filesPanel = $("ed-files-panel");
 function closeFiles() { filesPanel.classList.remove("ed-open"); }
 $("ed-files-toggle").addEventListener("click", () => filesPanel.classList.toggle("ed-open"));
 $("ed-files-close").addEventListener("click", closeFiles);
-$("ed-file").addEventListener("click", () => { if (S.file) renameFile(S.file.id); });
+$("ed-file").addEventListener("click", () => { if (S.file) renameFile(S.file.id, $("ed-file")); });
 
 // ---------------------------------------------------------------- menus
 const menu = $("ed-menu");
-function closeMenu() { menu.hidden = true; delete menu.dataset.file; }
+function closeMenu() {
+  menu.hidden = true;
+  delete menu.dataset.file;
+  $("ed-more").setAttribute("aria-expanded", "false");
+}
+
+// On a narrow screen the same buttons wrap to four rows and take a quarter
+// of the window, so they move into one menu that opens under a single
+// button. The buttons themselves stay: the menu clicks them.
+$("ed-more").addEventListener("click", () => {
+  if (!menu.hidden) { closeMenu(); return; }
+  const ids = ["ed-delete", null, "ed-fit", "ed-notation", "ed-theme",
+               "ed-present", null, "ed-settings", "ed-share", "ed-export"];
+  menu.innerHTML = ids.map((id) => id
+    ? `<button type="button" data-go="${id}"${$(id).disabled ? " disabled" : ""}>`
+      + `${escapeHtml($(id).textContent)}</button>`
+    : "<hr>").join("");
+  delete menu.dataset.file;
+  underButton(menu, $("ed-more"));
+  menu.hidden = false;
+  $("ed-more").setAttribute("aria-expanded", "true");
+});
 menu.addEventListener("click", async (e) => {
+  const go = e.target.dataset.go;
+  if (go) { closeMenu(); $(go).click(); return; }
   const f = e.target.dataset.f, x = e.target.dataset.x;
   const id = menu.dataset.file;
   closeMenu();
   if (f && id) {
-    if (f === "rename") renameFile(id);
+    if (f === "rename") renameFile(id, $("ed-file"));
     if (f === "del") deleteFile(id);
     if (f === "dup") {
       const src = readIndex().find((y) => y.id === id);
-      newFile(src.name + " (copy)", JSON.parse(localStorage.getItem(STORE.file(id))));
+      const copy = JSON.parse(localStorage.getItem(STORE.file(id)));
+      const name = src.name + " (copy)";
+      // one name: if the original drew its own, the copy draws the copy's
+      if (copy.title != null) copy.title = name;
+      newFile(name, copy);
     }
     return;
   }
@@ -1140,8 +1444,7 @@ menu.addEventListener("click", async (e) => {
     download(`${base}-${mode}.png`, await rasterise(svg, 2, mode), "image/png");
   } catch (err) { toast("Export failed: " + err.message); }
 });
-$("ed-export").addEventListener("click", (e) => {
-  const r = e.target.getBoundingClientRect(), st = $("ed-stage").getBoundingClientRect();
+$("ed-export").addEventListener("click", () => {
   menu.innerHTML = `
     <button data-x="svg">SVG that follows light and dark</button>
     <button data-x="svg-light">SVG, light, for Word and slides</button>
@@ -1150,8 +1453,9 @@ $("ed-export").addEventListener("click", (e) => {
     <button data-x="png-dark">PNG, dark, 2×</button>
     <hr><button data-x="page">HTML page with its controls</button>
     <button data-x="json">JSON, the diagram itself</button>`;
-  menu.style.left = clamp(r.left - st.left, 8, st.width - 240) + "px";
-  menu.style.top = "8px";
+  // the button itself is hidden on a narrow screen, where the menu that
+  // opened this one is the thing to sit under
+  underButton(menu, $("ed-export").offsetParent ? $("ed-export") : $("ed-more"));
   menu.hidden = false;
 });
 
@@ -1263,6 +1567,114 @@ function setHelp(on) {
 $("ed-help").addEventListener("click", () => setHelp($("ed-help-panel").hidden));
 $("ed-help-close").addEventListener("click", () => setHelp(false));
 
+// ------------------------------------------------------------------ tour
+// Four steps on the real editor, each finished by doing it rather than by
+// clicking Next: a page of prose about dragging is not how anyone learns
+// to drag. It runs on a scratch file so a reader who already has work open
+// cannot lose any of it.
+let tour = null;   // {step, fileId, from}
+
+const TOUR = [
+  {at: () => document.querySelector('.ed-card[data-key="free"]'),
+   text: "<b>Drag this onto the drawing.</b> A node is a place heat is — a "
+       + "die, a wall, the air. Nodes go anywhere.",
+   done: () => S.data.nodes.length >= 1},
+  {at: () => document.querySelector('.ed-card[data-key="free"]'),
+   text: "<b>Now a second one</b>, off to the right of the first.",
+   done: () => S.data.nodes.length >= 2},
+  {at: () => hitFor("node", 0),
+   text: "<b>Double-click this node, then click the other.</b> That draws a "
+       + "path between them — conduction, until you change its kind.",
+   done: () => S.data.branches.length >= 1},
+  {at: () => hitFor("branch", 0),
+   text: "<b>Click the path and give it a value.</b> Every element opens a "
+       + "card beside itself: label, value, kind, and more under <i>More</i>.",
+   done: () => S.data.branches.length >= 1 && S.data.branches[0].value != null},
+  {at: () => $("ed-findings"),
+   text: "<b>That is the whole editor.</b> This strip is what "
+       + "<code>thermodraw check</code> says about your drawing. Everything "
+       + "else is behind <b>?</b>. Your practice drawing is kept, as "
+       + "<i>Tour</i>.",
+   done: null},
+];
+
+function tourRunning() { return tour !== null; }
+
+function hitFor(role, index) {
+  return hitsG.querySelector(`rect[data-role="${role}"][data-index="${index}"]`);
+}
+
+function startTour() {
+  setHelp(false);
+  closePopover(); closeMenu(); closeFiles();
+  const from = S.file ? S.file.id : null;
+  // marked as taken the moment it starts, not when it ends: a reload
+  // partway through must not hand the reader the same four steps again
+  try { localStorage.setItem(STORE.toured, "1"); } catch {}
+  newFile("Tour", BLANK());
+  tour = {step: 0, fileId: S.file.id, from};
+  drawTour();
+}
+
+function tourCheck() {
+  if (!tour) return;
+  const step = TOUR[tour.step];
+  if (step && step.done && step.done()) { tour.step++; }
+  drawTour();
+}
+
+function drawTour() {
+  const card = $("ed-tour");
+  if (!tour || tour.step >= TOUR.length) { card.hidden = true; return; }
+  const step = TOUR[tour.step];
+  const last = tour.step === TOUR.length - 1;
+  card.innerHTML = `<p class="ed-tour-n">Step ${tour.step + 1} of ${TOUR.length}</p>`
+    + `<p>${step.text}</p>`
+    + `<div class="ed-row"><button type="button" data-tour="end">`
+    + `${last ? "Done" : "Skip the tour"}</button></div>`;
+  card.hidden = false;
+  const target = step.at();
+  const r = target ? target.getBoundingClientRect() : null;
+  const w = card.offsetWidth || 260, h = card.offsetHeight || 130;
+  // beside what it points at, on whichever side has room for it
+  let x = 16, y = 16;
+  if (r && r.width) {
+    x = r.left - w - 14 >= 8 ? r.left - w - 14 : r.right + 14;
+    y = r.top;
+    if (x + w > innerWidth - 8) { x = clamp(r.left, 8, innerWidth - w - 8); y = r.top - h - 14; }
+    if (y + h > innerHeight - 8) y = innerHeight - h - 8;
+  }
+  card.style.left = clamp(x, 8, Math.max(8, innerWidth - w - 8)) + "px";
+  card.style.top = clamp(y, 8, Math.max(8, innerHeight - h - 8)) + "px";
+  card.classList.toggle("ed-tour-done", last);
+  document.querySelectorAll(".ed-tour-mark").forEach((n) => n.classList.remove("ed-tour-mark"));
+  if (target) target.classList.add("ed-tour-mark");
+}
+
+function endTour() {
+  if (!tour) return;
+  const t = tour;
+  tour = null;
+  $("ed-tour").hidden = true;
+  document.querySelectorAll(".ed-tour-mark").forEach((n) => n.classList.remove("ed-tour-mark"));
+  // A reader who reached the end drew that themselves and keeps it. One
+  // who skipped part way asked for nothing and is left with nothing.
+  const finished = t.step >= TOUR.length - 1;
+  if (S.file && S.file.id === t.fileId && !finished) {
+    writeIndex(readIndex().filter((f) => f.id !== t.fileId));
+    localStorage.removeItem(STORE.file(t.fileId));
+    if (!(t.from && openFile(t.from))) {
+      const first = readIndex().sort((a, b) => b.updated - a.updated)[0];
+      if (!(first && openFile(first.id))) newFile("Untitled", BLANK());
+    }
+    renderFiles();
+  }
+}
+
+$("ed-tour").addEventListener("click", (e) => { if (e.target.dataset.tour === "end") endTour(); });
+$("ed-take-tour").addEventListener("click", startTour);
+addEventListener("resize", () => { if (tour) drawTour(); });
+
 // ----------------------------------------------------------------- chrome
 function updateChrome() {
   $("ed-file").textContent = S.file ? S.file.name : "Untitled";
@@ -1271,30 +1683,28 @@ function updateChrome() {
   $("ed-delete").disabled = !S.sel;
   $("ed-notation").textContent = `Notation: ${S.notation}`;
   $("ed-notation").setAttribute("aria-pressed", String(S.notation === "zigzags"));
-  $("ed-physics").textContent = `Physics: ${S.physics ? "on" : "off"}`;
-  $("ed-physics").setAttribute("aria-pressed", String(S.physics));
+  $("ed-physics").checked = S.physics;
   $("ed-theme").textContent = `Theme: ${currentTheme()}`;
   document.title = `${S.file ? S.file.name : "Editor"} · ThermoDraw ${BUILD.version}`;
 }
 $("ed-undo").addEventListener("click", undo);
 $("ed-redo").addEventListener("click", redo);
-$("ed-delete").addEventListener("click", () => { if (S.sel) { const sel = S.sel; edit(() => removeElement(sel)); select(null); } });
+$("ed-delete").addEventListener("click", removeSelected);
 $("ed-fit").addEventListener("click", () => { S.touched = false; fit(); });
 $("ed-notation").addEventListener("click", () => {
   S.notation = S.notation === "boxes" ? "zigzags" : "boxes";
   updateChrome();
   refresh();
 });
-$("ed-physics").addEventListener("click", () => {
-  S.physics = !S.physics;
-  updateChrome();
+$("ed-physics").addEventListener("change", () => {
+  S.physics = $("ed-physics").checked;
   refresh();
 });
 $("ed-findings-toggle").addEventListener("click", () => {
-  const l = $("ed-findings-list");
-  l.hidden = !l.hidden;
-  $("ed-findings-toggle").setAttribute("aria-expanded", String(!l.hidden));
-  $("ed-findings-toggle").querySelector(".ed-findings-more").textContent = l.hidden ? "▾" : "▴";
+  const shut = !$("ed-findings-list").hidden;
+  if (shut) $("ed-findings-toggle").dataset.closed = "1";
+  else delete $("ed-findings-toggle").dataset.closed;
+  openFindings(!shut);
 });
 
 function currentTheme() {
@@ -1325,9 +1735,12 @@ document.addEventListener("keydown", (e) => {
     if (!$("ed-help-panel").hidden) { setHelp(false); return; }
     if (!quick.hidden) { closeQuick(); return; }
     if (!menu.hidden) { closeMenu(); return; }
-    if (!pop.hidden) { closePopover(); return; }
+    if (!pop.hidden) { closePopover(); toCanvas(); return; }
     if (filesPanel.classList.contains("ed-open")) { closeFiles(); return; }
     if (S.mode !== "idle") { setMode("idle"); return; }
+    // last, and only with nothing else open: closing the card you were
+    // asked to type into must not throw away the tour and its drawing
+    if (tour) { endTour(); return; }
     select(null);
     return;
   }
@@ -1335,7 +1748,7 @@ document.addEventListener("keydown", (e) => {
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") { e.preventDefault(); if (e.shiftKey) redo(); else undo(); return; }
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "y") { e.preventDefault(); redo(); return; }
   if (e.key === "Delete" || e.key === "Backspace") {
-    if (S.sel && !S.present) { e.preventDefault(); const sel = S.sel; edit(() => removeElement(sel)); select(null); }
+    if (S.sel && !S.present) { e.preventDefault(); removeSelected(); }
     return;
   }
   if (S.present) {
@@ -1345,15 +1758,16 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "f" || e.key === "F") { S.touched = false; fit(); }
   if (e.key === "z" || e.key === "Z") $("ed-notation").click();
   if (e.key === "d" || e.key === "D") $("ed-theme").click();
-  if (e.key === "p" || e.key === "P") $("ed-physics").click();
+  if (e.key === "p" || e.key === "P") { $("ed-physics").checked = !$("ed-physics").checked; $("ed-physics").dispatchEvent(new Event("change")); }
 });
 
 document.addEventListener("pointerdown", (e) => {
-  if (!pop.hidden && !pop.contains(e.target) && !e.target.closest("#ed-hits") && !e.target.closest("#ed-ui") && e.target.id !== "ed-settings") closePopover();
-  if (!menu.hidden && !menu.contains(e.target) && e.target.id !== "ed-export" && e.target.dataset.act !== "more") closeMenu();
+  if (!pop.hidden && !pop.contains(e.target) && !e.target.closest("#ed-hits") && !e.target.closest("#ed-ui")
+      && e.target.id !== "ed-settings" && e.target.id !== "ed-file") closePopover();
+  if (!menu.hidden && !menu.contains(e.target) && e.target.id !== "ed-export" && e.target.id !== "ed-more" && e.target.dataset.act !== "more") closeMenu();
   if (!$("ed-help-panel").hidden && !$("ed-help-panel").contains(e.target) && e.target.id !== "ed-help") setHelp(false);
 });
-window.addEventListener("resize", () => { if (S.sel) placePopover(S.sel); });
+window.addEventListener("resize", () => { if (S.sel && !pop.hidden) placePopover(S.sel); });
 
 // ------------------------------------------------------------------- boot
 (async function boot() {
@@ -1368,6 +1782,11 @@ window.addEventListener("resize", () => { if (S.sel) placePopover(S.sel); });
     $("ed-loading").hidden = true;
     refresh();
     setTimeout(() => fit(), 60);
+    // a first visit is taught by doing, not by reading the help panel
+    try {
+      if (!localStorage.getItem(STORE.toured) && !location.hash
+          && S.data && !S.data.nodes.length) setTimeout(startTour, 400);
+    } catch {}
   });
   rpc.boot();
 

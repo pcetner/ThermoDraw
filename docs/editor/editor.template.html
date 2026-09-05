@@ -21,7 +21,7 @@ window.THERMODRAW = {version: "{{VERSION}}", wheel: "{{WHEEL}}", pyodide: "{{PYO
 <header id="ed-top">
   <div class="ed-group ed-group-file">
     <button type="button" id="ed-files-toggle" class="ed-narrow-only" title="Show your files">Files</button>
-    <button type="button" id="ed-file" class="ed-name" title="Rename this diagram">Untitled</button>
+    <button type="button" id="ed-file" class="ed-name" title="Name this diagram, and choose whether the name travels inside the file">Untitled</button>
   </div>
   <div class="ed-group" role="group" aria-label="Edit">
     <span class="ed-cap">Edit</span>
@@ -29,23 +29,20 @@ window.THERMODRAW = {version: "{{VERSION}}", wheel: "{{WHEEL}}", pyodide: "{{PYO
     <button type="button" id="ed-redo" title="Redo (Ctrl+Shift+Z)" disabled>Redo</button>
     <button type="button" id="ed-delete" title="Remove the selected component (Delete)" disabled>Delete</button>
   </div>
-  <div class="ed-group" role="group" aria-label="View">
+  <div class="ed-group ed-wide-only" role="group" aria-label="View">
     <span class="ed-cap">View</span>
     <button type="button" id="ed-fit" title="Bring the whole drawing into view (F)">Fit to screen</button>
     <button type="button" id="ed-notation" aria-pressed="false" title="Draw resistances as textured boxes or as circuit zigzags (Z)">Notation: boxes</button>
     <button type="button" id="ed-theme" title="Light or dark page (D)">Theme: light</button>
     <button type="button" id="ed-present" title="Show the drawing alone, full window, for a class (Esc leaves)">Present</button>
   </div>
-  <div class="ed-group" role="group" aria-label="Check">
-    <span class="ed-cap">Check</span>
-    <button type="button" id="ed-physics" aria-pressed="false" title="Also check that the temperatures, resistances and heat rates agree with each other at every node (P)">Physics: off</button>
-  </div>
-  <div class="ed-group" role="group" aria-label="Diagram">
+  <div class="ed-group ed-wide-only" role="group" aria-label="Diagram">
     <span class="ed-cap">Diagram</span>
-    <button type="button" id="ed-settings" title="The diagram's title, its units and its reference rail">Title &amp; units</button>
+    <button type="button" id="ed-settings" title="The unit of each quantity, whether K is absolute or a rise, and the reference rail">Units &amp; rail</button>
     <button type="button" id="ed-share" title="Copy a link that carries this whole diagram; anyone who opens it gets a copy">Copy share link</button>
     <button type="button" id="ed-export" title="Save as SVG, PNG, an HTML page or the JSON file">Export…</button>
   </div>
+  <button type="button" id="ed-more" class="ed-narrow-only" title="View, diagram and export" aria-expanded="false">⋯</button>
   <button type="button" id="ed-help" class="ed-help-btn" title="How this editor works" aria-expanded="false">?</button>
 </header>
 
@@ -65,7 +62,7 @@ window.THERMODRAW = {version: "{{VERSION}}", wheel: "{{WHEEL}}", pyodide: "{{PYO
 </aside>
 
 <main id="ed-stage">
-  <svg id="ed-canvas" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 600" role="application" aria-label="The drawing">
+  <svg id="ed-canvas" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 600" role="application" aria-label="The drawing" tabindex="0">
     <defs>
       <pattern id="ed-grid" width="10" height="10" patternUnits="userSpaceOnUse">
         <path d="M10 0H0V10" fill="none" stroke="var(--rule)" stroke-width="0.5"/>
@@ -100,37 +97,40 @@ window.THERMODRAW = {version: "{{VERSION}}", wheel: "{{WHEEL}}", pyodide: "{{PYO
   <div id="ed-present-label" class="ed-present-label" hidden></div>
   <section id="ed-help-panel" class="ed-help card" hidden aria-label="How this editor works">
     <div class="ed-panel-head"><h2>How this works</h2><button type="button" id="ed-help-close">Close</button></div>
-    <ol>
-      <li><b>Add components.</b> Drag one from the panel on the right onto the drawing, or click empty space and type its name. Nodes go anywhere; a path or a source needs a node, so drop it on one.</li>
-      <li><b>Connect nodes.</b> Double-click a node (double-tap on touch): a line follows your pointer. Click the node it joins. The path is conduction until you change its kind.</li>
-      <li><b>Edit.</b> Click anything to open its card beside it: label, subscript, value, kind, and more under <i>More</i>. Drag a node, a box or a source to move it; it snaps to the grid.</li>
-      <li><b>Read the findings.</b> The strip at the bottom is what <code>thermodraw check</code> says about the drawing; click a finding to see where. <i>Physics</i> adds the balance at every node.</li>
-    </ol>
+    <p class="ed-tour-offer"><button type="button" id="ed-take-tour">Take the tour</button>
+      Four steps on your own drawing: add, connect, edit, check.</p>
     <dl>
       <dt>Undo, Redo, Delete</dt><dd>The last change back or forward; the selected component removed with what hung on it.</dd>
       <dt>Fit to screen</dt><dd>Brings the whole drawing into view. Scroll to zoom, drag empty space to pan, pinch on touch.</dd>
       <dt>Notation</dt><dd>Textured boxes, the default, or circuit zigzags for every resistance. Nothing else moves.</dd>
       <dt>Theme, Present</dt><dd>Light or dark page. Present shows the drawing alone, full window: Esc leaves, ← → step through your files.</dd>
-      <dt>Physics</dt><dd>Also checks that the temperatures, resistances and heat rates agree at every node, in the checker's own words.</dd>
-      <dt>Title &amp; units</dt><dd>The diagram's title, the unit of each quantity, whether K is absolute or a rise, and the reference rail.</dd>
+      <dt>Check the numbers</dt><dd>In the strip at the bottom. Adds a heat balance at every node: what arrives must leave, from the values you typed.</dd>
+      <dt>Units &amp; rail</dt><dd>The unit of each quantity, whether K is absolute or a rise, and the reference rail.</dd>
       <dt>Copy share link</dt><dd>A link that carries the whole diagram inside it. Nothing is stored on any server; whoever opens it gets a copy.</dd>
       <dt>Export</dt><dd>SVG that follows light and dark, SVG baked for Word and slides, PNG, the HTML page with its controls, or the JSON file itself.</dd>
-      <dt>Files</dt><dd>Everything you draw is kept in this browser, saved as you go. New, Example and Import make a file; rename, copy and delete are in each file's menu.</dd>
+      <dt>Files</dt><dd>Everything you draw is kept in this browser, saved as you go. New, Example and Import make a file; rename, copy and delete are in each file's menu. A diagram's name can travel inside the file too, so an export or a share link carries it.</dd>
     </dl>
-    <p class="ed-hint">Keys: Ctrl+Z undo · Ctrl+Shift+Z redo · Delete · Esc · F fit · Z notation · D theme · P physics.</p>
+    <p class="ed-hint">Keys: Ctrl+Z undo · Ctrl+Shift+Z redo · Delete · Esc · F fit · Z notation · D theme · P check the numbers.</p>
   </section>
 </main>
+
+<div id="ed-tour" class="ed-tour card" hidden role="status" aria-live="polite"></div>
 
 <aside id="ed-palette" aria-label="Components">
   <div class="ed-panel-head"><h2>Components</h2></div>
 {{PALETTE}}
-<p class="ed-hint">Drag one onto the drawing, or tap it and then tap the drawing. Nodes go anywhere; drop a path or a source on a node.</p>
 </aside>
 
 <section id="ed-findings" aria-label="Findings">
-  <button type="button" id="ed-findings-toggle" class="ed-findings-summary" aria-expanded="false" title="What thermodraw check says about this drawing">
-    <span id="ed-findings-count">No findings</span><span class="ed-findings-more">▾</span>
-  </button>
+  <div class="ed-findings-bar">
+    <button type="button" id="ed-findings-toggle" class="ed-findings-summary" aria-expanded="false" title="What thermodraw check says about this drawing">
+      <span id="ed-findings-count">No findings</span><span class="ed-findings-more">▾</span>
+    </button>
+    <label class="ed-check ed-physics-check" title="Kirchhoff at every node: from the values you typed, the heat arriving at a node must equal the heat leaving it (P)">
+      <input type="checkbox" id="ed-physics"><span>Check the numbers</span>
+    </label>
+  </div>
+  <p id="ed-physics-said" class="ed-said" hidden></p>
   <ul id="ed-findings-list" hidden></ul>
 </section>
 

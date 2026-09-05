@@ -16,12 +16,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the checker grades, and every export is `Diagram.svg`, `Diagram.page` or
   `to_json`. Your files on the left, the components on the right. Drag
   components on or tap empty space and type a name; double-click a node to
-  connect it to another; edit fields in a popover beside the element; a
-  help panel says what every control does;
-  findings in a strip at the bottom with a physics toggle; files in the
+  connect it to another; edit fields in a card beside the element; a
+  four-step tour on a first visit that advances by doing each step, and a
+  help panel behind `?`; findings in a strip at the bottom, with the check
+  that produces them beside the count; files in the
   browser with import and export as SVG, PNG, HTML page or JSON; New from
   a blank canvas or any diagram on the site; a share link that carries the
   diagram in its fragment; a present mode; undo and redo; mouse and touch.
+  A diagram is named once, in the top bar, and a checkbox there says
+  whether the name goes inside the file as `title` — which is what an
+  exported page is called and what names the copy a share link makes.
+  **A path symbol dragged off its run takes the run with it**: `at` is
+  used by the library exactly as written and is never projected, so
+  writing a drop point into it made the wire jog diagonally out to the box
+  and back, and the checker said so. A drag within 12 units of the run
+  slides the symbol along it, quantised along the run rather than to the
+  page grid — the checker's tolerance is one unit, and grid-snapping a
+  point on a diagonal throws it seven off its own line. A drag further out
+  writes a waypoint either side of the box, spliced into the leg the drop
+  landed on, so the wire arrives at the box and leaves it. A run too short
+  to route around keeps the box on the wire and says why.
   `thermodraw._editor` is the bridge, private; `Placement.index` is new
   and listed in `docs/stability.md`. `tests/test_editor_ui.py` drives the
   built site in headless Chromium, in its own CI job.

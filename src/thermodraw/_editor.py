@@ -42,6 +42,11 @@ def _hit(p, element: str, bounds: Sequence[float]) -> Dict[str, Any]:
     }
     if p.symbol is not None:
         out["kind"] = p.symbol.key
+        # How far the wire is cut back either side of the symbol. `bounds`
+        # cannot stand in for it: that is the ink, which on a box symbol
+        # reaches 62 for leads the symbol is only 42 long. An editor routing
+        # a wire around a dragged symbol needs the 42.
+        out["half_len"] = float(p.symbol.half_len)
     if element == "symbol" and p.role == "branch" and p.via:
         out["via"] = [[float(x), float(y)] for x, y in p.via]
     return out

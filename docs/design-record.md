@@ -1017,3 +1017,57 @@ anywhere, and a present mode for a lecture hall. What is not built is
 written down in the plan that built it: offline use, pinch-zoom polish,
 editing a repeated group's expanded form on the canvas, a text view of
 the JSON.
+
+### What ten minutes of using it found
+
+Three of the four things that were wrong were the same mistake in
+different clothes: a gesture that produced a file the library would
+draw but the checker would object to, or a control whose words did not
+describe what it did.
+
+**A drag must not write a warning.** Dragging a path's box wrote the
+drop point into `at`, and `layout` uses `at` exactly as written — it
+finds the nearest segment and then throws the projection away — so the
+wire jogged diagonally out to meet the box and back, and `check` said
+`symbol-off-its-run` about a drawing the reader had just made by hand.
+The library's own remedy names the fix: `at` on the route, or a `via`
+where the box is. The editor now does both, choosing by how far the drop
+landed from the run. Two details are not obvious and were found by
+running the library rather than by reasoning about it. The first is that
+the slide must be quantised **along the run**: `OFF_RUN` is one unit and
+the page grid is ten, so snapping a point that is on a diagonal line to
+the grid moves it up to seven units off that line, and the snap alone
+raises the warning the change exists to remove. The second is that the
+waypoints must go into the leg the drop landed on, not onto the end of
+the list, or a drop near the source end of an already-bent path sends
+the route to the far end and back. A run shorter than the box plus its
+pad is refused rather than routed around: the route would run past both
+nodes and come back, raise no finding at all, and silence
+`nodes-too-close`, which skips any branch that is not straight.
+
+**A field that grabs the cursor eats every key.** `Delete` was bound and
+never fired, because selecting anything opened its card and put the
+cursor in the empty Label field, and the key handler ignores every key
+typed in a field. It was the correct guard defeating the correct
+binding, and it failed precisely on elements with no label yet — the new
+ones. Only the three creation paths focus the label now; a plain
+selection hands the keyboard to the canvas.
+
+**Two names for one drawing.** The top bar renamed the file and
+`Title & units` set `title`, and nothing said which was which. They are
+one name now. The checkbox that was going to say "draw this as the
+diagram's title" says something else, because nothing draws a title:
+`title` is what an exported page is called and what names the copy at
+the far end of a share link. That is worth having and worth saying
+accurately; a control that promises ink and delivers metadata is the
+same defect as a remedy that cannot be applied.
+
+**Prose is not a walkthrough.** The help panel taught the workflow in a
+numbered list nobody reads. The tour teaches it in four steps on a
+scratch file, each finished by making the move. Two orderings had to be
+got right and both were found by using it: Escape closes the card the
+step just asked you to type into before it ends the tour, and the card
+must stop its own Escape from bubbling, or the document handler finds
+the card already shut and ends the tour anyway. And a reader who
+finishes keeps what they drew; one who skips is left with nothing,
+because they asked for nothing.
