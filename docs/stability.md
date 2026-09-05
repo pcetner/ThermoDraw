@@ -41,7 +41,7 @@ be added; none is removed.
 
 **`Placement`.** The fields `element`, `at`, `angle`, `symbol`, `points`,
 `label`, `radius`, `ref`, `wall`, `role`, `ends`, `via`, `count`,
-`arrangement`, `outward`, `variant`, `shown` and `copy`, and the four
+`arrangement`, `outward`, `variant`, `shown`, `copy` and `index`, and the four
 values of `element`: `symbol`, `wire`, `node`, `ground`, plus `anchor` for
 a repeated group's label.
 
