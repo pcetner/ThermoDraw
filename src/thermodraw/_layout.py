@@ -451,9 +451,21 @@ def layout(diagram) -> List[Placement]:
                         side=s.side), **who))
         reach = -sym.half_len if s.outward else sym.half_len
         end = (centre[0] + along[0] * reach, centre[1] + along[1] * reach)
-        edge = (tip[0] + along[0] * (5.5 if s.outward else -5.5),
-                tip[1] + along[1] * (5.5 if s.outward else -5.5))
-        if _length(end, edge) > 0.5:
+        # The wire stops on the node's circle rather than at its centre, and
+        # the 5.5 is measured along the wire's own direction, `tip` towards
+        # `end`. It used to be measured along `angle`, which is the same
+        # vector only while the source stands on its node's axis — which is
+        # where the solver puts one, and where an author writing `at` by hand
+        # mostly put one. A source dragged off that axis in the editor keeps
+        # its `angle`, so the trim went sideways: an arrow at angle 270 set
+        # to the left of its node ended 5.5 straight *down* from the centre,
+        # off its own line and on the fixed node's stub, hidden under the
+        # circle's opaque fill. The wire read as stopping short of the node
+        # it joins.
+        span = _length(end, tip)
+        if span > 5.5 + 0.5:
+            ux, uy = (end[0] - tip[0]) / span, (end[1] - tip[1]) / span
+            edge = (tip[0] + ux * 5.5, tip[1] + uy * 5.5)
             out.append(Placement("wire", points=[end, edge], ref=ref, **who))
 
     for i, n in enumerate(diagram.nodes):
