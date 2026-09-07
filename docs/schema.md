@@ -559,6 +559,7 @@ something of its own.
 | `wire-through-wall` | warning | a route passing through a boundary node's hatching, which is drawn below the node and cannot be turned |
 | `symbol-off-its-run` | warning | a branch's box placed with `at` off the line its own wire takes, so the run jogs out to it and back |
 | `frame-off-centre` | warning | the `size` you fixed leaves lopsided margins |
+| `run-off-axis` | note | a run within 15 degrees of square but not on it, so its wire and its box are drawn on a slant. A branch with `via` is exempt; so is a diagonal meant as one |
 | `parallel-pair-same-side` | note | two branches between the same two nodes, both labelled on the same side |
 
 Every finding names the schema field that fixes it. Two are worth knowing in
