@@ -7,7 +7,7 @@ it could not know rather than skip it silently.
 """
 import pytest
 
-from thermodraw import DiagramBuilder, check
+from thermodraw import Diagram, DiagramBuilder, check
 from thermodraw.__main__ import main
 
 
@@ -196,3 +196,114 @@ class TestARadiationValueOnARise:
         for scale in (None, "absolute", "rise"):
             assert "node-does-not-balance" not in codes(
                 check(self.sink(scale), physics=True))
+
+
+class TestALinkIsOnePlace:
+    """Kirchhoff is written about a place, not about a name for one.
+
+    So the merge happens before anything is summed. Without it the two ends
+    of a link balance separately, and a source on one of them looks like heat
+    arriving from nowhere at the other.
+    """
+
+    def linked(self, t_face="1520", **kw):
+        return Diagram.from_dict({
+            "units": {"R": "K/kW", "T": "K", "P": "kW", "q": "kW"},
+            "nodes": [
+                {"id": "gas", "value": "1520", "at": [0, 0]},
+                {"id": "face", "value": t_face, "at": [220, 0]},
+                {"id": "cold", "kind": "fixed", "value": "775",
+                 "at": [440, 0]}],
+            "branches": [
+                {"from": "gas", "to": "face", "kind": "link"},
+                {"from": "face", "to": "cold", "kind": "rad",
+                 "value": kw.get("r", "0.4719969589457678")}],
+            "sources": [{"to": "gas", "kind": "diss", "value": "1578.4"}]})
+
+    def test_heat_arriving_at_one_name_balances_at_the_other(self):
+        """The source is on `gas` and the resistance leaves from `face`."""
+        report = check(self.linked(), physics=True)
+        assert codes(report) == []
+
+    def test_the_group_is_named_by_every_name_it_answers_to(self):
+        report = check(self.linked(r="0.9"), physics=True)
+        found = [f for f in report.findings if f.code == "node-does-not-balance"]
+        assert len(found) == 1, "one place, not two nodes"
+        assert "'gas' (linked to 'face')" in found[0].message
+
+    def test_two_temperatures_on_one_place_is_a_contradiction(self):
+        report = check(self.linked(t_face="1480"), physics=True)
+        found = [f for f in report.findings
+                 if f.code == "link-temperatures-disagree"]
+        assert len(found) == 1
+        assert "1520 K and 1480 K" in found[0].message, "not 1.52e+03"
+
+    def test_equal_temperatures_say_nothing(self):
+        assert "link-temperatures-disagree" not in codes(
+            check(self.linked(), physics=True))
+
+
+class TestAStreamBalancesAgainstItsRise:
+    """Not that what arrives equals what leaves: that what arrives, net, is
+    the enthalpy rise the stream states. That equation is the kind's reason
+    to exist, and two `fixed` nodes with a source between them state nothing
+    a checker can hold to."""
+
+    def furnace(self, firing="1578.4", **kw):
+        node = {"id": "strip", "kind": "stream", "at": [220, 0],
+                "inlet": "300", "outlet": "1250", "rate": "1578.4"}
+        node.update(kw)
+        return Diagram.from_dict({
+            "units": {"T": "K", "P": "kW", "q": "kW"},
+            "nodes": [node],
+            "sources": [{"to": "strip", "kind": "diss", "value": firing,
+                         "at": [0, 0]}]})
+
+    def test_the_firing_rate_and_the_rise_agree(self):
+        assert codes(check(self.furnace(), physics=True)) == []
+
+    def test_a_firing_rate_that_does_not_make_the_rise_is_reported(self):
+        report = check(self.furnace(firing="1200"), physics=True)
+        found = [f for f in report.findings
+                 if f.code == "node-does-not-balance"]
+        assert len(found) == 1
+        assert "is a stream carrying off" in found[0].message
+
+    def test_a_stream_with_no_rate_is_named_as_unchecked(self):
+        report = check(self.furnace(rate=None), physics=True)
+        note = [f for f in report.findings if f.code == "physics-not-checked"]
+        assert len(note) == 1
+        assert "no `rate`" in note[0].message
+
+    def test_lmtd_is_said_to_be_uncomputed_rather_than_guessed(self):
+        """It needs both ends of a path, so it is not answerable from the
+        stream alone. Named in the note rather than quietly given the mean."""
+        d = Diagram.from_dict({
+            "units": {"R": "K/kW", "T": "K", "q": "kW"},
+            "nodes": [{"id": "w", "kind": "fixed", "value": "1520",
+                       "at": [0, 0]},
+                      {"id": "s", "kind": "stream", "at": [220, 0],
+                       "inlet": "300", "outlet": "1250", "rate": "1578.4",
+                       "reference": "lmtd"}],
+            "branches": [{"from": "w", "to": "s", "kind": "rad",
+                          "value": "0.47"}]})
+        note = [f for f in check(d, physics=True).findings
+                if f.code == "physics-not-checked"]
+        assert len(note) == 1 and "lmtd" in note[0].message
+
+
+def test_the_furnace_example_holds_both_new_elements_and_closes():
+    """`examples/furnace.json` is the diagram the two additions were built
+    for, and the one the old vocabulary could not state: the chamber gas and
+    the refractory hot face are one place, and the strip is a medium with two
+    temperatures. It carries no coordinate and reports nothing."""
+    import json
+    import pathlib
+
+    path = pathlib.Path(__file__).resolve().parents[1] / "examples" / "furnace.json"
+    data = json.loads(path.read_text(encoding="utf-8"))
+    assert not any("at" in n for n in data["nodes"]), "solver-placed"
+    kinds = {b["kind"] for b in data["branches"]} | {
+        n.get("kind") for n in data["nodes"]}
+    assert {"link", "stream"} <= kinds
+    assert codes(check(Diagram.from_dict(data), physics=True)) == []

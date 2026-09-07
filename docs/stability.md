@@ -26,8 +26,8 @@ finding codes, which a script may key on:
 `wire-through-symbol`, `wire-through-wall`, `symbol-off-its-run`,
 `run-off-axis`, `frame-off-centre`, `parallel-pair-same-side`; and under
 `--physics`,
-`node-does-not-balance`, `rate-does-not-match`, `rad-needs-absolute-scale`
-and `physics-not-checked`.
+`node-does-not-balance`, `rate-does-not-match`, `rad-needs-absolute-scale`,
+`link-temperatures-disagree` and `physics-not-checked`.
 
 A code's severity may not rise within 1.x. A new code may be added, and a
 script that gates on `ok` will see it; a script that gates on a list of
@@ -42,9 +42,9 @@ be added; none is removed.
 
 **`Placement`.** The fields `element`, `at`, `angle`, `symbol`, `points`,
 `label`, `radius`, `ref`, `wall`, `role`, `ends`, `via`, `count`,
-`arrangement`, `outward`, `variant`, `shown`, `copy` and `index`, and the four
-values of `element`: `symbol`, `wire`, `node`, `ground`, plus `anchor` for
-a repeated group's label.
+`arrangement`, `outward`, `variant`, `shown`, `copy` and `index`, and the
+values of `element`: `symbol`, `wire`, `node`, `ground`, `phase`, `stream`
+and `ellipsis`, plus `anchor` for a repeated group's label.
 
 **The public names.** Everything in `thermodraw.__all__`: `Diagram`,
 `Node`, `Branch`, `Source`, `Rail`, `DiagramError`, `solve`, `layout`,

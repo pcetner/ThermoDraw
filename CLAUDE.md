@@ -31,7 +31,7 @@ src/thermodraw/
   _page.py     the same SVG inline in HTML, with its controls
   _editor.py   what the browser editor asks, JSON in and out; private
   __main__.py  the command line: `check`, `describe`, `render`, `page`, `solve`
-  symbols.py   the eighteen symbols, plus sheet renderers
+  symbols.py   the twenty symbols, plus sheet renderers
   theme.py     CSS variables for web, baked literals and fonts for Word/slides
   _metrics.py  generated character widths — do not edit
   fonts/       the vendored subset, OFL-1.1
@@ -231,6 +231,23 @@ sentence after it says what would overturn it.
   force it. `via` bends a wire; a junction between two paths is a `free`
   node with a `sub`, which says what it is; a 0.3 file naming it is refused
   with that advice. It was the one kind the physics check had to fold away.
+- **A `stream` is a node with two temperatures, and it is the one node that
+  is not a place.** `inlet`, `outlet` and `rate`, never `value` — which
+  could not say which end it meant. Streamlines say a moving medium, the
+  same mark `conv` is filled with. Its balance is the reason to have it:
+  what arrives, net, is the rise it states, where the same furnace drawn as
+  two `fixed` nodes reports nothing at any firing rate at all. `reference`
+  says which temperature a resistance joined to it works from and is refused
+  when missing wherever one attaches, on `arrangement`'s rule; `lmtd` is
+  accepted and not yet computed, and is named in the skip note rather than
+  given the mean.
+- **A `link` is two nodes that are one place.** A plain wire, which is what
+  `break` declines to be, and it names no quantity so it refuses `value` and
+  `rate`. It is a claim, not a decoration: `--physics` merges its ends before
+  summing anything, and `link-temperatures-disagree` fires when they state
+  different numbers, with no tolerance — an identity cannot be nearly true.
+  That is what answers `corner` above: `corner` drew nothing *and said
+  nothing*.
 
 ### Rotation and text
 - Text is never rotated. Textures rotate with their box. Boundary symbols
@@ -421,14 +438,19 @@ sentence after it says what would overturn it.
    others in is still the author's. The record's table of what survives a
    solver says which checks it must satisfy, which it minimises, and which it
    may delete, and the chain solver says which it meets by construction.
-2. **What the format cannot state.** The deferred four have now recurred
-   in three runs — a way to relate two elements, a stream with an inlet
-   and an outlet, a result or provisional marker on a number, a
-   diagram-wide qualifier that is drawn — and run 4 named an area basis,
-   a boundary that is one thing drawn twice, physical arrangement as
-   distinct from page layout, and an effective temperature marked as one
-   (`FINDINGS-run-4.md`). Each needs its argument in the record before it
-   is built.
+2. **What the format cannot state.** The deferred four recurred in three
+   runs — a way to relate two elements, a stream with an inlet and an
+   outlet, a result or provisional marker on a number, a diagram-wide
+   qualifier that is drawn — and run 4 named an area basis, a boundary that
+   is one thing drawn twice, physical arrangement as distinct from page
+   layout, and an effective temperature marked as one (`FINDINGS-run-4.md`).
+   **The stream is built**, and so is a ninth that was found twice and never
+   made this list: two nodes that are one place, now `link`. The record has
+   a section for the rest, and each still needs its argument written there
+   before it is built. What the two that shipped do *not* reach is written
+   down with them: a counterflow exchanger still relates two elements, run
+   4's one-room-drawn-twice is still a loop the chain solver refuses, and a
+   heat pipe quoted as a 0.4 K drop still wants a quantity nothing has.
 3. Region enclosures that auto-size to their contents.
 4. Unit handling — `0.35` choosing between K/W and mK/W, with a deliberate
    per-element override.

@@ -502,13 +502,30 @@ def layout(diagram) -> List[Placement]:
         side = n.side
         if side == "auto" and n.wall == "up" and n.angle % 180 == 0:
             side = "auto:down"
-        out.append(Placement(
-            "node", at=at, angle=n.angle, ref=ref,
-            label=Label(user=n.label,
-                        name=S.S_("T", n.sub) if names else None,
-                        value=diagram.value_text(n.kind, n.value),
-                        half=half, half_len=half_len,
-                        side=side), **who))
+        if n.kind == "stream":
+            # A stream states three lines where every other node states one:
+            # the two ends it runs between and what the difference carried
+            # off. The subscripts are the library's, `in` and `out`, because
+            # on a stream those name the two ends structurally rather than
+            # naming a place — an author's `sub` is kept in front of them,
+            # so `sub: "w"` reads `T_w,in`.
+            def at_end(end, sub=n.sub):
+                return S.S_("T", f"{sub},{end}" if sub else end)
+            rate = diagram.rate_text(n.rate)
+            label = Label(
+                user=n.label, name=at_end("in"),
+                value=diagram.value_text(n.kind, n.inlet),
+                extra=[x for x in (
+                    (at_end("out"), diagram.value_text(n.kind, n.outlet)),
+                    (S.S_(M.RATE), rate) if rate else None) if x],
+                half=half, half_len=half_len, side=side)
+        else:
+            label = Label(user=n.label,
+                          name=S.S_("T", n.sub) if names else None,
+                          value=diagram.value_text(n.kind, n.value),
+                          half=half, half_len=half_len, side=side)
+        out.append(Placement("node", at=at, angle=n.angle, ref=ref,
+                             label=label, **who))
         # Both boundary kinds draw a wall; only one draws the stub reaching
         # it. That gap is the entire distinction between them, and it is
         # topological rather than decorative — which is why `break` having
@@ -521,6 +538,8 @@ def layout(diagram) -> List[Placement]:
                                  ref=ref, **who))
         elif n.kind == "phase":
             out.append(Placement("phase", at=at, ref=ref, **who))
+        elif n.kind == "stream":
+            out.append(Placement("stream", at=at, ref=ref, **who))
         elif n.kind == "break":
             # Set further out than a fixed node's wall, so the clear space
             # reads as longer than a stub. At the stub's own distance the

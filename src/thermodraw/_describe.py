@@ -316,6 +316,21 @@ def _kind(p):
     return p.element
 
 
+def _states_no_t(n):
+    """Whether this node puts no temperature on the page at all.
+
+    A `phase` node's temperature is the plateau its marking draws, so it is
+    not asked. A `stream` states two, in `inlet` and `outlet`, and neither is
+    `value`; reporting "no T" for one because `value` is empty would be
+    describing the kind rather than the diagram.
+    """
+    if n.kind == "phase":
+        return False
+    if n.kind == "stream":
+        return n.inlet is None and n.outlet is None
+    return n.value is None
+
+
 def describe(diagram, size: Optional[Sequence[float]] = None,
              padding: float = PADDING,
              source: str = "diagram") -> "Description":
@@ -408,8 +423,7 @@ def describe(diagram, size: Optional[Sequence[float]] = None,
         nodes=[(n.id, n.kind, tuple(n.at)) for n in diagram.nodes if n.at],
         walls={n.id: n.wall for n in diagram.nodes if n.wall != "down"},
         solved=solved,
-        unvalued=[n.id for n in diagram.nodes
-                  if n.at and n.value is None and n.kind != "phase"],
+        unvalued=[n.id for n in diagram.nodes if n.at and _states_no_t(n)],
         scale=diagram.scale,
         temperature_unit=diagram.units.get("T", ""),
         edges=edges,

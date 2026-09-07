@@ -56,7 +56,7 @@ NUDGE = {"fixed": (28, -9), "break": (16, -16), "flux": (-3, 0),
 def vocabulary(cols=4, cw=250, ch=152):
     """Every symbol once, at rest, named and nothing more.
 
-    Laid out group by group, each group starting a new row. At eighteen
+    Laid out group by group, each group starting a new row. At twenty
     entries the order *is* the specification, and a plain left-to-right fill
     stops carrying it — a reader learning the vocabulary needs to see that
     the four box textures are one family and the sources are another.

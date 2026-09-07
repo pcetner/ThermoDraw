@@ -140,7 +140,7 @@ link carries a diagram to anyone.
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/assets/vocabulary-dark.svg">
-    <img src="docs/assets/vocabulary-light.svg" alt="The eighteen symbols" width="800">
+    <img src="docs/assets/vocabulary-light.svg" alt="The twenty symbols" width="800">
   </picture>
 </p>
 
@@ -158,7 +158,7 @@ schemdraw will draw it in circuit notation. None of them says which
 mechanism each path is, in a notation a thermal engineer reads, and none
 says whether the drawing reads well or whether its numbers agree. That is
 what this is for. The parts that are ThermoDraw's own are the
-eighteen-symbol vocabulary, the label solver, `check`, `describe` and
+twenty-symbol vocabulary, the label solver, `check`, `describe` and
 `--physics`. Coordinates are solved for a chain of nodes, which is what
 nearly every network in this notation is. Anything else still takes its
 coordinates from you, and says so by name.

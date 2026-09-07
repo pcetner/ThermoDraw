@@ -263,3 +263,82 @@ def test_a_scale_needs_a_temperature_unit_to_sit_on():
     from thermodraw import DiagramBuilder
     with pytest.raises(DiagramError, match="no entry for 'T'"):
         DiagramBuilder(R="K/W", scale="rise").node("a", at=(0, 0)).build()
+
+
+# ------------------------------------------------- the two 1.1 vocabulary adds
+class TestALinkStatesNothing:
+    """A link's whole claim is that there is nothing between its ends.
+
+    So it names no quantity, and a number on one would be a number about
+    something the element says does not exist. The refusal is the same shape
+    as a `break`'s and gives its own reason, because the two name no quantity
+    for opposite reasons: a break carries no heat, a link carries it with
+    nothing in the way.
+    """
+
+    @pytest.mark.parametrize("field", ["value", "rate"])
+    def test_it_refuses_a_number(self, field):
+        with pytest.raises(DiagramError) as exc:
+            build(units={"R": "K/W", "q": "W"},
+                  branches=[{"from": "a", "to": "b", "kind": "link",
+                             field: "0.1"}])
+        assert "ideal joint" in str(exc.value)
+        assert f"states no {field}" in str(exc.value)
+
+    def test_a_break_keeps_its_own_reason(self):
+        """Both go through one check now; the break's wording is unmoved."""
+        with pytest.raises(DiagramError) as exc:
+            build(units={"R": "K/W"},
+                  branches=[{"from": "a", "to": "b", "kind": "break",
+                             "value": "1"}])
+        assert "carries no heat" in str(exc.value)
+
+    def test_a_label_alone_is_enough(self):
+        d = build(branches=[{"from": "a", "to": "b", "kind": "link",
+                             "label": "Bolted flange"}])
+        assert layout(d) and render(layout(d))
+
+
+class TestAStreamHasTwoTemperatures:
+    """Which is the whole reason the kind exists, so `value` is refused."""
+
+    def stream(self, **extra):
+        return Diagram.from_dict({
+            "units": {"T": "K", "q": "kW", "R": "K/kW"},
+            "nodes": [{"id": "s", "kind": "stream", "at": [0, 0],
+                       "inlet": "300", "outlet": "1250", **extra}]})
+
+    def test_value_is_refused_with_the_reason(self):
+        with pytest.raises(DiagramError) as exc:
+            self.stream(value="775")
+        assert "`inlet` and `outlet`, not `value`" in str(exc.value)
+
+    @pytest.mark.parametrize("field", ["inlet", "outlet", "rate", "reference"])
+    def test_another_kind_refuses_a_stream_field(self, field):
+        with pytest.raises(DiagramError) as exc:
+            Diagram.from_dict({
+                "units": {"T": "K", "q": "kW"},
+                "nodes": [{"id": "s", "at": [0, 0], field: "300"}]})
+        assert "belongs to a `stream` node" in str(exc.value)
+
+    def test_reference_must_be_one_of_the_four(self):
+        with pytest.raises(DiagramError) as exc:
+            self.stream(reference="average")
+        assert "'lmtd'" in str(exc.value)
+
+    def test_no_reference_is_needed_until_a_resistance_joins(self):
+        """A stream fed by sources and flows alone never reads it, and
+        requiring it there would be a field asked for and never used."""
+        assert self.stream(rate="1578.4").validate()
+
+    def test_a_resistance_joining_one_requires_it(self):
+        with pytest.raises(DiagramError) as exc:
+            Diagram.from_dict({
+                "units": {"T": "K", "q": "kW", "R": "K/kW"},
+                "nodes": [{"id": "w", "at": [0, 0], "value": "1520"},
+                          {"id": "s", "kind": "stream", "at": [220, 0],
+                           "inlet": "300", "outlet": "1250", "rate": "1578.4"}],
+                "branches": [{"from": "w", "to": "s", "kind": "rad",
+                              "value": "0.47"}]})
+        assert "needs a `reference`" in str(exc.value)
+        assert "never inferred" in str(exc.value)
