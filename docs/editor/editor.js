@@ -7,15 +7,26 @@
 // transparent rectangle per thing that can be clicked, and the findings.
 // Nothing here knows how a symbol looks.
 //
-// The workflow it is built around: drag components in (nodes go anywhere,
-// a path or a source lands on a node), double-click a node to connect it
-// to another, click anything to edit it.
+// The workflow it is built around: drag a component in and it lands whole,
+// where you dropped it, joined to nothing. A path arrives as its own two
+// nodes with the box between them, because a branch naming no node is not a
+// diagram the schema can hold -- and because which end meets which node is
+// the author's to say, never the editor's to guess. Loose ends are red, and
+// the red dot is what joins one to something already drawn. Double-click a
+// node to draw a path to another, click anything to edit it, [ and ] turn
+// what is selected.
 
 const $ = (id) => document.getElementById(id);
 const BUILD = window.THERMODRAW;
 const GRID = 10;
 const snap = (v) => Math.round(v / GRID) * GRID;
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+
+// The solver's own spacing between two nodes on a run, sent by
+// `_editor.head` so the editor's number and the library's are one number.
+// A dropped path is laid out at it, and a run built by hand at it is the
+// run `_solve` would have placed. The habit's 220 until the library answers.
+let PITCH = 220;
 
 // ------------------------------------------------------------- the library
 const rpc = (() => {
@@ -59,8 +70,10 @@ const S = {
   data: null,            // the diagram, as JSON
   scene: null,           // the last good scene from the library
   sel: null,             // {role, index} or null
-  mode: "idle",          // idle | place | connect
-  pending: null,         // place: the palette entry; connect: {fromId, kind}
+  loose: [],             // the ends joined to nothing, as red dots
+  mode: "idle",          // idle | place | connect | attach
+  pending: null,         // place: the palette entry; connect: {fromId, kind};
+                         // attach: {handle} from `looseEnds`
   view: {x: 0, y: 0, w: 1000, h: 600},
   undo: [], redo: [],
   notation: "boxes", physics: false,
@@ -85,6 +98,49 @@ const list = (role) => S.data[{node: "nodes", branch: "branches", source: "sourc
 const element = (sel) => (sel ? list(sel.role)[sel.index] : null);
 const nodeById = (id) => S.data.nodes.find((n) => n.id === id);
 
+// ------------------------------------------------- a node lands on a run
+// `at` taken from the raw pointer is a number related to nothing else on the
+// page, and `_layout` reads a branch's angle off its two endpoints, so two
+// nodes dropped by eye give a wire at 6.58 degrees and a box turned to
+// match. Nothing downstream objects: no check reads a run's bearing. The
+// alignment is therefore made here, under the hand -- a drop within reach of
+// another node's x or y takes that number exactly, and one within reach of
+// the solver's pitch from it takes that. Reach is in pixels, so it is the
+// same distance under the hand at every zoom; a page-unit reach would be
+// four pixels zoomed out and thirty-six zoomed in.
+// Generous, because there is no such thing as a run meant to be twenty
+// units off square. A parallel pair stands 80 off its main line and the
+// solver's own pitch is 220; anything inside 30 is a hand that meant one
+// line and missed. The three nodes that started this -- dropped by eye and
+// drawn at 6.58 and -4.97 degrees -- were 25 and 15 apart.
+const ALIGN_PX = 30;
+let lastAlign = {x: null, y: null};   // what the guides should show
+
+function alignedSnap(x, y, excludeId) {
+  const reach = ALIGN_PX * unitsPerPixel();
+  const others = S.data.nodes.filter((n) => n.at && n.id !== excludeId);
+  const pick = (v, axis) => {
+    let best = null, bestD = reach;
+    for (const n of others) {
+      // the node's own line first, then the pitch either side of it
+      for (const c of [n.at[axis], n.at[axis] - PITCH, n.at[axis] + PITCH]) {
+        const d = Math.abs(v - c);
+        if (d < bestD) { best = {value: c, from: n, own: c === n.at[axis]}; bestD = d; }
+      }
+    }
+    return best;
+  };
+  let ax = pick(x, 0), ay = pick(y, 1);
+  // Both lines taken from one node puts the drop exactly on top of it, and
+  // two places at one point is not a drawing. Whichever line the hand was
+  // nearer to is the one it meant; the other axis lands where it fell.
+  if (ax && ay && ax.own && ay.own && ax.from === ay.from) {
+    if (Math.abs(x - ax.value) <= Math.abs(y - ay.value)) ay = null; else ax = null;
+  }
+  lastAlign = {x: ax, y: ay};
+  return [ax ? ax.value : snap(x), ay ? ay.value : snap(y)];
+}
+
 function newNodeId() {
   const used = new Set(S.data.nodes.map((n) => n.id));
   for (let i = 1; ; i++) if (!used.has(`n${i}`)) return `n${i}`;
@@ -103,6 +159,10 @@ function edit(fn) {
 
 function afterEdit() {
   save();
+  // ahead of the library, which is a round trip away: the dots are read off
+  // the diagram, and a reader who has just dropped a path should see where
+  // its ends are before the drawing catches up
+  if (S.data) drawLoose();
   refresh();
   updateChrome();
 }
@@ -143,6 +203,141 @@ function renameNode(oldId, newId) {
   if (d.rail && d.rail.reference === oldId) d.rail.reference = newId;
 }
 
+// ------------------------------------------------------------ loose ends
+// Which nodes are joined to which, as one component number per node. A
+// `break` counts as joined, as it does in `check`: the question is whether
+// the network is one network, not whether heat crosses.
+function islands() {
+  const of = new Map(S.data.nodes.map((n) => [n.id, n.id]));
+  const find = (a) => { while (of.get(a) !== a) a = of.get(a); return a; };
+  for (const b of S.data.branches) {
+    if (!of.has(b.from) || !of.has(b.to)) continue;   // the rail joins nothing
+    const [x, y] = [find(b.from), find(b.to)];
+    if (x !== y) of.set(x, y);
+  }
+  const out = new Map();
+  for (const n of S.data.nodes) out.set(n.id, find(n.id));
+  return out;
+}
+
+// Nothing has been said about this node: it is a place with no name, no
+// temperature and no kind. Saying any of those makes it the reader's, and
+// its end stops being loose whether or not it was ever joined.
+function unsaid(node) {
+  return node && node.label == null && node.value == null && node.sub == null
+         && (!node.kind || node.kind === "free");
+}
+
+// The ends that are hanging: one per end of a path, and one per source,
+// whose node is unsaid, joins no other path, and has somewhere to go.
+//
+// The last clause is what keeps the dot honest rather than decorative. A
+// dot's whole offer is "click me and pick the node I meet", so a dot with
+// no node outside its own island to meet is a control that cannot do
+// anything. A lone path on an empty canvas is not disconnected from
+// anything; the moment a second thing is on the page, both are.
+//
+// A bare node gets none. Its useful act is to be joined by a path, which is
+// the double-click, not to be merged into another point.
+function looseEnds() {
+  const d = S.data;
+  const where = islands();
+  const degree = new Map(d.nodes.map((n) => [n.id, 0]));
+  for (const b of d.branches) {
+    for (const end of [b.from, b.to]) {
+      if (degree.has(end)) degree.set(end, degree.get(end) + 1);
+    }
+  }
+  const free = (id) => {
+    const node = nodeById(id);
+    return node && node.at && unsaid(node) && degree.get(id) <= 1
+           && d.nodes.some((n) => where.get(n.id) !== where.get(id));
+  };
+  const out = [];
+  d.branches.forEach((b, index) => {
+    const route = routeOf(b);
+    for (const end of ["from", "to"]) {
+      const id = b[end];
+      if (!free(id)) continue;
+      // out along the wire, away from whatever the path leads to
+      const node = nodeById(id);
+      const near = route ? (end === "from" ? route[1] : route[route.length - 2])
+                         : null;
+      out.push({id, role: "branch", index, end,
+                at: node.at, u: away(node.at, near)});
+    }
+  });
+  d.sources.forEach((x, index) => {
+    const id = x.to != null ? x.to : x.from;
+    if (!free(id) || degree.get(id) !== 0) return;
+    const node = nodeById(id);
+    // the arrow's own side is taken; the dot goes on the other one
+    const rad = (x.angle || 0) * Math.PI / 180;
+    const along = [Math.cos(rad), Math.sin(rad)];
+    const sign = x.from != null ? -1 : 1;
+    out.push({id, role: "source", index, end: x.from != null ? "from" : "to",
+              at: node.at, u: [along[0] * sign, along[1] * sign]});
+  });
+  return out;
+}
+
+// A unit step from `at` directly away from `near`, or to the right when
+// there is nothing to be away from.
+function away(at, near) {
+  if (!near) return [1, 0];
+  const dx = at[0] - near[0], dy = at[1] - near[1];
+  const len = Math.hypot(dx, dy);
+  return len ? [dx / len, dy / len] : [1, 0];
+}
+
+// A join carries one end of a path clear across the drawing and used to
+// leave the other end where it had been dropped, so the run came out at 40
+// degrees: the crooked wire this editor was built to stop, arriving by
+// another road. The far end follows, to the nearest quarter turn, when it
+// is joined to this path and nothing else and so is free to move. A routed
+// path keeps its route; its legs are the author's.
+function squareRun(branch, pivotId) {
+  const otherId = branch.from === pivotId ? branch.to : branch.from;
+  const pivot = nodeById(pivotId), other = nodeById(otherId);
+  if (!pivot || !other || !pivot.at || !other.at) return;
+  if (branch.via && branch.via.length) return;
+  if (S.data.branches.filter(
+        (b) => b.from === otherId || b.to === otherId).length !== 1) return;
+  const len = snap(Math.hypot(other.at[0] - pivot.at[0],
+                              other.at[1] - pivot.at[1])) || PITCH;
+  const rad = (((Math.round(bearing(pivot.at, other.at) / 90) * 90) % 360)
+               + 360) % 360 * Math.PI / 180;
+  other.at = [snap(pivot.at[0] + Math.cos(rad) * len),
+              snap(pivot.at[1] + Math.sin(rad) * len)];
+}
+
+// Two places become one. `renameNode` is the whole rewiring — branches,
+// sources and the rail reference all point at ids — so this is that, then
+// the node that has become a duplicate, then the far end of each path that
+// moved squared up, then any source it carried given a side of its new
+// node with nothing already on it.
+function joinNodes(looseId, targetId) {
+  const index = S.data.nodes.findIndex((n) => n.id === looseId);
+  if (index < 0 || !nodeById(targetId)) return;
+  edit((d) => {
+    const carried = d.sources.filter(
+      (x) => (x.to != null ? x.to : x.from) === looseId);
+    const moved = d.branches.filter(
+      (b) => b.from === looseId || b.to === looseId);
+    renameNode(looseId, targetId);
+    d.nodes.splice(index, 1);
+    for (const b of moved) squareRun(b, targetId);
+    for (const x of carried) {
+      const angle = freeSide(targetId, x);
+      if (angle) x.angle = angle; else delete x.angle;
+    }
+  });
+  const target = nodeById(targetId);
+  select(null);
+  toast(`Joined to \u201c${target.label || targetId}\u201d.`,
+        {label: "Undo", act: undo});
+}
+
 // --------------------------------------------------------------- the view
 const canvas = $("ed-canvas");
 const drawing = $("ed-drawing");
@@ -153,6 +348,7 @@ function setView(v) {
   S.view = v;
   canvas.setAttribute("viewBox", `${v.x} ${v.y} ${v.w} ${v.h}`);
   if (S.sel) drawSelection();
+  if (S.data) drawLoose();   // sized in pixels, so a zoom redraws them
   // a step points at something on the drawing, and the drawing refits
   // itself after every addition: the card has to follow it
   if (tour) drawTour();
@@ -223,8 +419,14 @@ function refresh() {
       S.scene = scene;
       drawing.innerHTML = scene.parts;
       buildHits(scene.hits);
+      // before the strip reads it: `showFindings` asks which ends are loose
+      // before deciding whether to fling itself open
+      drawLoose();
       showFindings(scene.findings);
       if (S.sel) drawSelection();
+      // the hit rectangles were just rebuilt, so whatever a live mode had
+      // marked on them went with the old ones
+      if (S.mode === "attach") markTargets(S.pending.handle);
       // A new element's card opens before its hit rectangle exists, so it
       // had nothing to sit beside and went to the corner. It gets its
       // place the moment the drawing arrives.
@@ -298,6 +500,35 @@ function svgEl(name, attrs, cls) {
   return el;
 }
 
+// The red dots. Drawn from the diagram rather than from the scene, so they
+// are there the instant an edit lands and do not wait on the library; sized
+// in pixels through `unitsPerPixel`, like the waypoint handles, so they stay
+// under the thumb at every zoom. The dot sits just outside its node so the
+// node underneath stays draggable and clickable: it is the loose tip of the
+// wire, not the node.
+const LOOSE_R = 7;
+
+function drawLoose() {
+  ui.querySelectorAll(".ed-loose, .ed-loose-ring").forEach((e) => e.remove());
+  S.loose = S.data ? looseEnds() : [];
+  if (S.present) { S.loose = []; return; }
+  const upp = unitsPerPixel();
+  S.loose.forEach((h, i) => {
+    const [x, y] = [h.at[0] + h.u[0] * (5.5 + (LOOSE_R + 3) * upp),
+                    h.at[1] + h.u[1] * (5.5 + (LOOSE_R + 3) * upp)];
+    ui.appendChild(svgEl("circle",
+      {cx: h.at[0], cy: h.at[1], r: 5.5 + 3 * upp}, "ed-loose-ring"));
+    const dot = svgEl("circle", {cx: x, cy: y, r: LOOSE_R * upp}, "ed-loose");
+    dot.dataset.loose = i;
+    dot.dataset.node = h.id;
+    dot.setAttribute("tabindex", "0");
+    dot.append(svgEl("title", {}));
+    dot.querySelector("title").textContent =
+      "This end joins nothing. Click or drag it onto the node it meets.";
+    ui.appendChild(dot);
+  });
+}
+
 function drawSelection() {
   ui.querySelectorAll(".ed-sel, .ed-via").forEach((e) => e.remove());
   if (!S.sel) return;
@@ -349,8 +580,13 @@ function showFindings(findings) {
     li.addEventListener("click", () => pointAt(f));
     list.appendChild(li);
   }
-  // something is wrong with the drawing: say what, without being asked
-  if (counts.error || counts.warning) openFindings(true);
+  // Something is wrong with the drawing: say what, without being asked.
+  // Except that a drawing being built is in pieces by definition, and the
+  // red dots say so in place, on the ends it is about. The finding stays in
+  // the list; it just stops flinging the strip open once per drop.
+  const shouted = shown.filter(
+    (f) => !(f.code === "network-in-pieces" && S.loose.length));
+  if (shouted.some((f) => f.severity !== "note")) openFindings(true);
 }
 
 function openFindings(on) {
@@ -418,19 +654,30 @@ canvas.addEventListener("pointerdown", (e) => {
     drag = {kind: "via", sel: S.sel, i: +via, start: p, orig: [...element(S.sel).via[+via]], moved: false, snapshot: snapshot()};
     return;
   }
+  const loose = e.target.dataset && e.target.dataset.loose;
+  if (loose !== undefined && S.loose[+loose]) {
+    // either gesture means the same thing, so both start here: a drag that
+    // moves offers the nodes for the duration, a press that does not opens
+    // the same offer and leaves it open
+    drag = {kind: "loose", handle: S.loose[+loose], start: p, moved: false};
+    markTargets(drag.handle);
+    return;
+  }
   const hit = hitAt(e.target);
+  if (S.mode === "attach") {
+    const handle = S.pending.handle;
+    const id = hit && hit.role === "node" ? element(hit).id : null;
+    setMode("idle");
+    if (id && eligible(handle, id)) joinNodes(handle.id, id);
+    return;
+  }
   if (S.mode === "connect") {
     // connection mode: the next node clicked is the other end
     if (hit && hit.role === "node") finishConnect(S.pending.fromId, element(hit).id, S.pending.kind);
     else setMode("idle");
     return;
   }
-  if (S.mode === "place" && S.pending) {
-    if (S.pending.role === "node") { placeNode(S.pending.kind, p); return; }
-    if (hit && hit.role === "node") { dropOnNode(S.pending, hit); return; }
-    setMode("idle");
-    return;
-  }
+  if (S.mode === "place" && S.pending) { dropEntry(S.pending, p); return; }
   if (hit) {
     const movable = (hit.role === "node" && hit.element !== "label") || (hit.element === "symbol");
     drag = {kind: "element", hit, sel: {role: hit.role, index: hit.index}, start: p, moved: false, movable,
@@ -455,7 +702,14 @@ function currentAt(hit) {
 // A drag near the run therefore slides the symbol along it; a drag away
 // from it bends the run to follow, with a waypoint either side of the
 // symbol so the wire arrives at the box and leaves it.
-const OFF_RUN = 12;     // nearer than this to the run and the box just slides
+// How far off its run a box has to be dragged before the wire bends to
+// follow it, in **pixels**: the same distance under the hand at every zoom.
+// It was twelve page units, six lines from a drag threshold that was
+// correctly converted -- so zoomed out it was four pixels and any twitch
+// bent the wire, and zoomed in it was thirty-six and a detour was hard to
+// ask for at all. It is also a deliberate distance now rather than a hair's
+// breadth, because sliding along the run is what nearly every drag means.
+const OFF_RUN_PX = 40;
 const DETOUR_PAD = 6;   // how far past the box the wire straightens again
 
 const tidy = (v) => Math.round(v * 1000) / 1000;
@@ -523,13 +777,14 @@ function placeBranchSymbol(sel, p) {
   const seg = nearestSegment(route, p);
   const hit = symbolHit(sel);
   const d = (hit && hit.half_len != null ? hit.half_len : 42) + DETOUR_PAD;
-  if (Math.abs(seg.off) <= OFF_RUN || 2 * d > seg.len) {
+  const offRun = OFF_RUN_PX * unitsPerPixel();
+  if (Math.abs(seg.off) <= offRun || 2 * d > seg.len) {
     // Along the run, quantised along the run. Snapping to the page grid
     // instead would throw a point on a diagonal up to 7 units off its own
     // line, and the checker's tolerance for that is one unit.
     const t = clamp(snap(seg.along), 0, seg.len);
     el.at = [tidy(seg.a[0] + seg.u[0] * t), tidy(seg.a[1] + seg.u[1] * t)];
-    return Math.abs(seg.off) <= OFF_RUN;
+    return Math.abs(seg.off) <= offRun;
   }
   const c = [snap(p[0]), snap(p[1])];
   const out = (k) => [tidy(c[0] + seg.u[0] * k * d), tidy(c[1] + seg.u[1] * k * d)];
@@ -540,6 +795,152 @@ function placeBranchSymbol(sel, p) {
   el.at = c;
   return true;
 }
+
+// ---------------------------------------------------------------- turning
+// `]` turns what is selected to the next multiple of 90 degrees and `[` to
+// the previous one: a thing lying at 38 goes to 90 or to 0, and one at 90
+// goes to 180 or to 0. Two unshifted keys, because a shortcut needing two
+// hands is one nobody reaches for.
+//
+// What turns is the component, not a named field. A node is a point, so the
+// only thing it has to turn is its label. A source turns its `angle`, which
+// is the side of its node the arrow comes from -- for a source the field and
+// the geometry are the same thing. A path turns its **run** wherever the run
+// can move: an end joined to nothing else swings about the other end, and a
+// path loose at both ends swings about its middle. That is what standing a
+// dropped path upright means, and writing an angle onto the box instead
+// would turn the box and leave the wire lying where it was.
+//
+// Only when both ends are pinned by other paths is there no geometry to
+// turn. Then the box turns and the wire is re-routed to meet it -- a
+// waypoint either side of the box along its new axis -- because `_layout`
+// cuts the wire along the route, so a turned box on an uncut route has its
+// leads crossing its own wire.
+//
+// No text is rotated by any of this: `angle` orients a label's frame and a
+// symbol, never a glyph, which is the library's own standing decision.
+const quarter = (a, dir) => ((((dir > 0 ? Math.floor(a / 90) + 1
+                                        : Math.ceil(a / 90) - 1) * 90) % 360) + 360) % 360;
+const bearing = (a, c) => ((Math.atan2(c[1] - a[1], c[0] - a[0])
+                            * 180 / Math.PI) % 360 + 360) % 360;
+
+function turnSelected(dir) {
+  if (!S.sel || S.present) return;
+  const sel = S.sel, el = element(sel);
+  if (!el) return;
+  if (sel.role === "branch") turnBranch(sel, el, dir);
+  else applyField(sel, "angle", String(quarter(el.angle || 0, dir)));
+  if (!pop.hidden) openPopover(sel);
+}
+
+// Waypoints the reader put there themselves, as opposed to the pair this
+// editor writes either side of a box. Swinging a node would leave those
+// where they were and bend the run through them, so a hand-routed path
+// turns its symbol instead.
+function routedByHand(el) {
+  if (!el.via || !el.via.length) return false;
+  const copy = {at: el.at, via: el.via.map((v) => [...v])};
+  dropBracket(copy);
+  return !!(copy.via && copy.via.length);
+}
+
+function turnBranch(sel, el, dir) {
+  const ends = [el.from, el.to];
+  const nodes = ends.map(nodeById);
+  const alone = (id) => S.data.branches.filter(
+    (b) => b.from === id || b.to === id).length === 1;
+  const swing = ends.map((id, i) => !!(nodes[i] && nodes[i].at && alone(id)));
+
+  if ((swing[0] || swing[1]) && !routedByHand(el)) {
+    const [a, c] = [nodes[0].at, nodes[1].at];
+    const len = snap(Math.hypot(c[0] - a[0], c[1] - a[1])) || PITCH;
+    const rad = quarter(bearing(a, c), dir) * Math.PI / 180;
+    const u = [Math.cos(rad), Math.sin(rad)];
+    edit(() => {
+      if (swing[0] && swing[1]) {
+        const mid = [snap((a[0] + c[0]) / 2), snap((a[1] + c[1]) / 2)];
+        nodes[0].at = [snap(mid[0] - u[0] * len / 2), snap(mid[1] - u[1] * len / 2)];
+        nodes[1].at = [snap(mid[0] + u[0] * len / 2), snap(mid[1] + u[1] * len / 2)];
+      } else if (swing[1]) {
+        nodes[1].at = [snap(a[0] + u[0] * len), snap(a[1] + u[1] * len)];
+      } else {
+        nodes[0].at = [snap(c[0] - u[0] * len), snap(c[1] - u[1] * len)];
+      }
+      // the box goes back to riding its own wire, wherever the wire now runs
+      dropBracket(el);
+      delete el.at;
+      delete el.angle;
+    });
+    select(sel, false);
+    return;
+  }
+
+  // Both ends are pinned, so only the symbol can turn. Two kinds refuse:
+  // validation forbids `angle` on a directed path and `via` on a fan, and
+  // saying so is better than a key that does nothing.
+  if (el.kind === "flow") {
+    toast("A heat flow's direction is its two ends, so the symbol cannot "
+          + "turn against them. Swap ends instead.");
+    return;
+  }
+  if (el.count > 1) {
+    toast("A repeated path is drawn as a fan between its own nodes, so there "
+          + "is no wire to route around a turn.");
+    return;
+  }
+  const hit = symbolHit(sel);
+  const now = el.angle != null ? el.angle : (hit ? hit.angle : 0);
+  const next = quarter(((now % 360) + 360) % 360, dir);
+  const reach = (hit && hit.half_len != null ? hit.half_len : 42) + DETOUR_PAD;
+  edit(() => {
+    dropBracket(el);
+    const centre = el.at ? [...el.at] : (hit ? [...hit.at] : null);
+    const route = routeOf(el);
+    if (!centre || !route) { el.angle = next; return; }
+    const seg = nearestSegment(route, centre);
+    // turned back onto the line its wire already takes, the box wants no
+    // detour and no angle: absent is what "turns with its wire" is written as
+    const run = bearing([0, 0], seg.u);
+    if (Math.min(Math.abs(run - next), 360 - Math.abs(run - next)) < 1) {
+      delete el.angle;
+      return;
+    }
+    el.angle = next;
+    const rad = next * Math.PI / 180;
+    const u = [Math.cos(rad), Math.sin(rad)];
+    el.via = el.via || [];
+    el.via.splice(seg.i, 0,
+      [tidy(centre[0] - u[0] * reach), tidy(centre[1] - u[1] * reach)],
+      [tidy(centre[0] + u[0] * reach), tidy(centre[1] + u[1] * reach)]);
+    el.at = [tidy(centre[0]), tidy(centre[1])];
+  });
+  select(sel, false);
+}
+
+// What a drag has landed on, shown while it is still held. Both of these
+// were only discoverable by letting go: a node's alignment was invisible
+// until the drawing came back, and a box's route -- slide along the run, or
+// bend the run to follow -- was computed on every move and shown on none of
+// them, so the reader learned which of two very different edits they had
+// made a round trip after making it.
+function drawGuides(at) {
+  clearGuides();
+  const span = 4000;
+  if (lastAlign.x) ui.appendChild(svgEl("line",
+    {x1: at[0], y1: at[1] - span, x2: at[0], y2: at[1] + span}, "ed-guide"));
+  if (lastAlign.y) ui.appendChild(svgEl("line",
+    {x1: at[0] - span, y1: at[1], x2: at[0] + span, y2: at[1]}, "ed-guide"));
+}
+function clearGuides() { ui.querySelectorAll(".ed-guide").forEach((e) => e.remove()); }
+
+function drawGhost(el) {
+  clearGhost();
+  const route = routeOf(el);
+  if (!route) return;
+  ui.appendChild(svgEl("polyline",
+    {points: route.map((q) => `${q[0]},${q[1]}`).join(" ")}, "ed-ghost"));
+}
+function clearGhost() { ui.querySelectorAll(".ed-ghost").forEach((e) => e.remove()); }
 
 canvas.addEventListener("pointermove", (e) => {
   if (pointers.has(e.pointerId)) pointers.set(e.pointerId, {x: e.clientX, y: e.clientY});
@@ -559,6 +960,10 @@ canvas.addEventListener("pointermove", (e) => {
     const from = nodeById(S.pending.fromId);
     if (from && from.at) rubber({x: from.at[0], y: from.at[1]}, toPage(e.clientX, e.clientY));
   }
+  if (S.mode === "attach" && !drag) {
+    const at = S.pending.handle.at;
+    rubber({x: at[0], y: at[1]}, toPage(e.clientX, e.clientY));
+  }
   if (!drag) { hover(e.target); return; }
   const p = toPage(e.clientX, e.clientY);
   const dx = p.x - drag.start.x, dy = p.y - drag.start.y;
@@ -570,13 +975,21 @@ canvas.addEventListener("pointermove", (e) => {
     setView({...drag.view, x: drag.view.x - (e.clientX - drag.start.x) * upp, y: drag.view.y - (e.clientY - drag.start.y) * upp});
   } else if (drag.kind === "element" && drag.movable) {
     const el = element(drag.sel);
-    const p = [drag.orig[0] + dx, drag.orig[1] + dy];
-    if (drag.sel.role === "branch") drag.routed = placeBranchSymbol(drag.sel, p);
-    else el.at = [snap(p[0]), snap(p[1])];
+    const q = [drag.orig[0] + dx, drag.orig[1] + dy];
+    if (drag.sel.role === "branch") {
+      drag.routed = placeBranchSymbol(drag.sel, q);
+      drawGhost(el);
+    } else {
+      el.at = alignedSnap(q[0], q[1], el.id);
+      drawGuides(el.at);
+    }
     refresh();
   } else if (drag.kind === "via") {
     element(drag.sel).via[drag.i] = [snap(drag.orig[0] + dx), snap(drag.orig[1] + dy)];
     refresh();
+  } else if (drag.kind === "loose") {
+    rubber({x: drag.handle.at[0], y: drag.handle.at[1]}, p);
+    hover(document.elementFromPoint(e.clientX, e.clientY));
   }
 });
 
@@ -586,7 +999,21 @@ canvas.addEventListener("pointerup", (e) => {
   if (!drag) return;
   const d = drag; drag = null;
   canvas.classList.remove("ed-pan");
+  clearGuides(); clearGhost();
   const p = toPage(e.clientX, e.clientY);
+  if (d.kind === "loose") {
+    ui.querySelectorAll(".ed-rubber").forEach((r) => r.remove());
+    hover(null);
+    // a press that never moved is the click form, and holds the offer open
+    if (!d.moved) { startAttach(d.handle); return; }
+    clearTargets();
+    const hit = hitAt(document.elementFromPoint(e.clientX, e.clientY));
+    const id = hit && hit.role === "node" ? element(hit).id : null;
+    // let go over nothing and nothing happens: the end stays exactly where
+    // it was, with no half-made state and no mode left armed
+    if (id && eligible(d.handle, id)) joinNodes(d.handle.id, id);
+    return;
+  }
   if (d.kind === "pan") {
     if (!d.moved) { select(null); openQuick(p, e.clientX, e.clientY); }
     return;
@@ -616,7 +1043,12 @@ canvas.addEventListener("pointerup", (e) => {
     if (d.moved) { S.undo.push(d.snapshot); S.redo.length = 0; afterEdit(); }
   }
 });
-canvas.addEventListener("pointercancel", (e) => { pointers.delete(e.pointerId); drag = null; pinch = null; canvas.classList.remove("ed-pan"); });
+canvas.addEventListener("pointercancel", (e) => {
+  pointers.delete(e.pointerId); drag = null; pinch = null;
+  canvas.classList.remove("ed-pan");
+  clearGuides(); clearGhost(); clearTargets();
+  ui.querySelectorAll(".ed-rubber").forEach((r) => r.remove());
+});
 
 // the double-click that starts a connection
 canvas.addEventListener("dblclick", (e) => {
@@ -691,10 +1123,11 @@ function select(sel, popover = true, fresh = false) {
 function setMode(mode, pending = null) {
   S.mode = mode; S.pending = pending;
   canvas.classList.toggle("ed-place", mode === "place");
-  canvas.classList.toggle("ed-connect", mode === "connect");
+  canvas.classList.toggle("ed-connect", mode === "connect" || mode === "attach");
   document.querySelectorAll(".ed-card").forEach((c) => c.setAttribute("aria-pressed",
     String(mode === "place" && pending && c.dataset.key === pending.key)));
   hitsG.querySelectorAll(".ed-from").forEach((r) => r.classList.remove("ed-from"));
+  clearTargets();
   ui.querySelectorAll(".ed-rubber").forEach((r) => r.remove());
   const pill = $("ed-mode");
   let text = "";
@@ -702,14 +1135,46 @@ function setMode(mode, pending = null) {
     const from = nodeById(pending.fromId);
     text = `Connecting from <b>${escapeHtml((from && from.label) || pending.fromId)}</b> with ${escapeHtml(kindName("branch", pending.kind).toLowerCase())}: click the node it joins`;
     markFrom();
+  } else if (mode === "attach") {
+    text = "Joining a loose end: click the node it meets";
+    markTargets(pending.handle);
   } else if (mode === "place" && pending) {
-    text = pending.role === "node" ? `Click where the ${escapeHtml(kindName("node", pending.kind).toLowerCase())} goes`
-         : pending.role === "source" ? `Click the node this ${escapeHtml(kindName("source", pending.kind).toLowerCase())} joins`
-         : `Click the node this ${escapeHtml(kindName("branch", pending.kind).toLowerCase())} leaves from, then the node it reaches`;
+    text = `Click where the ${escapeHtml(kindName(pending.role, pending.kind).toLowerCase())} goes`;
   }
   pill.innerHTML = text ? `<span>${text}</span><button type="button" id="ed-mode-cancel">Cancel (Esc)</button>` : "";
   pill.hidden = !text;
   if (text) $("ed-mode-cancel").addEventListener("click", () => setMode("idle"));
+}
+
+// Where a loose end may go: any node outside its own island. Inside it,
+// joining would either double a path already there or make a branch name
+// one node twice, which validation refuses.
+function eligible(handle, id) {
+  if (!handle || id === handle.id) return false;
+  const where = islands();
+  return where.has(id) && where.get(id) !== where.get(handle.id);
+}
+
+function markTargets(handle) {
+  clearTargets();
+  S.data.nodes.forEach((n, i) => {
+    if (!eligible(handle, n.id)) return;
+    hitsOf({role: "node", index: i}).forEach((r) => r.classList.add("ed-target"));
+  });
+}
+
+function clearTargets() {
+  hitsG.querySelectorAll(".ed-target").forEach(
+    (r) => r.classList.remove("ed-target"));
+}
+
+// Clicking a red dot rather than dragging it: the same offer, held open
+// until a node is clicked. Escape and a click on empty canvas both drop it,
+// through the chain every other mode already goes down.
+function startAttach(handle) {
+  closePopover();
+  select(null);
+  setMode("attach", {handle});
 }
 
 function markFrom() {
@@ -727,8 +1192,9 @@ function startConnect(fromId, kind) {
 // ------------------------------------------------------------ adding
 function placeNode(kind, p) {
   const id = newNodeId();
+  const at = alignedSnap(p.x, p.y, null);
   edit((d) => {
-    const n = {id, at: [snap(p.x), snap(p.y)]};
+    const n = {id, at};
     if (kind !== "free") n.kind = kind;
     d.nodes.push(n);
   });
@@ -736,19 +1202,60 @@ function placeNode(kind, p) {
   select({role: "node", index: S.data.nodes.length - 1}, true, true);
 }
 
-// A path or a source dropped on a node: a source attaches there; a path
-// starts a connection from there, with its kind, and waits for the other end.
-function dropOnNode(entry, hit) {
-  const id = element(hit).id;
-  if (entry.role === "source") attachSource(entry.kind, id);
-  else if (entry.role === "branch") startConnect(id, entry.kind);
+// What a drop makes, for all three groups alike: the component, whole,
+// where it was dropped, joined to nothing. A node dropped anywhere used to
+// be the only drag that finished -- a source finished only on a node, and a
+// path never finished at all, turning itself into a mode and throwing the
+// drop point away.
+function dropEntry(entry, p) {
+  if (entry.role === "node") placeNode(entry.kind, p);
+  else if (entry.role === "branch") dropPath(entry.kind, p);
+  else dropSource(entry.kind, p);
+}
+
+// A path arrives as its own run: two nodes a pitch apart with the box
+// between them, centred where it was dropped and running the way heat runs.
+// The two nodes are not scaffolding to be tidied away -- a path between two
+// places needs two places, and these are the two the reader was going to
+// make. Both ends are loose, so both show a red dot.
+function dropPath(kind, p) {
+  const [cx, cy] = alignedSnap(p.x, p.y, null);
+  const half = PITCH / 2;
+  edit((d) => {
+    const a = newNodeId();
+    d.nodes.push({id: a, at: [snap(cx - half), cy]});
+    const b = newNodeId();
+    d.nodes.push({id: b, at: [snap(cx + half), cy]});
+    const branch = {from: a, to: b};
+    if (kind !== "cond") branch.kind = kind;
+    d.branches.push(branch);
+  });
+  setMode("idle");
+  select({role: "branch", index: S.data.branches.length - 1}, true, true);
+}
+
+// A source arrives on a node of its own, from the left, which is where the
+// library's own habit puts heat coming in. Its node is loose, so it shows a
+// red dot; joining that node to one already drawn is how the source gets
+// onto it.
+function dropSource(kind, p) {
+  const [x, y] = alignedSnap(p.x, p.y, null);
+  edit((d) => {
+    const id = newNodeId();
+    d.nodes.push({id, at: [x, y]});
+    const s = {to: id};
+    if (kind !== "diss") s.kind = kind;
+    d.sources.push(s);
+  });
+  setMode("idle");
+  select({role: "source", index: S.data.sources.length - 1}, true, true);
 }
 
 // Which way a new source should arrive: the side of the node with nothing
 // on it. The library's own habit is to arrive from the left (angle 0) and
 // the solver turns an interior one to arrive from above; here the wires
 // are known, so the emptiest of the four sides wins, above first.
-function freeSide(nodeId) {
+function freeSide(nodeId, except) {
   const d = S.data;
   const node = nodeById(nodeId);
   if (!node || !node.at) return 0;
@@ -762,23 +1269,11 @@ function freeSide(nodeId) {
     if (id === "rail") taken.push(90);
     else if (to) taken.push((Math.atan2(to[1] - node.at[1], to[0] - node.at[0]) * 180 / Math.PI + 360) % 360);
   }
-  for (const s of d.sources) if ((s.to || s.from) === nodeId) taken.push(((s.angle || 0) + (s.from ? 0 : 180)) % 360);
+  for (const s of d.sources) if ((s.to || s.from) === nodeId && s !== except) taken.push(((s.angle || 0) + (s.from ? 0 : 180)) % 360);
   if (node.kind === "fixed" || node.kind === "break") taken.push({down: 90, up: 270, left: 180, right: 0}[node.wall || "down"]);
   const candidates = [90, 0, 270, 180];   // above, left, below, right
   const gap = (a) => Math.min(...taken.map((t) => { const dd = Math.abs(((a + 180) % 360) - t) % 360; return Math.min(dd, 360 - dd); }), 999);
   return candidates.reduce((best, a) => (gap(a) > gap(best) ? a : best), candidates[0]);
-}
-
-function attachSource(kind, nodeId) {
-  const angle = freeSide(nodeId);
-  edit((d) => {
-    const s = {to: nodeId};
-    if (kind !== "diss") s.kind = kind;
-    if (angle) s.angle = angle;
-    d.sources.push(s);
-  });
-  setMode("idle");
-  select({role: "source", index: S.data.sources.length - 1}, true, true);
 }
 
 function finishConnect(fromId, toId, kind) {
@@ -830,11 +1325,7 @@ document.querySelectorAll(".ed-card").forEach((card) => {
     const over = document.elementFromPoint(e.clientX, e.clientY);
     if (!over || !over.closest("#ed-stage")) return;
     lastPointer = {x: e.clientX, y: e.clientY};
-    const p = toPage(e.clientX, e.clientY);
-    const hit = hitAt(over);
-    if (d.entry.role === "node") placeNode(d.entry.kind, p);
-    else if (hit && hit.role === "node") dropOnNode(d.entry, hit);
-    else { setMode("place", d.entry); toast(d.entry.role === "source" ? "A source joins a node: drop it on one, or click the node." : "A path joins two nodes: drop it on the first, or click it."); }
+    dropEntry(d.entry, toPage(e.clientX, e.clientY));
   };
   card.addEventListener("pointerup", finish);
   card.addEventListener("pointercancel", () => { if (cardDrag && cardDrag.ghost) cardDrag.ghost.remove(); cardDrag = null; hover(null); });
@@ -1575,21 +2066,21 @@ $("ed-help-close").addEventListener("click", () => setHelp(false));
 let tour = null;   // {step, fileId, from}
 
 const TOUR = [
-  {at: () => document.querySelector('.ed-card[data-key="free"]'),
-   text: "<b>Drag this onto the drawing.</b> A node is a place heat is — a "
-       + "die, a wall, the air. Nodes go anywhere.",
-   done: () => S.data.nodes.length >= 1},
-  {at: () => document.querySelector('.ed-card[data-key="free"]'),
-   text: "<b>Now a second one</b>, off to the right of the first.",
-   done: () => S.data.nodes.length >= 2},
-  {at: () => hitFor("node", 0),
-   text: "<b>Double-click this node, then click the other.</b> That draws a "
-       + "path between them — conduction, until you change its kind.",
+  {at: () => document.querySelector('.ed-card[data-key="cond"]'),
+   text: "<b>Drag this onto the drawing.</b> A path is what heat crosses — "
+       + "here, conduction. It arrives with a place at each end, which is "
+       + "what a path needs to be a path.",
    done: () => S.data.branches.length >= 1},
   {at: () => hitFor("branch", 0),
-   text: "<b>Click the path and give it a value.</b> Every element opens a "
-       + "card beside itself: label, value, kind, and more under <i>More</i>.",
+   text: "<b>Click the path and give it a value.</b> Every component opens a "
+       + "card beside itself: label, value, kind, and more under <i>More</i>. "
+       + "<b>[</b> and <b>]</b> turn whatever is selected.",
    done: () => S.data.branches.length >= 1 && S.data.branches[0].value != null},
+  {at: () => document.querySelector('.ed-card[data-key="conv"]'),
+   text: "<b>Drag a second path in, then drag one of its red ends onto an "
+       + "end of the first.</b> A red dot is an end joined to nothing; drag "
+       + "or click it to say which place it meets.",
+   done: () => S.data.branches.length >= 2 && S.loose.length === 0},
   {at: () => $("ed-findings"),
    text: "<b>That is the whole editor.</b> This strip is what "
        + "<code>thermodraw check</code> says about your drawing. Everything "
@@ -1755,6 +2246,7 @@ document.addEventListener("keydown", (e) => {
     if (e.key === "ArrowRight") stepFile(1);
     if (e.key === "ArrowLeft") stepFile(-1);
   }
+  if (e.key === "[" || e.key === "]") { turnSelected(e.key === "]" ? 1 : -1); return; }
   if (e.key === "f" || e.key === "F") { S.touched = false; fit(); }
   if (e.key === "z" || e.key === "Z") $("ed-notation").click();
   if (e.key === "d" || e.key === "D") $("ed-theme").click();
@@ -1778,6 +2270,7 @@ window.addEventListener("resize", () => { if (S.sel && !pop.hidden) placePopover
     const style = document.createElement("style");
     style.textContent = m.head.faces.join("") + m.head.vars + m.head.css;
     document.head.appendChild(style);
+    if (m.head.pitch) PITCH = m.head.pitch;
     S.ready = true;
     $("ed-loading").hidden = true;
     refresh();

@@ -7,7 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Every drop in the editor lands the component whole, where you dropped
+  it, joined to nothing.** A node dropped anywhere used to be the only drag
+  that finished: a source finished only when dropped on a node, and a path
+  never finished at all — on empty canvas and on a node alike it turned the
+  drag into a mode and threw the drop point away. A path now arrives as its
+  own two nodes with the box between them, at the solver's pitch, because a
+  path between two places needs two places.
+- **Joining is its own act, and a loose end says so in red.** An end that
+  joins nothing carries a red dot; click it or drag it onto the node it
+  meets. Escape cancels and letting go over empty space does nothing.
+  Joining is deliberate because which end meets which node is the author's
+  to say: `contact` hatches its halves in opposing directions, `flow` is
+  directed, and `from`/`to` is what `describe` and `--physics` read.
+- **`[` and `]` turn what is selected**, to the next quarter turn either
+  way — 38° goes to 90° or to 0°. A path swings its whole run where an end
+  is free to move, and turns its symbol, wire re-routed to meet it, where
+  both ends are pinned. No text is ever rotated.
+- **A node dropped or dragged near another's line lands on it**, and on the
+  solver's pitch along it, with the line shown while the drag is held.
+  Three nodes dropped by eye used to draw at 6.58° and −4.97°, with nothing
+  in the checker to say so.
+- **The off-run drag threshold is in pixels**, so bending a wire round a
+  dragged box feels the same at every zoom instead of firing on any twitch
+  when zoomed out; and the route the drop would take is drawn while the
+  drag is held, instead of arriving a library round trip after you let go.
+
 ### Added
+
+- **`run-off-axis`**, a note: a run within 15 degrees of square but not on
+  it, so its wire and its box are drawn on a slant. A branch carrying `via`
+  is exempt, and so is any diagonal past 15 degrees. Nothing in `check` had
+  ever asked whether a wire was straight.
 
 - **The editor.** https://pcetner.github.io/ThermoDraw/editor/ draws a
   thermal network by hand, in the browser, with this library doing the

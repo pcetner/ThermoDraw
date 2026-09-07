@@ -106,14 +106,73 @@ sentence after it says what would overturn it.
   branch's `at` is used by `layout` exactly as written and is never
   projected onto the run, so a dropped symbol used to grow a diagonal jog
   and a `symbol-off-its-run` warning against the reader. Dragging a path
-  slides it along the run when it lands within 12 units, quantised **along
-  the run** — the checker's tolerance is `OFF_RUN = 1.0` and the page grid
-  is 10, so snapping a point on a diagonal is itself the fault — and
-  otherwise writes a `via` either side of the box, spliced into the leg
+  slides it along the run when it lands within `OFF_RUN_PX`, quantised
+  **along the run** — the checker's tolerance is `OFF_RUN = 1.0` and the
+  page grid is 10, so snapping a point on a diagonal is itself the fault —
+  and otherwise writes a `via` either side of the box, spliced into the leg
   the drop landed on. The pair is recognised again by its shape, a
   midpoint that is the symbol, since nothing in the file marks one.
   `half_len` is on the symbol hit for this: `bounds` is the ink, 62 where
-  `half_len` is 42, because of the leads.
+  `half_len` is 42, because of the leads. **The threshold is in pixels**,
+  like the drag threshold six lines from it and unlike its own first
+  version: 12 page units was four pixels zoomed out, where any twitch bent
+  the wire, and thirty-six zoomed in, where a detour could not be asked
+  for. It is 40 now, a deliberate distance, because sliding along the run
+  is what nearly every drag means — and the route the drop would take is
+  drawn while the drag is held, since it was computed on every move and
+  shown on none of them.
+- **A drop lands the component whole, where it was dropped, joined to
+  nothing.** One rule for all three groups. A node dropped anywhere used to
+  be the only drag that finished: a source finished only on a node, and a
+  path never finished at all, turning itself into a mode and throwing the
+  drop point away — three drop targets, six outcomes, half of them "your
+  drag did nothing". A path therefore arrives as its own two nodes with the
+  box between them, at the solver's pitch, which `_editor.head` sends so
+  the number is the library's. Those two nodes are not scaffolding: a path
+  between two places needs two places, and they are the two the reader was
+  going to make. **Joining is its own act** because which end meets which
+  node is the author's to say — `contact` hatches its halves in opposing
+  directions, `flow` is directed by validation, and `from`/`to` is what
+  `describe` and `--physics` read — so the editor never guesses it.
+- **A loose end is red, and the red dot is what joins it.** An end of a
+  path, or the node a source stands on, where nothing has been said about
+  that node, it joins no other path, and there is a node outside its island
+  to meet. That last clause is what keeps the dot honest: its whole offer is
+  "pick the node I meet", so a dot with nothing to meet is a control that
+  cannot act, and a lone path on an empty canvas is not disconnected from
+  anything. A bare node gets none — its useful act is to be joined by a
+  path, which is the double-click. Click the dot or drag it: both offer
+  every eligible node, Escape cancels, and letting go over empty space does
+  nothing at all. Joining is `renameNode` — branches, sources and the rail
+  all point at ids — then the duplicate node, then `freeSide` for any source
+  it carried. `network-in-pieces` stops flinging the strip open while any
+  dot is showing: a drawing being built is in pieces by definition, and the
+  dots say so in place, on the ends it is about.
+- **`[` and `]` turn what is selected, to the next quarter turn.** A thing
+  at 38° goes to 90° or to 0°; two unshifted keys, because a shortcut
+  needing two hands is one nobody reaches for. What turns is the component,
+  not a named field: a node turns its label, which is all a point has; a
+  source turns `angle`, which for a source *is* its geometry; and a path
+  turns its **run** wherever the run can move — an end joined to nothing
+  else swings about the other, and a path loose at both ends swings about
+  its middle. That is what standing a dropped path upright means, and an
+  angle written onto the box would turn the box and leave the wire lying
+  where it was. Only with both ends pinned is there no geometry to turn,
+  and then the box turns and the wire is re-routed to meet it, because
+  `_layout` cuts the wire along the route. A directed path and a fan refuse,
+  each saying which field validation forbids it. No text rotates: `angle`
+  orients a label's frame and a symbol, never a glyph.
+- **A node lands on a run, not on a pointer.** `at` from the raw pointer is
+  a number related to nothing else on the page, and `_layout` reads a
+  branch's angle off its endpoints, so three nodes dropped by eye drew at
+  6.58° and −4.97° and the strip said nothing to report. A drop within
+  `ALIGN_PX` of another node's x or y takes that number exactly, and one
+  within reach of the solver's pitch from it takes that; the line is drawn
+  while the drag is held. Reach is in pixels and generous — 30, where a
+  parallel pair stands 80 off its line — because there is no such thing as
+  a run meant to be twenty units off square. Both axes from one node would
+  land the drop on top of it, so the nearer line wins and the other axis
+  falls where it fell.
 - **A diagram is named once.** The top bar names the file, and a checkbox
   there says whether the name also goes in as `title`. Nothing draws a
   title — `title` is what an exported page is called and what names the
@@ -223,6 +282,14 @@ sentence after it says what would overturn it.
   route around the box, so an `at` beside the route draws a diagonal jog out
   to it and back. Measured from the run's line, not from the wire, which is
   `half_len` away either way.
+- **A run within 15° of square but not on it is a note.** Nothing asked
+  whether the wire was straight — every other rule here asks about labels,
+  crossings, or a symbol's relation to its own wire — so a whole crooked
+  ladder drew clean. A branch carrying `via` is exempt, because where a
+  route goes is the author's, and so is anything past `OFF_AXIS`: every
+  deliberate diagonal in the corpus is 37° or more and nothing anywhere sits
+  between nought and fifteen. A note, not a warning: the drawing is legible
+  and its numbers are right, and it is the drafting that is off.
 - A branch may not join a place to itself.
 - A wire through a boundary node's hatching is a warning. The wall faces
   `wall`, `down` unless turned, so a branch arriving from that side crosses

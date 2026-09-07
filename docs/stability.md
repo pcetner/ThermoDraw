@@ -24,7 +24,8 @@ finding codes, which a script may key on:
 `label-collision`, `symbols-overlap`, `off-canvas`, `network-in-pieces`,
 `nodes-too-close`, `label-adrift`, `label-in-a-corridor`,
 `wire-through-symbol`, `wire-through-wall`, `symbol-off-its-run`,
-`frame-off-centre`, `parallel-pair-same-side`; and under `--physics`,
+`run-off-axis`, `frame-off-centre`, `parallel-pair-same-side`; and under
+`--physics`,
 `node-does-not-balance`, `rate-does-not-match`, `rad-needs-absolute-scale`
 and `physics-not-checked`.
 
