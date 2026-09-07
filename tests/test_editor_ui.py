@@ -5,8 +5,10 @@ runs this file alone; the bridge and the site have their own tests in the
 ordinary suite. One test, a handful of assertions, one browser: it proves
 the page boots the library, that the two ways of adding a symbol and the
 handle that connects two nodes write the file the schema describes, that a
-drag lands on the grid, that an export is the library's SVG, and that a
-share link round-trips.
+drag lands on the grid and on its neighbour's line, that one drop makes a
+whole path, that a red dot joins a loose end and only ever onto a node,
+that `[` and `]` turn what is selected, that an export is the library's
+SVG, and that a share link round-trips.
 """
 import functools
 import http.server
@@ -78,6 +80,14 @@ def codes(page):
         "#ed-findings-list .ed-code", "els => els.map((e) => e.textContent)")
 
 
+def loose(page):
+    """The red dots: where each one is drawn and whose end it is."""
+    return page.eval_on_selector_all(
+        "#ed-ui .ed-loose",
+        "els => els.map((e) => [+e.getAttribute('cx'), "
+        "+e.getAttribute('cy'), e.dataset.node])")
+
+
 def canvas_point(page, x, y):
     """Screen coordinates of a page point, from the canvas's own matrix."""
     return page.evaluate(
@@ -103,12 +113,12 @@ def test_the_editor_draws_what_is_drawn_into_it(served):
         # a first visit is met by the tour, and it advances by doing the
         # step rather than by clicking Next
         page.wait_for_selector("#ed-tour:not([hidden])")
-        assert "Step 1 of 5" in page.text_content("#ed-tour")
-        drop_card(page, "free", 700, 400)
+        assert "Step 1 of 4" in page.text_content("#ed-tour")
+        drop_card(page, "cond", 700, 400)
         page.wait_for_function(
             "() => document.getElementById('ed-tour')"
-            ".textContent.includes('Step 2 of 5')")
-        page.keyboard.press("Escape")   # closes the new node's card
+            ".textContent.includes('Step 2 of 4')")
+        page.keyboard.press("Escape")   # closes the new path's card
         page.click('#ed-tour button[data-tour="end"]')
         page.wait_for_selector("#ed-tour", state="hidden")
         names = page.evaluate("JSON.parse(localStorage.getItem("
@@ -216,6 +226,80 @@ def test_the_editor_draws_what_is_drawn_into_it(served):
         page.keyboard.press("Control+z")
         settled(page, "branch", 0)
         assert len(stored(page)["branches"]) == 1
+
+        # One drop makes a whole path: two places with the box between
+        # them, laid along the run. A path card used to make nothing at all
+        # — it turned the drag into a mode and threw the drop point away.
+        was = len(stored(page)["nodes"])
+        drop_card(page, "rad", 520, 640)
+        page.wait_for_selector("#ed-popover:not([hidden])")
+        page.keyboard.press("Escape")
+        settled(page)
+        d = stored(page)
+        assert len(d["nodes"]) == was + 2, d["nodes"]
+        assert d["branches"][-1]["kind"] == "rad"
+        a, c = [n["at"] for n in d["nodes"][-2:]]
+        assert a[1] == c[1] and c[0] > a[0], (a, c)
+
+        # both its ends join nothing, and both say so. The named nodes of
+        # the drawing it landed beside are nobody's loose end.
+        assert sorted(x[2] for x in loose(page)) == sorted(
+            n["id"] for n in d["nodes"][-2:]), loose(page)
+
+        # `]` turns the component. A path loose at both ends swings its whole
+        # run, which is what standing a dropped path upright means; writing
+        # an angle onto the box would leave the wire lying where it was.
+        page.mouse.click(*canvas_point(
+            page, *[(a[i] + c[i]) / 2 for i in (0, 1)]))
+        settled(page)
+        page.keyboard.press("]")
+        settled(page)
+        turned = [n["at"] for n in stored(page)["nodes"][-2:]]
+        assert turned[0][0] == turned[1][0], turned
+        page.keyboard.press("[")
+        settled(page)
+        assert [n["at"] for n in stored(page)["nodes"][-2:]] == [a, c]
+
+        # A red dot let go over empty space does nothing whatever: no
+        # half-made state, no mode left armed.
+        before = json.dumps(stored(page))
+        x, y, _ = loose(page)[0]
+        sx, sy = canvas_point(page, x, y)
+        page.mouse.move(sx, sy)
+        page.mouse.down()
+        page.mouse.move(sx, sy + 280, steps=8)
+        page.mouse.up()
+        settled(page)
+        assert json.dumps(stored(page)) == before
+
+        # Dropped on a node, the loose place becomes that place: the branch
+        # is rewired and the spare node goes.
+        d = stored(page)
+        target = d["nodes"][0]
+        x, y, went = loose(page)[0]
+        sx, sy = canvas_point(page, x, y)
+        tx, ty = canvas_point(page, *target["at"])
+        page.mouse.move(sx, sy)
+        page.mouse.down()
+        page.mouse.move(tx, ty, steps=10)
+        page.mouse.up()
+        settled(page)
+        d2 = stored(page)
+        assert len(d2["nodes"]) == len(d["nodes"]) - 1
+        assert not any(n["id"] == went for n in d2["nodes"])
+        assert target["id"] in (d2["branches"][-1]["from"],
+                                d2["branches"][-1]["to"]), d2["branches"][-1]
+
+        # A node dropped near another's line takes that line exactly. Two
+        # nodes placed by eye differ by a few units, `_layout` reads a
+        # branch's angle off its endpoints, and the wire came out at 6.58
+        # degrees with nothing in the checker to say so.
+        line = d2["nodes"][0]["at"][1]
+        drop_card(page, "free", 1000, canvas_point(page, 0, line)[1] + 8)
+        page.wait_for_selector("#ed-popover:not([hidden])")
+        page.keyboard.press("Escape")
+        settled(page)
+        assert stored(page)["nodes"][-1]["at"][1] == line
 
         # the findings strip reports what the checker says, in its words
         summary = page.text_content("#ed-findings-count")

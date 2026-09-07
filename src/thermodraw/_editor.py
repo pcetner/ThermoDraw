@@ -125,11 +125,18 @@ def export(data: Dict[str, Any], what: str = "svg",
 
 def head() -> Dict[str, Any]:
     """What the page supplies once so no render has to carry it: the
-    symbol stylesheet, the palette variables, the three faces."""
+    symbol stylesheet, the palette variables, the three faces.
+
+    `pitch` is the solver's own spacing between two nodes on a run. The
+    editor lays a dropped path out at it, and a hand-placed ladder that
+    follows it is the one `_solve` would have produced, so it is sent
+    from here rather than written down a second time in the page.
+    """
     return {
         "css": symbols.CSS,
         "vars": theme._VARS,
         "faces": [theme.font_face(f) for f in ("regular", "italic", "semibold")],
+        "pitch": float(_solve.PITCH),
         "version": __version__,
     }
 
