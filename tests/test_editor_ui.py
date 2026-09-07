@@ -233,6 +233,33 @@ def test_the_editor_draws_what_is_drawn_into_it(served):
         was = len(stored(page)["nodes"])
         drop_card(page, "rad", 520, 640)
         page.wait_for_selector("#ed-popover:not([hidden])")
+        settled(page)
+
+        # The card a drop opens parks the caret in the label box, and the
+        # turn keys reach the drawing from there: the moment a component
+        # most wants turning is the moment it has just landed lying flat.
+        # `]` used to put a `]` in the label and turn nothing at all, and
+        # this test never saw it because it dismissed the card first.
+        lying = [n["at"] for n in stored(page)["nodes"][-2:]]
+        page.keyboard.press("]")
+        settled(page)
+        upright = [n["at"] for n in stored(page)["nodes"][-2:]]
+        assert upright[0][0] == upright[1][0], upright
+        assert page.input_value('#ed-popover input[data-field="label"]') == ""
+        page.keyboard.press("[")
+        settled(page)
+        assert [n["at"] for n in stored(page)["nodes"][-2:]] == lying
+
+        # and the caret survives the turn, so a name being typed is not the
+        # price of squaring the thing being named
+        page.keyboard.type("Sky")
+        page.keyboard.press("]")
+        settled(page)
+        page.keyboard.type("view")
+        settled(page)
+        assert stored(page)["branches"][-1]["label"] == "Skyview"
+        page.keyboard.press("[")
+        settled(page)
         page.keyboard.press("Escape")
         settled(page)
         d = stored(page)
