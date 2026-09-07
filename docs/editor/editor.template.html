@@ -98,8 +98,10 @@ window.THERMODRAW = {version: "{{VERSION}}", wheel: "{{WHEEL}}", pyodide: "{{PYO
   <section id="ed-help-panel" class="ed-help card" hidden aria-label="How this editor works">
     <div class="ed-panel-head"><h2>How this works</h2><button type="button" id="ed-help-close">Close</button></div>
     <p class="ed-tour-offer"><button type="button" id="ed-take-tour">Take the tour</button>
-      Four steps on your own drawing: add, connect, edit, check.</p>
+      Four steps on your own drawing: add, edit, join, check.</p>
     <dl>
+      <dt>Adding and joining</dt><dd>Drag any component onto the drawing and it lands whole, where you dropped it, joined to nothing — a path arrives with a place at each end, because that is what a path needs to be one. A <b>red dot</b> marks an end that joins nothing: drag it onto the node it meets, or click it and then click that node. Esc cancels, and letting go over empty space changes nothing. Double-click a node to draw a path from it to another.</dd>
+      <dt>Turning</dt><dd><b>[</b> and <b>]</b> turn what is selected to the next quarter turn. A path swings its whole run where an end is free to move, and turns its symbol, wire re-routed to meet it, where both ends are pinned.</dd>
       <dt>Undo, Redo, Delete</dt><dd>The last change back or forward; the selected component removed with what hung on it.</dd>
       <dt>Fit to screen</dt><dd>Brings the whole drawing into view. Scroll to zoom, drag empty space to pan, pinch on touch.</dd>
       <dt>Notation</dt><dd>Textured boxes, the default, or circuit zigzags for every resistance. Nothing else moves.</dd>
@@ -110,7 +112,7 @@ window.THERMODRAW = {version: "{{VERSION}}", wheel: "{{WHEEL}}", pyodide: "{{PYO
       <dt>Export</dt><dd>SVG that follows light and dark, SVG baked for Word and slides, PNG, the HTML page with its controls, or the JSON file itself.</dd>
       <dt>Files</dt><dd>Everything you draw is kept in this browser, saved as you go. New, Example and Import make a file; rename, copy and delete are in each file's menu. A diagram's name can travel inside the file too, so an export or a share link carries it.</dd>
     </dl>
-    <p class="ed-hint">Keys: Ctrl+Z undo · Ctrl+Shift+Z redo · Delete · Esc · F fit · Z notation · D theme · P check the numbers.</p>
+    <p class="ed-hint">Keys: Ctrl+Z undo · Ctrl+Shift+Z redo · Delete · Esc · [ ] turn · F fit · Z notation · D theme · P check the numbers.</p>
   </section>
 </main>
 

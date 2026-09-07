@@ -55,6 +55,13 @@ SHAVE = 1.0
 # this is slack for rounding, not for a different place.
 OFF_RUN = 1.0
 
+# How far off square a run may lie before it reads as a mistake rather than a
+# choice. Everything drawn deliberately on the diagonal in three clean-room
+# runs and the gallery is 37 degrees or more; nothing anywhere in the corpus
+# sits between nought and fifteen, because nobody means a run to be six
+# degrees off.
+OFF_AXIS = 15.0
+
 # Opposite margins may differ by this fraction of the padding before the
 # drawing reads as sitting off-centre in its own frame.
 FRAME_SLACK = 0.25
@@ -905,6 +912,62 @@ def _symbol_off_its_run(placements, out):
             at=tuple(p.at)))
 
 
+def _run_off_axis(placements, out):
+    """A run that is nearly square, and is not.
+
+    Two nodes placed by eye differ by a few units; `layout` reads a branch's
+    angle straight off its endpoints, so the wire comes out at 6.58 degrees
+    with the box turned to match. Every other rule here asks about labels,
+    crossings, or a symbol's relation to its own wire. None asked whether the
+    wire was straight, so a whole crooked ladder could be drawn and told
+    there was nothing to report -- which is what the editor drew, before it
+    learned to land a node on its neighbour's line.
+
+    A branch carrying `via` is exempt. Its legs were routed, by hand or
+    around a box, and where a route goes is the author's. So is anything
+    past `OFF_AXIS`: a diagonal that far over is meant.
+
+    A note, not a warning. The drawing is legible and every number in it is
+    right; it is the drafting that is off, and a rule that shouts at a
+    sketch is one an author learns to silence.
+    """
+    at = {p.ends[0]: tuple(p.at) for p in placements
+          if p.element == "node" and p.ends}
+    worst: Dict[str, Any] = {}
+    for p in placements:
+        if (p.element != "wire" or p.role != "branch" or not p.shown
+                or p.via):
+            continue
+        for a, b in zip(p.points, p.points[1:]):
+            dx, dy = b[0] - a[0], b[1] - a[1]
+            if math.hypot(dx, dy) < 1.0:
+                continue
+            off = math.degrees(math.atan2(abs(dy), abs(dx))) % 90
+            off = min(off, 90 - off)
+            if not 1e-6 < off <= OFF_AXIS:
+                continue
+            key = str(p.ref)
+            if off > worst.get(key, (0.0,))[0]:
+                worst[key] = (off, p, (dx, dy))
+    for off, p, (dx, dy) in worst.values():
+        # Which square the run was reaching for, and the number that gets it
+        # there. Naming the axis without the number leaves the author to
+        # read a coordinate off a drawing that does not show one.
+        axis, name = (1, "y") if abs(dy) < abs(dx) else (0, "x")
+        ends = [e for e in p.ends if e in at]
+        remedy = (f"give one of them the other's `at[{axis}]`, so the run "
+                  f"is square")
+        if len(ends) == 2:
+            remedy = (f"give node {ends[1]!r} the same {name} as node "
+                      f"{ends[0]!r}, {at[ends[0]][axis]:g}, so the run is "
+                      f"square")
+        out.append(Finding(
+            "run-off-axis", "note", p.ref or "a run",
+            f"the run is {off:.1f} degrees off square, so its wire and its "
+            "box are drawn on a slant",
+            remedy=remedy, at=tuple(p.points[0])))
+
+
 def _wire_through_wall(placements, out):
     """A wire running through a boundary node's hatching.
 
@@ -1188,6 +1251,7 @@ def check(diagram, size: Optional[Sequence[float]] = None,
     _wire_through_symbol(placements, findings)
     _wire_through_wall(placements, findings)
     _symbol_off_its_run(placements, findings)
+    _run_off_axis(placements, findings)
     _frame(scene, padding, findings)
     _parallel_pairs(placements, scene, findings)
     if physics:

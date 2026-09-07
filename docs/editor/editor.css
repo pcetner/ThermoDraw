@@ -92,6 +92,24 @@ body{display:grid;font-family:var(--sans);font-size:14px;line-height:1.4;
 #ed-ui .ed-via{fill:var(--panel);stroke:var(--accent);stroke-width:1.5px;
                vector-effect:non-scaling-stroke;cursor:move;pointer-events:all}
 
+/* an end joined to nothing, and the nodes it could be joined to. Red is the
+   editor's error red, because the reader reads red as something to see to,
+   which is exactly what a loose end is. */
+#ed-ui .ed-loose{fill:#b4442c;stroke:var(--paper);stroke-width:1.5px;
+                 vector-effect:non-scaling-stroke;cursor:crosshair;pointer-events:all}
+#ed-ui .ed-loose:focus{outline:none;stroke:var(--accent);stroke-width:2.5px}
+#ed-ui .ed-loose-ring{fill:none;stroke:#b4442c;stroke-opacity:.45;stroke-width:1.5px;
+                      vector-effect:non-scaling-stroke;pointer-events:none}
+#ed-hits rect.ed-target{stroke:#b4442c;stroke-width:2px;vector-effect:non-scaling-stroke;
+                        fill:#b4442c;fill-opacity:.12;cursor:crosshair}
+
+/* the line a dragged node has landed on, and the route a dragged box would
+   take if it were let go here */
+#ed-ui .ed-guide{fill:none;stroke:var(--accent);stroke-opacity:.5;stroke-width:1px;
+                 stroke-dasharray:3 4;vector-effect:non-scaling-stroke;pointer-events:none}
+#ed-ui .ed-ghost{fill:none;stroke:var(--accent);stroke-opacity:.5;stroke-width:2px;
+                 stroke-dasharray:5 4;vector-effect:non-scaling-stroke;pointer-events:none}
+
 /* what mode the drawing is in, said out loud */
 .ed-mode{position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:4;
          background:var(--accent);color:#fff;padding:6px 14px;border-radius:999px;
