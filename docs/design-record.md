@@ -930,6 +930,133 @@ usually the reason the diagram was drawn. Saying it needs an energy beside a
 temperature — a second quantity on a node kind that has one, which is a
 schema change. Until then the limit is prose.
 
+## What the format cannot state
+
+`CLAUDE.md` lists eight of these and says each needs its argument here before
+it is built. None had one. The evidence sat in `examples/gallery/FINDINGS*.md`
+and in fifteen per-diagram `findings.md` files, and the decision list pointed
+at a section of this record that did not exist — so the gate was unenforceable
+in the one direction that matters, which is refusing to build something that
+has not been argued for. This is that section.
+
+The rule it applies is the checker's, read in the other direction. **Validation
+catches diagrams that cannot be drawn; `check` catches diagrams that should not
+be; and a thing stays on this list until someone shows a drawing that says
+something false without it.** Wanting a field is not the standard. A diagram
+that states a number the author did not mean is.
+
+Two entries below meet that standard. Both are being built. The rest of the
+list stays prose.
+
+A note on how the second one got here: it is not one of the eight. It was found
+twice, in two runs, by agents who reached for the same three words — and it
+never reached the decision list at all, because nothing collected it. That is
+the cost of a gate with nothing behind it.
+
+### A stream has two temperatures, and a node has one
+
+**A node is a place; a stream is not a place.** `docs/schema.md` opens the node
+table with "A place with a temperature" — singular — and that is the whole of
+the difficulty. Water through a coil is 30 °C at one end and 38 °C at the other,
+and the difference *is* the transfer. `flow` is the neighbouring statement and a
+different one: heat moved from place A to place B, across a branch whose two
+ends are ordinary nodes with one temperature each.
+
+It is the most-asked-for thing in four clean-room runs, and the only gap two
+separate agents, two runs apart, each ranked first on their own list. Run 2's
+immersion rack tried three shapes before writing any JSON, took the least bad,
+and said so: 38 °C is in the data and 30 °C is *prose*, set in the same size as
+the rest of the label, not a `T` of anything, invisible to `--physics`. Run 4's
+battery pack drew the glycol loop dumping into a 25 °C reservoir that is really
+the inlet — "there is a fact the format has no slot for, and I did not invent a
+number to fill it". Run 1 ranked it first of all gaps and called it the only one
+that makes a drawing state something false; run 3 recorded it prospectively,
+having not needed it. Two agents independently refused to fake it as an
+`R_conv`, which would have named physics that is not happening.
+
+**What makes it a schema change rather than a limit is that the silence is
+total.** A furnace drawn the obvious way — strip in at 300 K and out at 1250 K
+as two `fixed` nodes, with the firing rate as a source between them — reports
+nothing, because `_physics.balance` asks only free nodes to close and a fixed
+node is a reservoir. Set that firing rate to 99,999 kW against a 1578.4 kW load
+and `check --physics` still exits 0 with no findings. Every other entry on this
+list costs a number that cannot be written down. This one costs the check.
+
+**So a stream is a node kind, and its balance is what justifies it.** It carries
+an inlet temperature in `value`, an outlet in `out`, and the enthalpy rise in
+`rate`; heat arriving must equal the rise, and that equation is the reason to
+add it rather than a fourth container. Branches and sources attach as they do to
+any node, the chain solver places it, and `Placement`'s roles stay the three the
+editor knows.
+
+**The temperature a resistive branch sees is declared, and refused when
+missing.** `inlet`, `outlet`, `mean` or `lmtd`. This is `arrangement`'s rule —
+never inferred — for `arrangement`'s reason: mean against LMTD against inlet
+moves the answer far enough that a default would be a confidently wrong number
+on a drawing, which the fold table already refused to be. The declaration is
+also what keeps the change small: it collapses a stream to one number at exactly
+the point every existing reader needs one, so `_physics` keeps a single
+temperature per node and nothing downstream is rewritten. `lmtd` is the one that
+cannot resolve there, needing the neighbour's temperature, and resolves per
+branch instead.
+
+**What it does not reach.** A stream exchanging with another stream — a
+counterflow exchanger — is still two elements with nothing relating them, which
+is the first of the deferred four and stays deferred. And a closed loop becomes
+one element rather than a severed chain, which is better than run 2's missing
+return leg but is not the same as drawing the return.
+
+### Two nodes that are one place
+
+**The vocabulary can say two things are not connected and cannot say they are
+the same place.** `break` is an open circuit; every other branch kind is a
+resistance, a capacitance or a rate. There is no way to join two named nodes
+with nothing between them.
+
+This was pre-registered. The gallery README says every brief was chosen because
+it was likely to hit a wall, and names five: advective transport, latent heat,
+active refrigeration, spreading resistance, **isothermal links**. Two of the
+five walls in that sentence are the two entries in this section.
+
+Two agents hit it, in two runs, and both wrote the words. Run 2's laser diode:
+"the schema has no zero-resistance link, no way to give one node two names, and
+no `pipe` that would read as 'these are the same temperature by construction'
+without also claiming a small resistance." It merged the baseplate into the TEC
+hot face, so the word "baseplate" survives only inside a branch label, and a
+reader counting parts gets seven where the brief describes eight. Run 3's
+furnace wall: "a radiative link between two nodes at the same temperature is a
+zero-resistance branch, which the schema cannot draw as anything meaningful."
+It merged the refractory hot face into the furnace interior and asked for the
+approximation to be on the record — the drawing now asserts the face is at
+exactly 1200 °C, which no furnace engineer believes. That agent's own summary
+of what it had done is the standard this section asks for: it *promoted an
+implication into a printed fact.*
+
+**So `link` is a branch kind, and it is an ideal short rather than a small
+resistance.** Not "negligible, unchecked": an element that states nothing
+checkable does not earn a glyph here. `--physics` merges linked nodes into one
+before balancing, so the two ends' attachments sum where they physically do, and
+it reports when their two stated temperatures disagree. That last finding is the
+whole difference between an element and a decoration.
+
+**It is a plain line, and that answers `corner`.** `g_branch_break`'s comment
+already argues the geometry from the other side — "Not a plain wire: a wire says
+heat flows" — and a link is exactly the case where heat flows and nothing
+impedes it. The objection to be met is not the glyph but the precedent: `corner`
+was removed for drawing nothing. It was removed for drawing nothing *and saying
+nothing*. It put routing into the topology, so `describe` hid it, `check` skipped
+it, and `--physics` folded it away before it could balance anything. A `link`
+draws a line and makes a claim that can be wrong — these two are one place — and
+a claim that can be wrong is the thing `corner` never had. If the line turns out
+to be indistinguishable from a routed wire on a real drawing, that is an
+argument about the mark, and the goldens will say.
+
+**What it does not reach.** Run 4's cryostat wanted its two 300 K boundaries to
+be one room, and a link between them makes the network a loop, which the chain
+solver refuses; that is the general placer, not this. Run 2's heat pipe drops
+0.4 K at load, which is neither zero nor a resistance, and still has nowhere to
+go. Neither is made worse by this, and neither is fixed by it.
+
 ## The README hero
 
 The picture at the top of the README was the power-device ladder in
