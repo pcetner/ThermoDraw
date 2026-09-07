@@ -152,7 +152,7 @@ def test_the_head_carries_the_faces_and_the_variables():
     json.dumps(h)
 
 
-def test_the_palette_is_the_eighteen_symbols_in_their_groups():
+def test_the_palette_is_the_twenty_symbols_in_their_groups():
     from thermodraw import symbols
     p = E.palette()
     assert [e["key"] for e in p] == [s.key for s in symbols.SYMBOLS]
@@ -176,3 +176,27 @@ def test_quick_add_ranks_what_was_meant_first(typed, first):
     got = E.quick_add(typed)
     assert got and got[0]["key"] == first, got[:3]
     assert E.quick_add("") == []
+
+
+def test_the_editor_offers_exactly_the_kinds_the_model_has():
+    """`docs/editor/editor.js` writes all three kind sets out by hand.
+
+    The palette is generated from the library, so a new kind is droppable the
+    day it lands; the inspector's Kind dropdown is this literal, so it was
+    the one place a new kind could go missing with every test green. Nothing
+    compared the two until `link` and `stream` were added and both were
+    droppable and unselectable at once.
+    """
+    import re
+
+    from thermodraw import model
+
+    src = (ROOT / "docs" / "editor" / "editor.js").read_text(encoding="utf-8")
+    block = re.search(r"const KINDS = \{(.*?)\n\};", src, re.S)
+    assert block, "editor.js no longer declares KINDS as one literal"
+    listed = {role: set(re.findall(r'"([a-z-]+)"', body))
+              for role, body in re.findall(r"(\w+): \[(.*?)\],",
+                                           block.group(1))}
+    assert listed == {"node": model.NODE_KINDS,
+                      "branch": model.BRANCH_KINDS,
+                      "source": model.SOURCE_KINDS}

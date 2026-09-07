@@ -7,6 +7,66 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`stream`, a node kind: a medium with two temperatures.** A node is "a
+  place with a temperature", singular, and a steel strip through an oven or
+  water through a coil is one temperature at each end, the difference being
+  the transfer. It was the most-asked-for missing thing in four clean-room
+  runs and the only gap two separate agents each ranked first. A stream
+  states `inlet` and `outlet` rather than `value` — it is not at one
+  temperature, and `value` could not say which end it meant — and `rate` is
+  what the rise came to. Streamlines beneath the node say a moving medium,
+  the same mark a `conv` box is filled with. Under `--physics` it is asked a
+  different question from every other node: not that what arrives equals
+  what leaves, but that what arrives, net, is the rise it states. The same
+  furnace drawn the old way, as two `fixed` nodes with a source between
+  them, reports nothing at all at 99,999 kW against a 1578.4 kW load,
+  because a fixed node is a reservoir and is never asked to balance.
+  `reference` — `inlet`, `outlet`, `mean` or `lmtd` — says which temperature
+  a resistance joined to one works from, and is refused when missing
+  wherever a resistance actually attaches, for the reason `arrangement` is:
+  the answers are too far apart to infer. `lmtd` is accepted and not yet
+  computed, and `--physics` names such a node in the note saying what it did
+  not check rather than quietly using the mean.
+- **`link`, a branch kind: two nodes that are one place.** The vocabulary
+  could say two things are *not* connected — that is `break` — and could not
+  say they are the same place. Two clean-room agents reached for it in the
+  same words, and the gallery README had pre-registered "isothermal links"
+  as one of the five walls its briefs were chosen to hit. It draws a plain
+  wire, which is exactly what a `break` declines to be, and names no
+  quantity, so it refuses `value` and `rate`. It is a claim rather than a
+  decoration: `--physics` merges the two ends into one place before anything
+  is summed, so heat arriving at either name arrives at the same balance,
+  and reports **`link-temperatures-disagree`** when the two ends state
+  different numbers — a contradiction rather than a disagreement, so no
+  tolerance is allowed for it. That is the answer to the `corner`
+  precedent: `corner` was removed for drawing nothing *and saying nothing*,
+  and this makes a claim that can be wrong.
+- `examples/furnace.json`, the diagram both were built for and the one the
+  old vocabulary could not state: the chamber gas and the refractory hot
+  face are one place, and the strip is a medium with two temperatures. It
+  holds no coordinate and `check --physics` reports nothing.
+- A test that `docs/editor/editor.js` offers exactly the kinds the model
+  has. The palette is generated from the library, so a new kind is droppable
+  the day it lands, but the inspector's Kind dropdown is a hand-written
+  literal — the one place a new kind could go missing with every test green.
+- `core.streamlines` takes an `amp`. The default is unchanged, so every
+  `conv` box is byte-identical; a band as shallow as a node can afford needs
+  a smaller one or the waves cross into a blur.
+
+### Changed
+
+- `docs/design-record.md` has a section for **what the format cannot state**.
+  `CLAUDE.md` lists eight of these and says each needs its argument there
+  before it is built; none had one, and the gate pointed at a section that
+  did not exist. Its rule is the checker's read backwards: a thing stays on
+  the list until someone shows a drawing that says something false without
+  it. The two entries above are its first, and each says what it does *not*
+  fix.
+- `--physics` counts **places**, not nodes: a linked group is one of them and
+  answers to several names, so `checked 2 of 6 free nodes` would undercount.
+
 ### Changed
 
 - **Every drop in the editor lands the component whole, where you dropped

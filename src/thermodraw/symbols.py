@@ -237,6 +237,35 @@ def g_phase_node(a):
 # a test asserts the two agree, which is what `g_break` needed and lacked.
 PHASE_HALF, PHASE_Y1, PHASE_Y2 = 13, 13, 19
 
+# The same arrangement for a stream's band, and for the same reason.
+STREAM_HALF, STREAM_TOP, STREAM_DEPTH = 19, 9, 15
+
+
+def stream_band():
+    """The streamline band beneath a stream node, centred on the node.
+
+    One function, called by the card glyph and by `render` both, so the
+    sheet cannot show a band the pipeline does not draw.
+    """
+    return (f'<g transform="translate(0,{STREAM_TOP + STREAM_DEPTH / 2:g})">'
+            + S.streamlines(2 * STREAM_HALF, STREAM_DEPTH, n=2,
+                            amp=2.3) + '</g>')
+
+
+def g_stream_node(a):
+    """A node that is a medium rather than a place.
+
+    Streamlines, because in this vocabulary streamlines are a moving fluid —
+    the same rule that textures `conv`, so a reader who has learnt the box
+    interiors already knows this. They say the medium is going without saying
+    which way: a node carries no direction, and which end is which is in the
+    label, `T_in` above `T_out`.
+    """
+    return ('<line class="w" x1="-54" y1="0" x2="-5" y2="0"/>'
+            '<line class="w" x1="5" y1="0" x2="54" y2="0"/>'
+            '<circle class="node-open" cx="0" cy="0" r="5.5"/>'
+            + stream_band())
+
 
 def g_branch_break(a):
     # The open circuit, which is what a mechanical connection carrying no
@@ -247,6 +276,24 @@ def g_branch_break(a):
             '<line class="w" x1="-12" y1="-8" x2="-12" y2="8"/>'
             '<line class="w" x1="12" y1="-8" x2="12" y2="8"/>'
             '<line class="w" x1="12" y1="0" x2="40" y2="0"/>')
+
+
+def g_link(a):
+    """Two nodes that are one place: a wire, and nothing on it.
+
+    A plain wire is exactly what `g_branch_break` declines to be — "a wire
+    says heat flows" — and here that is the whole statement. Nothing is
+    crossed, so there is no interior to texture; nothing resists, so there is
+    no box; and heat does flow, so there is no gap. It is the one branch
+    glyph that adds no mark of its own: the line is collinear with the wire
+    either side, and a reader sees one unbroken run between two circles.
+
+    That it draws nothing extra is the objection `corner` was removed for,
+    and the answer is that `corner` drew nothing *and said nothing*. This
+    says the two ends are one place, `--physics` merges them on the strength
+    of it, and it reports when their two stated temperatures disagree.
+    """
+    return '<line class="w" x1="-40" y1="0" x2="40" y2="0"/>'
 
 
 def g_flow(a):
@@ -281,7 +328,7 @@ class Symbol:
 
     `reach` is the other measurement, and it is not the same one. `half` and
     `half_len` say how much room to leave a label; `reach` says how far the
-    ink goes, which for some of the eighteen is further. A box symbol runs LEAD
+    ink goes, which for some of the twenty is further. A box symbol runs LEAD
     past each end of the box, and a capacitance draws ±40 against a
     `half_len` of 15. Mid-route those leads lie over wire the canvas already
     counts, so nothing shows; at the end of a run the canvas is sized to the
@@ -311,7 +358,7 @@ class Symbol:
                                                           self.half)
 
 
-# The order is the specification. At eighteen entries an arbitrary list stops
+# The order is the specification. At twenty entries an arbitrary list stops
 # being readable, so they are grouped by what kind of statement they make, and
 # `render_demo.vocabulary` starts each group on a new row. `GROUPS` below is
 # the same order, and a test pins the two to each other.
@@ -343,6 +390,16 @@ SYMBOLS = [
                 "the whole reason a two-phase system exists. The hold lasts "
                 "only while the phase change does, and the symbol does not say "
                 "how long that is."),
+    Symbol(key="stream", name="Stream", draw=g_stream_node,
+           text=S_("T", "in"), value="300 K", user="Steel strip",
+           half=27, half_len=16, reach=(54, 24),
+           note="The one node that is not a place. It arrives at `inlet` and "
+                "leaves at `outlet`, and `rate` is the heat that difference "
+                "carried off; the balance is that what arrives equals the "
+                "rise. Streamlines say a moving medium, the same rule that "
+                "textures convection. A resistance joined to one needs "
+                "`reference` — `inlet`, `outlet`, `mean` or `lmtd` — because "
+                "a resistance works from one temperature and this has two."),
 
     # -- paths: the interior states what the heat is crossing
     Symbol(key="cond", name="Conduction", draw=g_cond, texture=tex_cond,
@@ -402,7 +459,7 @@ SYMBOLS = [
            note="On a near-vertical branch the block moves to whichever side has "
                 "room, and stays whole."),
 
-    # -- paths that carry a rate, or carry nothing
+    # -- paths that are not resistances
     Symbol(key="flow-branch", name="Heat flow, along a path",
            draw=g_flow_branch, text=S_("q"), value="3.2 kW",
            user="Technical water", half=10, half_len=22, reach=(40, 10),
@@ -417,6 +474,16 @@ SYMBOLS = [
                 "plain wire would say heat flows and a resistance would say "
                 "how much, so it is neither. It names no quantity either, and "
                 "the label is the user's line alone."),
+    Symbol(key="link", name="Ideal joint", draw=g_link,
+           text="", value=None, user="Bolted flange",
+           half=8, half_len=12, reach=(40, 2),
+           note="Two nodes that are one place, drawn twice because the reader "
+                "needs both names. A plain wire, which is what a break "
+                "declines to be: heat flows and nothing is in the way, so "
+                "there is no box, no texture and no gap. It names no quantity "
+                "and refuses `value` and `rate`. `--physics` merges its two "
+                "ends before balancing, and says so when their stated "
+                "temperatures disagree."),
 
     # -- sources: heat crossing into or out of one node
     Symbol(key="diss", name="Dissipation", draw=g_diss,
@@ -443,13 +510,13 @@ SYMBOLS = [
 # sheet starts a new row at each group; `tests/test_model.py` pins this list
 # against SYMBOLS so neither can drift from the other.
 GROUPS = [
-    ("Nodes", ("free", "fixed", "break", "phase")),
+    ("Nodes", ("free", "fixed", "break", "phase", "stream")),
     ("Paths: what the heat crosses",
      ("cond", "conv", "rad", "contact")),
     ("Paths: shape, phase, mechanism, storage",
      ("spread", "pipe", "mixed", "cap")),
-    ("Paths that carry a rate, or carry nothing",
-     ("flow-branch", "break-branch")),
+    ("Paths that are not resistances",
+     ("flow-branch", "break-branch", "link")),
     ("Sources", ("diss", "radin", "flow", "flux")),
 ]
 

@@ -633,7 +633,7 @@ so following the page's advice about layered walls switched the check
 off for the zone inside them, and the worst-balanced node in one diagram
 was absent from the only report that could have found it. A skip that is
 not visible from the file has to be visible in the output. One note per
-diagram, `checked 2 of 6 free nodes; not checked: ...`, with the reason
+diagram, `checked 2 of 6 free places; not checked: ...`, with the reason
 for each, and nothing on a diagram whose nodes were all asked.
 
 ### What the third clean room taught it
@@ -983,7 +983,7 @@ and `check --physics` still exits 0 with no findings. Every other entry on this
 list costs a number that cannot be written down. This one costs the check.
 
 **So a stream is a node kind, and its balance is what justifies it.** It carries
-an inlet temperature in `value`, an outlet in `out`, and the enthalpy rise in
+an inlet temperature in `inlet`, an outlet in `outlet`, and the rise in
 `rate`; heat arriving must equal the rise, and that equation is the reason to
 add it rather than a fourth container. Branches and sources attach as they do to
 any node, the chain solver places it, and `Placement`'s roles stay the three the

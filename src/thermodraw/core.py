@@ -566,12 +566,19 @@ def hatch(w, h, angle=45, step=7, cls="tex", x=None, y=None):
             f'<g transform="translate({cx},{cy})">{_rules(R, step, angle)}</g></g>')
 
 
-def streamlines(w, h, n=3, cls="tex"):
+def streamlines(w, h, n=3, cls="tex", amp=3.2):
+    """Waves along the box: heat carried by a moving fluid.
+
+    `amp` is how far each line swings either side of its own centreline. The
+    default fills a box 32 deep with three of them. A shallower band needs a
+    smaller one or the waves cross each other into a blur, which is what a
+    stream node's mark did at the depth a node can afford.
+    """
     cid, defs = clip_rect(w, h)
     out = []
     for i in range(n):
         y = -h / 2 + h * (i + 1) / (n + 1)
-        pts = [f"{-w/2 + (k/24)*w:.1f},{y + 3.2*math.sin(2*math.pi*(k/24) + i):.1f}"
+        pts = [f"{-w/2 + (k/24)*w:.1f},{y + amp*math.sin(2*math.pi*(k/24) + i):.1f}"
                for k in range(25)]
         out.append(f'<polyline points="{" ".join(pts)}"/>')
     return (f'<defs>{defs}</defs><g class="{cls}" clip-path="url(#{cid})">'

@@ -104,7 +104,7 @@ def examples() -> List[dict]:
 
 
 def _palette_markup() -> str:
-    """The eighteen cards, drawn by the library, grouped as it groups them,
+    """The twenty cards, drawn by the library, grouped as it groups them,
     baked into the page so the palette is there before Python is."""
     out = []
     group = None

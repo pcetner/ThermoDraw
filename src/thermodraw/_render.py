@@ -211,6 +211,22 @@ def _phase_box(p):
             (PHASE_HALF, (PHASE_Y2 - PHASE_Y1) / 2), 0.0)
 
 
+def stream_mark(x, y):
+    """The streamline band beneath a node that is a moving medium.
+
+    The band itself comes from `symbols.stream_band`, so the sheet and the
+    pipeline cannot draw different things — the split copy is what `g_break`
+    had, and it drew nothing here for a release.
+    """
+    return f'<g transform="translate({x:.1f},{y:.1f})">{SY.stream_band()}</g>'
+
+
+def _stream_box(p):
+    """The band as an oriented box: (centre, half, angle)."""
+    return ((p.at[0], p.at[1] + SY.STREAM_TOP + SY.STREAM_DEPTH / 2),
+            (SY.STREAM_HALF, SY.STREAM_DEPTH / 2), 0.0)
+
+
 def _wall(p):
     """(half, depth) for a ground placement, defaulting to what ground draws."""
     return tuple(p.wall) if p.wall else (WALL_HALF, WALL_DEPTH)
@@ -250,6 +266,8 @@ def bounds(p):
         return S.box_bounds(centre, half, angle)
     if p.element == "phase":
         return S.box_bounds(*_phase_box(p))
+    if p.element == "stream":
+        return S.box_bounds(*_stream_box(p))
     if p.element == "ellipsis":
         reach = ELLIPSIS_STEP + ELLIPSIS_R
         return S.box_bounds(p.at, (reach, ELLIPSIS_R), p.angle)
@@ -311,6 +329,8 @@ def compose(placements, size=None, padding=PADDING):
             glyphs.append(ground(p.at[0], p.at[1], p.angle, *_wall(p)))
         elif p.element == "phase":
             glyphs.append(phase_mark(p.at[0], p.at[1]))
+        elif p.element == "stream":
+            glyphs.append(stream_mark(p.at[0], p.at[1]))
         elif p.element == "ellipsis":
             emit(p, ellipsis(p.at[0], p.at[1], p.angle), glyphs)
         elif p.element == "node":
@@ -336,6 +356,9 @@ def compose(placements, size=None, padding=PADDING):
             occupied.add_box(centre, half, angle, owner=p)
         elif p.element == "phase":
             centre, half, angle = _phase_box(p)
+            occupied.add_box(centre, half, angle, owner=p)
+        elif p.element == "stream":
+            centre, half, angle = _stream_box(p)
             occupied.add_box(centre, half, angle, owner=p)
         elif p.element == "node":
             occupied.add_box(p.at, (p.radius, p.radius), 0.0, owner=p)

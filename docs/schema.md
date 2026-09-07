@@ -97,7 +97,7 @@ A place with a temperature.
 | field | meaning |
 |---|---|
 | `id` | referred to by branches and sources |
-| `kind` | `free` (default), `fixed`, `break`, `phase` |
+| `kind` | `free` (default), `fixed`, `break`, `phase`, `stream` |
 | `label` | the words above the symbol — the top line, always. Optional: a node with none draws its `T` line alone, or nothing, and still counts as a label placed |
 | `sub` | subscript on `T`. Identity: you choose it, it names a place |
 | `value` | temperature, unit appended from `units.T` |
@@ -105,11 +105,44 @@ A place with a temperature.
 | `angle` | turns the node's label frame, in degrees. It moves the label and nothing else |
 | `side` | `auto` (default), `up`, `down`, `left`, `right` — where the label goes |
 | `wall` | `down` (default), `up`, `left`, `right` — which way a `fixed` or `break` node's wall faces. Refused on a node that has no wall |
+| `inlet` | `stream` only: the temperature the medium arrives at, in `units.T` |
+| `outlet` | `stream` only: the temperature it leaves at |
+| `rate` | `stream` only: the heat that difference carried off, in `units.q` |
+| `reference` | `stream` only: `inlet`, `outlet`, `mean` or `lmtd` — which temperature a resistance joined to it works from. Required when one is |
 
 `phase` is a node whose temperature a phase change holds rather than a
 boundary: the constant-temperature marking, two short rules beneath, and
 no wall. Condensation at 3.2 kW with no temperature drop is one node, not
 two surfaces with a path between them.
+
+`stream` is the one node that is not a place. A medium moving through the
+diagram — a steel strip through an oven, water through a coil — arrives at
+one temperature and leaves at another, and the difference *is* the heat it
+carried off. It states `inlet` and `outlet` rather than `value`, because it
+is not at one temperature and `value` could not say which end it meant, and
+`rate` is what the rise came to. Streamlines beneath the node say the medium
+is going, the same mark a `conv` box is textured with.
+
+```jsonc
+{"id": "strip", "kind": "stream", "label": "Steel strip",
+ "inlet": "300", "outlet": "1250", "rate": "1578.4", "reference": "mean"}
+```
+
+Under `--physics` a stream is asked a different question from every other
+node: not that what arrives equals what leaves, but that what arrives, net,
+is the rise it states. A furnace whose firing rate does not match the load
+is reported; the same furnace drawn as two `fixed` nodes with a source
+between them reports nothing at all, because a fixed node is a reservoir and
+is never asked to balance.
+
+`reference` says which of the two temperatures a **resistance** joined to
+the stream works from — `inlet`, `outlet`, `mean` or `lmtd`. It is required
+whenever a resistance actually attaches, and never inferred, for the reason
+`arrangement` is never inferred: the three answers are far enough apart that
+a default would be a confidently wrong number. A stream joined only by
+`flow` branches and sources never needs it. `lmtd` is accepted and is not
+yet computed — `--physics` names such a node in the one note saying what it
+did not check, rather than quietly using the mean.
 
 `fixed` draws the boundary wall and connects to it with a short stub. `break`
 draws the same wall with no stub — the visible gap is the whole distinction,
@@ -164,7 +197,7 @@ A path heat takes between two nodes.
 | field | meaning |
 |---|---|
 | `from`, `to` | node ids, or the literal `"rail"` |
-| `kind` | `cond`, `conv`, `rad`, `contact`, `spread`, `pipe`, `mixed`, `cap`, `flow`, `break` |
+| `kind` | `cond`, `conv`, `rad`, `contact`, `spread`, `pipe`, `mixed`, `cap`, `flow`, `break`, `link` |
 | `label` | the words above the box |
 | `sub` | yours on the kinds whose subscript the library does not set: `cap`, where it names a place; `mixed`, where it names the part — `R_wall` — since the mechanism is what `mixed` declines to say, and it may be left off; `flow`. Ignored on `break`, and overridden on every resistance kind |
 | `value` | unit appended from `units.R` (`units.C` for `cap`, `units.q` for `flow`). Optional: a path with no number draws its label alone. Refused on `break` |
@@ -263,6 +296,21 @@ standoff or a mount. It names no quantity, so it takes **no `value` and no
 nothing, there being no symbol for it to sit under. Everything else on the
 table works on it. The same word is also a node `kind`, and it means the same thing there:
 a break at a boundary rather than between two nodes.
+
+`link` is the other end of that thought: two nodes that are **one place**,
+drawn twice because the reader needs both names. A bolted flange quoted as
+having no resistance worth stating, a baseplate that is the part the reader
+counts but not a separate temperature. It draws a plain wire — which is
+exactly what a `break` declines to be, since a wire says heat flows, and
+here it flows with nothing in the way — and like `break` it names no
+quantity, so it takes **no `value` and no `rate`** and its label stands
+alone.
+
+It is a claim, not a decoration. Under `--physics` the two ends are merged
+into one place before anything is summed, so heat arriving at either name
+arrives at the same balance; and if the two ends state different
+temperatures, that is `link-temperatures-disagree` — a contradiction rather
+than a disagreement, so no tolerance is allowed for it.
 
 ## Sources
 
@@ -610,7 +658,7 @@ which is what an interior junction drawn the way this page recommends does
 to the nodes either side of it; `rail` is not a neighbour, and a capacitance
 to it blinds nothing — when it carries a `flux` source, which has
 no area, or when a value is not a number. Every skip is reported, as one
-note per diagram: `physics-not-checked`, `checked 2 of 6 free nodes; not
+note per diagram: `physics-not-checked`, `checked 2 of 6 free places; not
 checked: j (source 1 is a flux, which has no area); sm, cb (neighbour 'smb'
 has no temperature); smb (it has no temperature)`. A diagram whose free
 nodes were all checked gets no note. The units it reads are `R` in `K/W`,

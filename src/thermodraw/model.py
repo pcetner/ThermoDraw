@@ -18,7 +18,19 @@ from dataclasses import MISSING as _MISSING
 from dataclasses import dataclass, field, fields
 from typing import Any, Dict, List, Optional, Sequence, Union
 
-NODE_KINDS = {"free", "fixed", "break", "phase"}
+NODE_KINDS = {"free", "fixed", "break", "phase", "stream"}
+
+# A `stream` is the one node that is not a place: it arrives at one
+# temperature and leaves at another, and the difference is the heat it
+# carried off. These four fields are its and no other kind's.
+STREAM_FIELDS = ("inlet", "outlet", "rate", "reference")
+
+# Which of a stream's two temperatures a resistance arriving at it works
+# from. Never inferred, and refused when a resistance attaches and it is
+# missing: mean against LMTD against inlet moves the answer far enough that
+# a default would be a confidently wrong number, which is the same reason
+# `arrangement` is required with `count`.
+REFERENCES = ("inlet", "outlet", "mean", "lmtd")
 # Kinds that existed and were removed, and what to write instead. A file
 # from before the removal gets the reason and the replacement, not "unknown
 # kind" beside a list it used to be on.
@@ -28,7 +40,17 @@ RETIRED_KINDS = {
               "so that it has a name and states no temperature",
 }
 BRANCH_KINDS = {"cond", "conv", "rad", "contact", "cap", "break",
-                "flow", "spread", "pipe", "mixed"}
+                "flow", "spread", "pipe", "mixed", "link"}
+
+# The two kinds that state no quantity, for opposite reasons: a `break`
+# carries no heat, and a `link` carries it with nothing in the way. Both are
+# `None` in `BRANCH_SYMBOL`; this says why, in the author's words, so the
+# refusal explains itself instead of naming a table.
+UNVALUED = {
+    "break": "a break carries no heat",
+    "link": "a link is an ideal joint, and its whole claim is that there is "
+            "nothing between its two ends to state",
+}
 
 # A branch whose quantity is a rate rather than a resistance, so which end
 # is `from` and which is `to` is the direction heat travels. `angle` is
@@ -61,13 +83,16 @@ BRANCH_SUB = {"cond": "cond", "conv": "conv", "rad": "rad",
               "flow": None, "spread": "spread", "pipe": "pipe",
               # `mixed` is the one kind whose mechanism the library does
               # not know, so its subscript is the caller's to set.
-              "mixed": None}
+              "mixed": None,
+              # A link names no quantity, so there is no symbol for a
+              # subscript to sit under. Accepted and ignored, as on a break.
+              "link": None}
 # None means the branch names no quantity at all: a thermal break has neither
 # a resistance nor a capacitance, so it carries the user's label and nothing
 # else. `layout` drops the second line rather than inventing a symbol for it.
 BRANCH_SYMBOL = {"cond": "R", "conv": "R", "rad": "R", "contact": "R",
                  "cap": "C", "break": None, "flow": "q",
-                 "spread": "R", "pipe": "R", "mixed": "R"}
+                 "spread": "R", "pipe": "R", "mixed": "R", "link": None}
 SOURCE_SYMBOL = {"diss": "P", "radin": "q", "flow": "q", "flux": "q″"}
 
 # Which quantity each kind is measured in, so one units entry serves many.
@@ -77,6 +102,7 @@ SOURCE_SYMBOL = {"diss": "P", "radin": "q", "flow": "q", "flux": "q″"}
 QUANTITY = {"cond": "R", "conv": "R", "rad": "R", "contact": "R", "cap": "C",
             "spread": "R", "pipe": "R", "mixed": "R",
             "free": "T", "fixed": "T", "break": "T", "phase": "T",
+            "stream": "T",
             "diss": "P", "radin": "q", "flow": "q", "flux": "q″"}
 
 # What a `rate` on a resistance is measured in. It is a heat rate whatever
@@ -308,6 +334,15 @@ def _build(cls, data, where, mapping=None):
 
 @dataclass
 class Node:
+    """A place with a temperature — or, as a `stream`, a medium with two.
+
+    A stream is the exception the rest of this class is written against. It
+    states `inlet` and `outlet` rather than `value`, because it is not at one
+    temperature, and `value` could not say which of the two it meant. What it
+    carries off is `rate`, and `reference` says which end a resistance
+    arriving at it should work from.
+    """
+
     id: str
     kind: str = "free"
     label: Optional[str] = None
@@ -317,6 +352,10 @@ class Node:
     angle: float = 0.0
     side: str = "auto"
     wall: str = "down"                      # `fixed` and `break` only
+    inlet: Union[str, float, None] = None   # `stream` only, from here down
+    outlet: Union[str, float, None] = None
+    rate: Union[str, float, None] = None
+    reference: Optional[str] = None
 
 
 @dataclass
@@ -595,6 +634,36 @@ class Diagram:
             _value(n.value, where)
             _side(n.side, where)
             _wall(n.wall, n.kind, where)
+            if n.kind != "stream":
+                for name in STREAM_FIELDS:
+                    if getattr(n, name) is not None:
+                        raise DiagramError(
+                            f"{where}: `{name}` belongs to a `stream` node, "
+                            "which arrives at one temperature and leaves at "
+                            f"another; a `{n.kind}` node is a place with one "
+                            "temperature, in `value`")
+            else:
+                # Refused rather than quietly preferred over one of the two.
+                # A stream is not at a temperature, and `value` cannot say
+                # which end it meant — which is the whole reason the kind
+                # exists.
+                if n.value is not None:
+                    raise DiagramError(
+                        f"{where}: a stream states `inlet` and `outlet`, not "
+                        f"`value`; got {n.value!r}. It is not at one "
+                        "temperature, and `value` cannot say which end it is")
+                _value(n.inlet, where)
+                _value(n.outlet, where)
+                _value(n.rate, where)
+                if n.rate is not None and not self.units.get(RATE):
+                    raise DiagramError(
+                        f"{where} has the rate {n.rate!r} but units has no "
+                        f"entry for {RATE!r}, so it would render bare")
+                if n.reference is not None and n.reference not in REFERENCES:
+                    raise DiagramError(
+                        f"{where}: reference must be one of "
+                        + ", ".join(map(repr, REFERENCES))
+                        + f", got {n.reference!r}")
         if self.rail:
             if self.rail.reference not in seen:
                 raise DiagramError(
@@ -641,10 +710,19 @@ class Diagram:
                 raise DiagramError(
                     f"branch {b.source}-{b.target}: arrangement "
                     f"{b.arrangement!r} without a count says nothing")
-            if b.kind == "break" and b.rate is not None:
-                raise DiagramError(
-                    f"branch {b.source}-{b.target} is a break, which carries "
-                    f"no heat and so no rate; got {b.rate!r}")
+            # The kinds that name no quantity state no number either, and
+            # they are the two `BRANCH_SYMBOL` maps to None. `rate` is asked
+            # first so that a branch carrying both is told about the same one
+            # it always was. `UNVALUED` gives each its own reason, because
+            # they have opposite ones: a break has no heat to measure, a link
+            # has nothing in the way to measure.
+            if b.kind in UNVALUED:
+                for name, got in (("rate", b.rate), ("value", b.value)):
+                    if got is not None:
+                        raise DiagramError(
+                            f"branch {b.source}-{b.target}: "
+                            f"{UNVALUED[b.kind]}, so it states no {name}; "
+                            f"got {got!r}")
             # The other end of the same rule. A `rate` is what a path carries
             # beside the quantity it presents, so a path that already presents
             # a rate has nothing to put beside. `flow` states `q` as its own
@@ -663,10 +741,6 @@ class Diagram:
                         f"branch {b.source}-{b.target} has the rate "
                         f"{b.rate!r} but units has no entry for {RATE!r}, so "
                         "it would render bare")
-            if b.kind == "break" and b.value is not None:
-                raise DiagramError(
-                    f"branch {b.source}-{b.target} is a break, which carries "
-                    f"no heat and so no value; got {b.value!r}")
             # A branch is a path between two places. Named the same place
             # twice it validated, laid out, rendered and checked clean while
             # drawing a stub that leaves a node and returns to it; `rail` to
@@ -703,6 +777,23 @@ class Diagram:
             _text(b.sub, where, "sub")
             _value(b.value, where)
             _side(b.side, where)
+        # A resistance arriving at a stream has to work from one of its two
+        # temperatures, and which one moves the answer far too much to guess.
+        # Asked here, after the branches are known, and only where it is
+        # actually read: a stream joined by `flow` branches and sources alone
+        # never needs it, and requiring it there would be noise.
+        resistive = {end for b in self.branches
+                     if BRANCH_SYMBOL.get(b.kind) == "R"
+                     for end in (b.source, b.target)}
+        for n in self.nodes:
+            if n.kind == "stream" and n.reference is None and n.id in resistive:
+                raise DiagramError(
+                    f"node {n.id!r} is a stream with a resistance joined to "
+                    "it, so it needs a `reference` of "
+                    + ", ".join(map(repr, REFERENCES))
+                    + ". A resistance works from one temperature and a stream "
+                      "has two; which of them applies is a modelling choice "
+                      "and is never inferred")
         known = set(QUANTITY.values())
         for quantity in self.units:
             if quantity not in known:
@@ -770,6 +861,11 @@ class Diagram:
     def _valued(self):
         for n in self.nodes:
             yield f"node {n.id!r}", n.kind, n.value
+            if n.kind == "stream":
+                # Both of a stream's temperatures go through the same
+                # bare-number check as everyone else's one.
+                yield f"node {n.id!r} inlet", n.kind, n.inlet
+                yield f"node {n.id!r} outlet", n.kind, n.outlet
         for b in self.branches:
             yield f"branch {b.source}-{b.target}", b.kind, b.value
         for s in self.sources:
@@ -966,7 +1062,7 @@ def _node_dict(n):
     if n.kind != "free":
         out["kind"] = n.kind
     return _keep(out, n, ("label", "sub", "value", "at", "angle", "side",
-                          "wall"))
+                          "wall") + STREAM_FIELDS)
 
 
 def _branch_dict(b):

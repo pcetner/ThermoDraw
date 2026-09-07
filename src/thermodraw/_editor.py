@@ -64,7 +64,8 @@ def _hits(placements, scene) -> List[Dict[str, Any]]:
                 y0, y1 = sorted((a[1], b[1]))
                 hits.append(_hit(p, "wire", (x0 - WIRE_REACH, y0 - WIRE_REACH,
                                              x1 + WIRE_REACH, y1 + WIRE_REACH)))
-        elif p.element in ("symbol", "node", "ground", "phase", "ellipsis"):
+        elif p.element in ("symbol", "node", "ground", "phase", "ellipsis",
+                           "stream"):
             hits.append(_hit(p, p.element, _render.bounds(p)))
     for rect in scene.rects:
         owner = rect.owner
@@ -156,7 +157,7 @@ def _model_kind(key: str, heading: str) -> Dict[str, str]:
 
 
 def palette() -> List[Dict[str, Any]]:
-    """The eighteen symbols as the editor's palette, drawn by the library,
+    """The twenty symbols as the editor's palette, drawn by the library,
     grouped as `symbols.GROUPS` groups them."""
     by_key = {s.key: s for s in symbols.SYMBOLS}
     out = []
