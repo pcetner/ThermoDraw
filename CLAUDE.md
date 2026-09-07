@@ -161,7 +161,16 @@ sentence after it says what would overturn it.
   and then the box turns and the wire is re-routed to meet it, because
   `_layout` cuts the wire along the route. A directed path and a fan refuse,
   each saying which field validation forbids it. No text rotates: `angle`
-  orients a label's frame and a symbol, never a glyph.
+  orients a label's frame and a symbol, never a glyph. **The keys reach the
+  drawing from inside a component's card**, the one place any shortcut
+  does: a drop opens that card with the caret in the label box, which is
+  exactly when a thing that has just landed flat wants turning, so the keys
+  were dead in the only place they were wanted and put a `]` in the label
+  instead. `f`, `d`, `z` and `p` stay out, being letters someone is typing
+  a name with; a bracket is not, and no label in the corpus holds one. The
+  caret is put back where it was, so a turn costs no part of a name being
+  typed. With nothing selected they say so: silence is what "the key does
+  nothing" is made of.
 - **A node lands on a run, not on a pointer.** `at` from the raw pointer is
   a number related to nothing else on the page, and `_layout` reads a
   branch's angle off its endpoints, so three nodes dropped by eye drew at

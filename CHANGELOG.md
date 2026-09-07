@@ -25,7 +25,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`[` and `]` turn what is selected**, to the next quarter turn either
   way — 38° goes to 90° or to 0°. A path swings its whole run where an end
   is free to move, and turns its symbol, wire re-routed to meet it, where
-  both ends are pinned. No text is ever rotated.
+  both ends are pinned. No text is ever rotated. They work from inside a
+  component's card, where every other shortcut correctly does not, because
+  the card a drop opens holds the caret and that is the moment a thing
+  wants turning; the caret comes back afterwards, mid-word and all. With
+  nothing selected the keys say so rather than doing nothing.
 - **A node dropped or dragged near another's line lands on it**, and on the
   solver's pitch along it, with the line shown while the drag is held.
   Three nodes dropped by eye used to draw at 6.58° and −4.97°, with nothing
