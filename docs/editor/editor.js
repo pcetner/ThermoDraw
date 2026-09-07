@@ -824,13 +824,42 @@ const quarter = (a, dir) => ((((dir > 0 ? Math.floor(a / 90) + 1
 const bearing = (a, c) => ((Math.atan2(c[1] - a[1], c[0] - a[0])
                             * 180 / Math.PI) % 360 + 360) % 360;
 
+// A turn rebuilds the card -- the angle it shows has just changed -- and a
+// reader turning something they are halfway through naming must not lose
+// the caret they were typing at. `turnBranch` also shuts the card on its
+// way through `select`, so the card is put back either way.
+function cardCaret() {
+  const a = document.activeElement;
+  if (!a || !pop.contains(a) || !a.dataset || !a.dataset.field) return null;
+  let start = null, end = null;
+  try { start = a.selectionStart; end = a.selectionEnd; } catch (_) {}
+  return {field: a.dataset.field, start: start, end: end};
+}
+
+function putCaret(mark) {
+  if (!mark) return;
+  const box = pop.querySelector(`[data-field="${mark.field}"]`);
+  if (!box) return;
+  box.focus({preventScroll: true});
+  if (mark.start != null && box.setSelectionRange) {
+    try { box.setSelectionRange(mark.start, mark.end); } catch (_) {}
+  }
+}
+
 function turnSelected(dir) {
-  if (!S.sel || S.present) return;
+  if (S.present) return;
+  // Silence is what "the key does nothing" is made of: the keys arrived to
+  // make turning cheap, so the one case where they cannot act says so.
+  if (!S.sel) {
+    toast("Nothing is selected. Click a component, then [ or ] turns it.");
+    return;
+  }
   const sel = S.sel, el = element(sel);
   if (!el) return;
+  const open = !pop.hidden, mark = cardCaret();
   if (sel.role === "branch") turnBranch(sel, el, dir);
   else applyField(sel, "angle", String(quarter(el.angle || 0, dir)));
-  if (!pop.hidden) openPopover(sel);
+  if (open) { openPopover(sel); putCaret(mark); }
 }
 
 // Waypoints the reader put there themselves, as opposed to the pair this
@@ -1551,6 +1580,19 @@ pop.addEventListener("input", (e) => {
   applyField(S.sel, f, e.target.value, true);
 });
 pop.addEventListener("keydown", (e) => {
+  // The card is a card over the drawing, and the moment a component most
+  // wants turning is the moment its card is open -- right after the drop
+  // that made it, with the caret parked in the label box. The turn keys
+  // therefore reach the drawing from inside the card, where every other
+  // shortcut correctly does not: `f`, `d`, `z` and `p` are letters someone
+  // is trying to type into a name, and a bracket is not. Without this the
+  // keys were dead in the one place they were wanted, and the reader who
+  // pressed `]` on a freshly dropped path got a `]` in its label.
+  if ((e.key === "[" || e.key === "]") && S.sel) {
+    e.preventDefault(); e.stopPropagation();
+    turnSelected(e.key === "]" ? 1 : -1);
+    return;
+  }
   // the card handles its own keys and says so: the document's Escape
   // chain would otherwise find the card already shut and go on to close
   // whatever is behind it
