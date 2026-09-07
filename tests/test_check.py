@@ -547,6 +547,72 @@ class TestASourceGivenNoPlace:
             assert _source_offset(sym) == sym.half_len + 5.5
 
 
+class TestASourceWireMeetsItsNode:
+    """The wire stops on the circle, on the line it is travelling along.
+
+    It is trimmed by 5.5, the node's radius, so that it ends on the circle
+    rather than under it. That 5.5 used to be measured along the source's
+    `angle`, which is the direction the wire runs only while the source
+    stands on its node's axis. A source dragged off that axis in the editor
+    keeps its `angle`, and the trim then went sideways: an arrow at angle 270
+    placed to the left of its node ended 5.5 straight *down* from the centre,
+    off its own line and on top of a fixed node's stub. `.node-open` is
+    filled, so what the reader saw was a wire stopping short of the node it
+    joins.
+    """
+
+    @staticmethod
+    def wire(**kw):
+        d = (DiagramBuilder(T="°C", P="W")
+             .node("a", "Steel Out", "1250", kind="fixed", at=(400, 240))
+             .source("a", "diss", "P", "45", **kw).build())
+        hits = [p for p in layout(d)
+                if p.element == "wire" and p.role == "source"]
+        assert len(hits) == 1, "the source draws one wire"
+        return hits[0].points
+
+    @staticmethod
+    def gap(point, node=(400, 240)):
+        return math.dist(point, node)
+
+    @pytest.mark.parametrize("at,angle", [((70, 310), 270), ((70, 310), 90),
+                                          ((700, 40), 180), ((240, 500), 0)])
+    def test_the_far_end_lands_on_the_circle(self, at, angle):
+        end, edge = self.wire(at=at, angle=angle)
+        assert self.gap(edge) == pytest.approx(5.5), "on the circle"
+        # and on the wire's own line, which is what `angle` could not say
+        assert math.dist(end, edge) + 5.5 == pytest.approx(self.gap(end))
+
+    def test_it_stops_short_rather_than_crossing_the_node(self):
+        """The old rule put the endpoint past the centre for this one."""
+        end, edge = self.wire(at=(70, 310), angle=270)
+        assert self.gap(edge) < self.gap(end), "not out the far side"
+        assert edge[0] < 400 and edge[1] < 310, "on the arrow's side"
+
+    @pytest.mark.parametrize("at,angle,want", [
+        ((400, 100), 90, (400, 234.5)), ((400, 400), 270, (400, 245.5)),
+        ((100, 240), 0, (394.5, 240)), ((700, 240), 180, (405.5, 240))])
+    def test_a_source_on_its_axis_did_not_move(self, at, angle, want):
+        """Nothing already right is disturbed: `angle` and the line agree.
+
+        Which is why no golden moved. The two rules differ only where the
+        author — or a drag — put the symbol somewhere `angle` does not point.
+        """
+        assert self.wire(at=at, angle=angle)[1] == pytest.approx(want)
+
+    def test_a_source_left_where_layout_puts_it_still_draws_no_wire(self):
+        """An arrow's tail already touches the circle; a gap of 0 is no wire.
+
+        `_source_offset` is `half_len + 5.5` for the arrows, so `end` lands
+        exactly on the circle and there is nothing between it and `edge`.
+        """
+        d = (DiagramBuilder(T="°C", P="W")
+             .node("a", "Junction", "110", at=(0, 0))
+             .source("a", "diss", "Switching loss", "45").build())
+        assert not [p for p in layout(d)
+                    if p.element == "wire" and p.role == "source"]
+
+
 class TestTheRemedyNamesTheField:
     """A finding that lists every field leaves the author to guess.
 
