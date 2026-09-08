@@ -945,13 +945,13 @@ be; and a thing stays on this list until someone shows a drawing that says
 something false without it.** Wanting a field is not the standard. A diagram
 that states a number the author did not mean is.
 
-One entry below meets that standard, and is being built. The rest of the list
-stays prose.
+Two entries below meet that standard. Both are being built. The rest of the
+list stays prose.
 
-A note on how it got here: it is not one of the eight. It was found twice, in
-two runs, by agents who reached for the same three words — and it never reached
-the decision list at all, because nothing collected it. That is the cost of a
-gate with nothing behind it.
+A note on how the first one got here: it is not one of the eight. It was found
+twice, in two runs, by agents who reached for the same three words — and it
+never reached the decision list at all, because nothing collected it. That is
+the cost of a gate with nothing behind it.
 
 ### Two nodes that are one place
 
@@ -1003,6 +1003,97 @@ be one room, and a link between them makes the network a loop, which the chain
 solver refuses; that is the general placer, not this. Run 2's heat pipe drops
 0.4 K at load, which is neither zero nor a resistance, and still has nowhere to
 go. Neither is made worse by this, and neither is fixed by it.
+
+### A stream is a branch, and the first version of it was a node
+
+**A medium moving through a diagram is a two-terminal element.** It enters at
+one temperature and leaves at another, and the difference *is* the transfer.
+`docs/schema.md` opens the node table with "A place with a temperature" —
+singular — and that is the whole of the difficulty. Water through a coil is
+30 °C at one end and 38 °C at the other.
+
+It is the most-asked-for thing in four clean-room runs, and the only gap two
+separate agents, two runs apart, each ranked first on their own list. Run 2's
+immersion rack tried three shapes before writing any JSON, took the least bad,
+and said so: 38 °C is in the data and 30 °C is *prose*, set in the same size as
+the rest of the label, not a `T` of anything, invisible to `--physics`. Run 4's
+battery pack drew the glycol loop dumping into a 25 °C reservoir that is really
+the inlet — "there is a fact the format has no slot for, and I did not invent a
+number to fill it". Two agents independently refused to fake it as an `R_conv`,
+which would have named physics that is not happening.
+
+**What makes it a schema change rather than a limit is that the silence is
+total.** A furnace drawn the obvious way — strip in at 300 K and out at 1250 K
+as two `fixed` nodes, with the firing rate as a source between them — reports
+nothing, because `_physics.balance` asks only free nodes to close and a fixed
+node is a reservoir. Set that firing rate to 99,999 kW against a 1578.4 kW load
+and `check --physics` still exits 0 with no findings. Every other entry on this
+list costs a number that cannot be written down. This one costs the check.
+
+**The first version made it a node kind, and that was wrong.** It carried
+`inlet`, `outlet` and `rate`, and `CLAUDE.md` defended it as "the one node that
+is not a place". That sentence should have been read as a bug report rather
+than an argument. Three things followed from the wrong container, and all three
+go away in the right one:
+
+- `reference` — `inlet`, `outlet`, `mean` or `lmtd` — existed **only** because
+  the node had two temperatures and something had to choose which one a
+  resistance saw. Give the stream two end nodes and a resistance attaches to a
+  node, which has exactly one temperature. The field, its validation rule and
+  `lmtd`'s unimplemented arm all disappear, and `lmtd` returns to this list as
+  the "relate two elements" gap it always was.
+- The author could not state what they know. A stream is characterised by a
+  mass flow and a specific heat; the node took a pre-multiplied `rate`, so the
+  arithmetic was the author's and the library could not check it.
+- A drawing needs the two temperature nodes anyway, and the node kind put both
+  numbers on one symbol, where a reader has to be told which end is which.
+
+**The evidence had said "branch" from the start**, which is the part worth
+recording. Run 4's battery pack: "Two ports, one fluid, one temperature rise."
+Run 2's immersion rack named the near-miss precisely — "`flow` is a *branch*
+between two ordinary nodes carrying a rate, which is a different statement" —
+and its ranked list asked for "an inlet, an outlet, a mass flow and a closed
+return". The first design cited both of those findings and then built the shape
+neither of them described. A record that collects evidence is not enough on its
+own; the evidence has to be read for what it says about the *shape*, not only
+about the gap.
+
+**So a stream is a directed branch stating `mdot` and `cp`, and the library
+derives what it carries:** `q = ṁ c_p (T_to − T_from)`, from one function that
+the label and `--physics` both call, so the number drawn and the number checked
+cannot disagree. That is the `FOLD` table's argument, applied again. `from` is
+the inlet and `to` is the outlet, so `angle` is refused as it is on `flow` — the
+drawing must not be able to contradict the data.
+
+**The sign is the one thing that must not be got wrong.** A stream is not a
+conductance. A conductance carries heat from hot to cold; a stream carries it
+from inlet to outlet, *up* the gradient, because the mass is doing the
+carrying. In circuit terms it is a dependent source, not a resistance. The rule
+is that `q` is applied as a departure at the `to` node and nothing happens at
+`from`: the inlet is where the medium arrives from outside, and for the furnace
+that is a reservoir. Cooling then needs no special case — water in at 80 °C and
+out at 40 °C with ṁ c_p of 2 kW/K gives −80 kW, so 80 kW *arrives* at the outlet
+and must leave through whatever the water is heating. Got backwards, every
+heated stream reports about twice its true imbalance while looking entirely
+reasonable, which is why it is asserted in a test of its own rather than left to
+a passing example.
+
+**Where the heat enters is placed by cutting the stream into segments**, not by
+a keyword. Two stream branches from `in` through `mid` to `out` each demand
+their own share, and a preheater on `mid` balances separately from the main zone
+on `out`. That is what `reference: "mean"` was approximating, and it needs no
+new machinery: it is a chain, which the solver already places. The
+approximation a lumped model makes is now a node someone put on the page rather
+than a word in a file.
+
+**What it does not reach.** A stream exchanging with another stream — a
+counterflow exchanger — is still two elements with nothing relating them, which
+is the first of the deferred four and stays deferred; LMTD is a property of that
+pair, not of either stream, which is why it left with `reference`. A closed
+pumped loop becomes a chain that does not close, so run 2's missing return leg
+is still missing. And `count` is refused on a stream for now: with no `value`,
+`Diagram.fold` has nothing to fold and the group line would read "4 in parallel"
+with no number after it, which is the failure the `=` was added to prevent.
 
 ## The README hero
 

@@ -33,10 +33,11 @@ from ._check import Finding
 # fourteen percent, so this is loose on purpose.
 SLACK = 0.15
 
-# Scale to K/W and W. A unit not here makes the check skip the diagram, not
-# guess.
-R_SCALE = {"K/W": 1.0, "°C/W": 1.0, "C/W": 1.0, "mK/W": 1e-3, "K/kW": 1e-3}
-P_SCALE = {"W": 1.0, "kW": 1e3, "mW": 1e-3}
+# Scale to K/W and W. A unit not in one makes the check skip the diagram,
+# not guess. They live in `model` because a stream's label states the number
+# this check balances against, and one table is what stops the two from
+# disagreeing; re-exported here, where every reader of them already looks.
+R_SCALE, P_SCALE = M.R_SCALE, M.P_SCALE
 
 RESISTANCES = {k for k, q in M.QUANTITY.items()
                if q == "R" and k in M.BRANCH_KINDS}
@@ -128,6 +129,9 @@ class _Net:
         # (a, b, R, label) for every resistance path
         self.paths: List[Tuple[str, str, Optional[float], str]] = []
         self.flows: List[Tuple[str, str, Optional[float], str]] = []
+        # A stream is a rate like a flow, but one it works out rather than
+        # states, and it acts at one end only — so it is its own list.
+        self.streams: List[Tuple[str, str, Optional[float], str]] = []
         for i, b in enumerate(diagram.branches):
             label = f"branch {i} {b.source}->{b.target}"
             ends = (self.rep[b.source], self.rep[b.target])
@@ -137,6 +141,15 @@ class _Net:
                                    None if r is None else r * r_scale, label))
             elif b.kind == "flow":
                 self.flows.append((*ends, _folded(diagram, b), label))
+            elif b.kind == "stream":
+                # Worked out here, where both ends' temperatures are already
+                # resolved, and by the diagram's own method, so this is the
+                # same number the box states.
+                self.streams.append((
+                    *ends,
+                    diagram.carried(b, self.temps.get(self.rep[b.source]),
+                                    self.temps.get(self.rep[b.target])),
+                    label))
 
 
 def _grouped(skipped) -> str:
@@ -161,8 +174,14 @@ def balance(diagram) -> List[Finding]:
     """
     out: List[Finding] = []
     units = diagram.units
-    for quantity, table, default in (("R", R_SCALE, "K/W"),
-                                     ("P", P_SCALE, "W"), ("q", P_SCALE, "W")):
+    # `mdot` and `cp` only where a stream actually uses them: a diagram
+    # without one has no entry to check, and demanding a default would be
+    # asking every drawing about a quantity it does not state.
+    streaming = any(b.kind == "stream" for b in diagram.branches)
+    gates = [("R", R_SCALE, "K/W"), ("P", P_SCALE, "W"), ("q", P_SCALE, "W")]
+    if streaming:
+        gates += [(M.MDOT, M.MDOT_SCALE, ""), (M.CP, M.CP_SCALE, "")]
+    for quantity, table, default in gates:
         unit = units.get(quantity, default)
         if unit not in table:
             out.append(Finding(
@@ -257,6 +276,27 @@ def balance(diagram) -> List[Finding]:
             else:
                 arrive += q
                 said.append(f"{_fmt(q)} W in by {label}")
+
+        for a, b, q, label in net.streams:
+            if why or n.id not in (a, b):
+                continue
+            if q is None:
+                why = (f"{label} is a stream and one of its ends states no "
+                       "temperature, so what it carries is not worked out")
+                break
+            # The sign, in one place. A stream is not a conductance: a
+            # conductance carries heat from hot to cold, and a stream carries
+            # it from inlet to outlet, up the gradient, because the mass is
+            # doing the carrying. What it takes away, it takes away where it
+            # leaves — nothing happens at the inlet, which is where the
+            # medium arrives from outside the drawing. A cooled stream needs
+            # no second rule: its `q` is negative and the same line adds heat
+            # to the outlet, which is what a hot fluid does to what it meets.
+            if b != n.id:
+                continue
+            q *= q_scale
+            leave += q
+            said.append(f"{_fmt(q)} W carried off by {label}")
 
         for a, b, r, label in net.paths:
             if why or n.id not in (a, b):

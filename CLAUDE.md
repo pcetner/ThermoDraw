@@ -31,7 +31,7 @@ src/thermodraw/
   _page.py     the same SVG inline in HTML, with its controls
   _editor.py   what the browser editor asks, JSON in and out; private
   __main__.py  the command line: `check`, `describe`, `render`, `page`, `solve`
-  symbols.py   the nineteen symbols, plus sheet renderers
+  symbols.py   the twenty symbols, plus sheet renderers
   theme.py     CSS variables for web, baked literals and fonts for Word/slides
   _metrics.py  generated character widths — do not edit
   fonts/       the vendored subset, OFL-1.1
@@ -231,6 +231,19 @@ sentence after it says what would overturn it.
   force it. `via` bends a wire; a junction between two paths is a `free`
   node with a `sub`, which says what it is; a 0.3 file naming it is refused
   with that advice. It was the one kind the physics check had to fold away.
+- **A `stream` is a branch, because a medium with an inlet and an outlet is
+  a two-terminal element.** It states `mdot` and `cp`; what it carries is
+  `ṁ c_p ΔT`, worked out by `Diagram.carried`, which the label and
+  `--physics` both call so the drawn number and the checked one cannot
+  disagree. Directed like `flow`, so `angle` is refused. **The sign is the
+  claim**: it is not a conductance, it carries heat up the gradient because
+  the mass does the carrying, so what it takes is taken at the `to` end and
+  nothing is asked of the inlet — and a cooled stream then delivers heat to
+  its outlet with no second rule. Heat is added by cutting the run into
+  segments, not by a field. It refuses `value`, `rate` and `count`, each
+  naming what a stream does state. **The first version was a node kind with
+  `inlet`, `outlet` and `reference`**; the record says why that was wrong,
+  and that the clean-room findings had said "two ports" all along.
 - **A `link` is two nodes that are one place.** A plain wire, which is what
   `break` declines to be, and it names no quantity so it refuses `value` and
   `rate`. It is a claim, not a decoration: `--physics` merges its ends before
@@ -434,12 +447,14 @@ sentence after it says what would overturn it.
    qualifier that is drawn — and run 4 named an area basis, a boundary that
    is one thing drawn twice, physical arrangement as distinct from page
    layout, and an effective temperature marked as one (`FINDINGS-run-4.md`).
-   **A ninth is built** — one that was found twice and never made this list:
-   two nodes that are one place, now `link`. The record has a section for
-   the rest, and each still needs its argument written there before it is
-   built. What `link` does *not* reach is written down with it: run 4's
-   one-room-drawn-twice is still a loop the chain solver refuses, and a heat
-   pipe quoted as a 0.4 K drop still wants a quantity nothing has.
+   **The stream is built**, and so is a ninth that was found twice and never
+   made this list: two nodes that are one place, now `link`. The record has
+   a section for the rest, and each still needs its argument written there
+   before it is built. What the two that shipped do *not* reach is written
+   down with them: a counterflow exchanger still relates two elements and is
+   where LMTD went, run 4's one-room-drawn-twice is still a loop the chain
+   solver refuses, and a heat pipe quoted as a 0.4 K drop still wants a
+   quantity nothing has.
 3. Region enclosures that auto-size to their contents.
 4. Unit handling — `0.35` choosing between K/W and mK/W, with a deliberate
    per-element override.

@@ -9,6 +9,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`stream`, a branch kind: a medium passing through.** A node is "a place
+  with a temperature", singular, and a steel strip through an oven is one
+  temperature at each end, the difference being the transfer. It is the
+  most-asked-for missing thing in four clean-room runs and the only gap two
+  separate agents each ranked first. It is a **branch**, because a thing
+  with an inlet and an outlet is a two-terminal element, and because the
+  findings that asked for it said so: "two ports, one fluid, one temperature
+  rise". You state `mdot` and `cp`; what it carries is `ṁ c_p ΔT`, worked
+  out once and read by both the label and `--physics`, so the drawing and
+  the check cannot disagree. Directed like `flow`, so `angle` is refused,
+  and it refuses `value`, `rate` and `count` as well — its number is a
+  result, and stating a result as an input is how two numbers come to
+  contradict each other. The two are stated together or neither, so a
+  dropped one draws its label alone like any other unnumbered path. Heat is
+  added along a run by cutting it into
+  segments, each asking its own outlet for its own share. The same furnace
+  drawn as two `fixed` nodes reports nothing at all at 99,999 kW against a
+  1579 kW load, because a fixed node is a reservoir and is never asked to
+  balance.
+- `mdot` and `cp` are units entries, and `--physics` scales them from a
+  table as it already did for `R` and `P`. A unit it does not know still
+  **draws** — it is text on the page — and the check says in one note that
+  it checked nothing rather than guessing at a factor.
+- A dot above a letter, drawn rather than typed. `ṁ` is in neither the
+  width table nor the vendored font subset, so a literal one would measure
+  at the fallback mean and then render in whatever face the reader happens
+  to have. It is the real combining mark in the string and a `<circle>` on
+  the page, and it adds no width, which is what "combining" means.
+- `examples/furnace.json`, the diagram both new kinds were built for and
+  the one the old vocabulary could not state: the chamber gas and the
+  refractory hot face are one place, and the strip is a medium with two
+  ends. It holds no coordinate and `check --physics` reports nothing.
 - **`link`, a branch kind: two nodes that are one place.** The vocabulary
   could say two things are *not* connected — that is `break` — and could not
   say they are the same place. Two clean-room agents reached for it in the
@@ -35,7 +67,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   before it is built; none had one, and the gate pointed at a section that
   did not exist. Its rule is the checker's read backwards: a thing stays on
   the list until someone shows a drawing that says something false without
-  it. `link` is its first entry, and it says what it does *not* fix.
+  it. The two kinds above are its first entries, and each says what it
+  does *not* fix.
 - `--physics` counts **places**, not nodes: a linked group is one of them and
   answers to several names, so `checked 2 of 6 free nodes` would undercount.
 

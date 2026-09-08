@@ -241,3 +241,87 @@ class TestALinkIsOnePlace:
     def test_equal_temperatures_say_nothing(self):
         assert "link-temperatures-disagree" not in codes(
             check(self.linked(), physics=True))
+
+
+class TestAStreamCarriesWhatItsTwoEndsSay:
+    """What a stream carries is worked out from `mdot`, `cp` and the
+    temperatures at its ends, and the outlet has to account for it. The
+    same furnace drawn as two `fixed` nodes reports nothing at any firing
+    rate at all, which is what this kind exists to fix."""
+
+    def furnace(self, mdot="2.5", fired="1579.4", t_out="1250"):
+        return Diagram.from_dict({
+            "units": {"T": "K", "P": "kW", "q": "kW",
+                      "mdot": "kg/s", "cp": "kJ/kg·K"},
+            "nodes": [{"id": "in", "kind": "fixed", "value": "300"},
+                      {"id": "out", "value": t_out}],
+            "branches": [{"from": "in", "to": "out", "kind": "stream",
+                          "mdot": mdot, "cp": "0.665"}],
+            "sources": [{"to": "out", "kind": "diss", "value": fired}]})
+
+    def test_the_oven_that_matches_the_rise_reports_nothing(self):
+        """2.5 kg/s at 0.665 kJ/kg-K over 950 K is 1579 kW."""
+        assert codes(check(self.furnace(), physics=True)) == []
+
+    def test_an_oven_that_does_not_reports_the_outlet(self):
+        found = [f for f in check(self.furnace(mdot="1.5"), physics=True)
+                 .findings if f.code == "node-does-not-balance"]
+        assert len(found) == 1
+        assert "node 'out'" in found[0].message
+        assert "carried off" in found[0].message
+
+    def test_the_two_fixed_nodes_it_replaces_still_report_nothing(self):
+        """The measurement of what the kind is worth. Both ends pinned,
+        nothing unknown, so no free node is asked and any firing rate
+        passes -- here a load of 1579 kW met with 99,999."""
+        silent = Diagram.from_dict({
+            "units": {"T": "K", "P": "kW", "q": "kW"},
+            "nodes": [{"id": "in", "kind": "fixed", "value": "300"},
+                      {"id": "out", "kind": "fixed", "value": "1250"}],
+            "branches": [{"from": "in", "to": "out", "kind": "flow",
+                          "value": "1579.4"}],
+            "sources": [{"to": "out", "kind": "diss", "value": "99999"}]})
+        report = check(silent, physics=True)
+        assert [f for f in report.findings if f.severity != "note"] == []
+
+    def test_heat_is_carried_off_at_the_outlet_and_not_at_the_inlet(self):
+        """The sign, asserted rather than left to a passing example. A
+        stream is not a conductance: it carries heat up the gradient
+        because the mass does the carrying, so a *cooled* one delivers
+        heat to its outlet. Reverse the sign and this fails while the
+        heated furnace above still passes."""
+        cooled = Diagram.from_dict({
+            "units": {"R": "K/kW", "T": "°C", "P": "kW", "q": "kW",
+                      "mdot": "kg/s", "cp": "kJ/kg·K"},
+            "nodes": [{"id": "hot", "kind": "fixed", "value": "80"},
+                      {"id": "warm", "value": "40"},
+                      {"id": "room", "kind": "fixed", "value": "20"}],
+            "branches": [{"from": "hot", "to": "warm", "kind": "stream",
+                          "mdot": "2", "cp": "1"},
+                         {"from": "warm", "to": "room", "kind": "conv",
+                          "value": "0.25"}]})
+        # 2 kW/K over a 40 K *fall* is -80 kW: 80 kW arrives at `warm`,
+        # and (40-20)/0.25 = 80 kW leaves it through the radiator.
+        assert codes(check(cooled, physics=True)) == []
+
+    def test_an_inlet_with_no_temperature_is_named_not_guessed(self):
+        """The outlet is asked and cannot answer, because what the stream
+        took depends on the end the outlet cannot see. Said in the skip
+        note by name, rather than treated as nothing carried."""
+        d = self.furnace()
+        d.nodes[0].value = None
+        report = check(d, physics=True)
+        note = [f for f in report.findings if f.code == "physics-not-checked"]
+        assert len(note) == 1
+        assert "not worked out" in note[0].message
+
+
+def test_the_furnace_example_holds_both_new_elements_and_closes():
+    import json
+    import pathlib
+    data = json.loads(pathlib.Path("examples/furnace.json")
+                      .read_text(encoding="utf-8"))
+    assert not any("at" in n for n in data["nodes"]), "solver-placed"
+    assert {"link", "stream"} <= {b["kind"] for b in data["branches"]}
+    assert codes(check(Diagram.from_dict(data), physics=True)) == []
+

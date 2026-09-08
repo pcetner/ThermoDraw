@@ -49,9 +49,17 @@ capacitance needs no `C`, and one with no text needs no `units` at all. A
 value whose quantity has no entry here is refused, so that a number never
 reaches the page without its unit.
 
-The quantities are `R`, `C`, `T`, `P`, `q` and `q″`. `radin` and `flow` are
-both powers and share `q`; a heat **flux** is per unit area, so it is measured
-in something else and reads `q″`.
+The quantities are `R`, `C`, `T`, `P`, `q` and `q″`, plus `mdot` and `cp`,
+which only a `stream` states. `radin` and `flow` are both powers and share
+`q`; a heat **flux** is per unit area, so it is measured in something else and
+reads `q″`.
+
+`--physics` works in SI and needs to recognise the unit it is given, so it
+knows `K/W`, `°C/W`, `C/W`, `mK/W` and `K/kW` for `R`; `W`, `kW` and `mW` for
+`P` and `q`; `kg/s`, `g/s`, `kg/min` and `kg/h` for `mdot`; and `J/kg·K` or
+`kJ/kg·K` for `cp`. Anything else still **draws** — the unit is text on the
+page — and `check --physics` says in one note that it checked nothing rather
+than guessing at a factor.
 
 `T` may also say which scale its temperatures are on, because `K` is
 byte-identical whether you mean absolute kelvin or a rise above ambient:
@@ -164,11 +172,13 @@ A path heat takes between two nodes.
 | field | meaning |
 |---|---|
 | `from`, `to` | node ids, or the literal `"rail"` |
-| `kind` | `cond`, `conv`, `rad`, `contact`, `spread`, `pipe`, `mixed`, `cap`, `flow`, `break`, `link` |
+| `kind` | `cond`, `conv`, `rad`, `contact`, `spread`, `pipe`, `mixed`, `cap`, `flow`, `break`, `link`, `stream` |
 | `label` | the words above the box |
-| `sub` | yours on the kinds whose subscript the library does not set: `cap`, where it names a place; `mixed`, where it names the part — `R_wall` — since the mechanism is what `mixed` declines to say, and it may be left off; `flow`. Ignored on `break`, and overridden on every resistance kind |
+| `sub` | yours on the kinds whose subscript the library does not set: `cap`, where it names a place; `mixed`, where it names the part — `R_wall` — since the mechanism is what `mixed` declines to say, and it may be left off; `flow`; `stream`, where it names the medium, so `ṁ_w`. Ignored on `break`, and overridden on every resistance kind |
 | `value` | unit appended from `units.R` (`units.C` for `cap`, `units.q` for `flow`). Optional: a path with no number draws its label alone. Refused on `break` |
 | `rate` | what this path actually carries. Drawn as `q = 12 W` on its own line, in `units.q`, under the resistance it presents. Needs `units.q`. Refused on `flow`, whose value already is a rate, and on `break`. On a `count`ed branch it is the whole group's, not per item. Stating it opts the branch into `rate-does-not-match` under `--physics` |
+| `mdot` | `stream` only: mass flow rate, in `units.mdot`. With `cp` or neither |
+| `cp` | `stream` only: specific heat, in `units.cp`. With `mdot` or neither |
 | `count` | how many identical ones there are |
 | `arrangement` | `parallel` or `series`. Required with `count` |
 | `via` | `[[x, y], ...]` waypoints, for a path that is not a straight line |
@@ -278,6 +288,51 @@ into one place before anything is summed, so heat arriving at either name
 arrives at the same balance; and if the two ends state different
 temperatures, that is `link-temperatures-disagree` — a contradiction rather
 than a disagreement, so no tolerance is allowed for it.
+
+
+`stream` is a medium moving through the drawing — a steel strip through an
+oven, water through a coil. It is a path and not a node, because it has two
+ends: it enters at the temperature of the node it comes `from` and leaves at
+the temperature of the node it goes `to`, and the difference *is* the heat it
+carries away. It states a mass flow and a specific heat, and the library works
+out the rest.
+
+```jsonc
+{"units": {"T": "K", "P": "kW", "q": "kW", "mdot": "kg/s", "cp": "kJ/kg·K"},
+ "nodes": [{"id": "in", "kind": "fixed", "label": "Strip in", "value": "300"},
+           {"id": "out", "label": "Strip out", "value": "1250"}],
+ "branches": [{"from": "in", "to": "out", "kind": "stream",
+               "label": "Steel strip", "mdot": "2.5", "cp": "0.665"}],
+ "sources": [{"to": "out", "kind": "diss", "label": "Oven", "value": "1579.4"}]}
+```
+
+What it carries is `ṁ c_p (T_to − T_from)`, drawn under the two numbers it
+states, and `--physics` balances against the same figure — it is worked out
+once, so the drawing and the check cannot disagree. Above, 2.5 kg/s of steel
+at 0.665 kJ/kg·K over a 950 K rise comes to 1579 kW, and the oven states
+1578.4; change either and the outlet node is reported. The same furnace drawn
+as two `fixed` nodes with a source between them reports nothing at any firing
+rate at all, because a fixed node is a reservoir and is never asked to balance.
+
+It is **directed**: `from` is the inlet and `to` is the outlet, so `angle` is
+refused as it is on `flow`. What it carries is taken away at the outlet, which
+is where the medium leaves; nothing is asked of the inlet, which is where it
+arrives from outside the drawing. A stream that is *cooled* needs no different
+statement — its number comes out negative, and heat arrives at the outlet
+instead.
+
+**Heat is added by cutting the run into segments, not by a field.** Two stream
+branches from `in` through `mid` to `out` each ask their own outlet for their
+own share, so a preheater on `mid` and a main zone on `out` balance
+separately. That is how a distributed transfer is drawn: as the number of
+lumps you are willing to defend, each one visible.
+
+It states the two together or neither: a mass flow with no specific heat says
+nothing about heat, and a stream with neither draws its label alone, as any
+path with no number does. It states no `value` and no `rate` — its number is
+worked out, and stating a result as an input is how the two come to disagree —
+and it does not take `count`, since a group would be drawn with no number
+under it. Write the strands out.
 
 ## Sources
 

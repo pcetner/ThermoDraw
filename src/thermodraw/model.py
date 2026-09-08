@@ -18,6 +18,8 @@ from dataclasses import MISSING as _MISSING
 from dataclasses import dataclass, field, fields
 from typing import Any, Dict, List, Optional, Sequence, Union
 
+from .core import DOT_ABOVE
+
 NODE_KINDS = {"free", "fixed", "break", "phase"}
 # Kinds that existed and were removed, and what to write instead. A file
 # from before the removal gets the reason and the replacement, not "unknown
@@ -28,7 +30,7 @@ RETIRED_KINDS = {
               "so that it has a name and states no temperature",
 }
 BRANCH_KINDS = {"cond", "conv", "rad", "contact", "cap", "break",
-                "flow", "spread", "pipe", "mixed", "link"}
+                "flow", "spread", "pipe", "mixed", "link", "stream"}
 
 # The two kinds that state no quantity, for opposite reasons: a `break`
 # carries no heat, and a `link` carries it with nothing in the way. Both are
@@ -44,7 +46,7 @@ UNVALUED = {
 # is `from` and which is `to` is the direction heat travels. `angle` is
 # refused on one: on a branch it overrides the direction taken from the
 # wire, which would let the drawing contradict the data.
-DIRECTED_KINDS = {"flow"}
+DIRECTED_KINDS = {"flow", "stream"}
 
 # How several identical paths combine. Never inferred: eight 0.0275 K/W
 # paths are 0.0034 in parallel and 0.22 in series, a factor of 64, so a
@@ -74,13 +76,21 @@ BRANCH_SUB = {"cond": "cond", "conv": "conv", "rad": "rad",
               "mixed": None,
               # A link names no quantity, so there is no symbol for a
               # subscript to sit under. Accepted and ignored, as on a break.
-              "link": None}
+              "link": None,
+              # A stream's subscript names the medium, not the mechanism:
+              # `sub: "w"` reads `ṁ_w`, the water's mass flow.
+              "stream": None}
 # None means the branch names no quantity at all: a thermal break has neither
 # a resistance nor a capacitance, so it carries the user's label and nothing
 # else. `layout` drops the second line rather than inventing a symbol for it.
 BRANCH_SYMBOL = {"cond": "R", "conv": "R", "rad": "R", "contact": "R",
                  "cap": "C", "break": None, "flow": "q",
-                 "spread": "R", "pipe": "R", "mixed": "R", "link": None}
+                 "spread": "R", "pipe": "R", "mixed": "R", "link": None,
+                 # A stream leads with the first thing it states rather
+                 # than with what it carries, which is derived. The dot is
+                 # the real combining mark and `sym_text` carries it through
+                 # untouched, so no caller needs a special case for it.
+                 "stream": "m" + DOT_ABOVE}
 SOURCE_SYMBOL = {"diss": "P", "radin": "q", "flow": "q", "flux": "q″"}
 
 # Which quantity each kind is measured in, so one units entry serves many.
@@ -90,11 +100,32 @@ SOURCE_SYMBOL = {"diss": "P", "radin": "q", "flow": "q", "flux": "q″"}
 QUANTITY = {"cond": "R", "conv": "R", "rad": "R", "contact": "R", "cap": "C",
             "spread": "R", "pipe": "R", "mixed": "R",
             "free": "T", "fixed": "T", "break": "T", "phase": "T",
+            # A stream is measured in the heat it carries, which is what the
+            # rest of the diagram has to supply. `mdot` and `cp` are the two
+            # it states and have units entries of their own.
+            "stream": "q",
             "diss": "P", "radin": "q", "flow": "q", "flux": "q″"}
 
 # What a `rate` on a resistance is measured in. It is a heat rate whatever
 # the path's own quantity is, which is the whole point of the field.
 RATE = "q"
+
+# The two a stream states. They are quantities like any other — each has its
+# own `units` entry — but neither is any kind's headline, so they are named
+# here rather than in `QUANTITY`.
+MDOT, CP = "mdot", "cp"
+
+# Scale to SI, so the number a label states and the number `--physics` sums
+# come from one place. A unit not in one of these is refused by name rather
+# than guessed at, which is the rule the checker already applied to `R` and
+# `P`; they live here, and not beside the check, because the label needs
+# them too and a second copy is how the drawn number and the checked number
+# come to disagree.
+R_SCALE = {"K/W": 1.0, "°C/W": 1.0, "C/W": 1.0, "mK/W": 1e-3, "K/kW": 1e-3}
+P_SCALE = {"W": 1.0, "kW": 1e3, "mW": 1e-3}
+MDOT_SCALE = {"kg/s": 1.0, "g/s": 1e-3, "kg/h": 1 / 3600, "kg/min": 1 / 60}
+CP_SCALE = {"J/kg·K": 1.0, "kJ/kg·K": 1e3, "J/kgK": 1.0,
+            "kJ/kgK": 1e3}
 
 RAIL = "rail"
 
@@ -355,6 +386,10 @@ class Branch:
     sub: str = ""
     value: Union[str, float, None] = None
     rate: Union[str, float, None] = None
+    # `stream` only, and both or neither: what it carries is their product
+    # with the temperature rise across it, so one alone states nothing.
+    mdot: Union[str, float, None] = None
+    cp: Union[str, float, None] = None
     count: Optional[int] = None
     arrangement: Optional[str] = None
     via: List[Sequence[float]] = field(default_factory=list)
@@ -453,6 +488,57 @@ class Diagram:
         if text is None:
             return None
         return f"{text} {self.units.get(RATE, '')}".strip()
+
+    def flow_text(self, quantity, value):
+        """One of a stream's two stated numbers with its unit, or None.
+
+        `mdot` and `cp` are quantities with `units` entries like any other;
+        they are not any kind's headline, so they do not go through
+        `unit_for`, which reads `QUANTITY`.
+        """
+        text = _fmt(value)
+        if text is None:
+            return None
+        return f"{text} {self.units.get(quantity, '')}".strip()
+
+    def carried(self, branch, t_from, t_to):
+        """What a stream carries away, in `units.q`, or None.
+
+        `q = ṁ c_p (T_to − T_from)`. The one place it is worked out: the
+        label states it and `--physics` balances against it, and a second
+        copy is how a drawing comes to disagree with the check that passed
+        it. None when either end has no temperature, or when any of the
+        three numbers is not one — a sketch with a placeholder in it is
+        still a diagram.
+        """
+        try:
+            mdot = float(str(branch.mdot).strip())
+            cp = float(str(branch.cp).strip())
+        except (TypeError, ValueError, AttributeError):
+            return None
+        if t_from is None or t_to is None:
+            return None
+        m_s = MDOT_SCALE.get(self.units.get(MDOT, ""))
+        c_s = CP_SCALE.get(self.units.get(CP, ""))
+        q_s = P_SCALE.get(self.units.get(RATE, "W"))
+        if m_s is None or c_s is None or q_s is None:
+            return None
+        # Through SI and back, so `kg/h` against `kJ/kg·K` against `kW`
+        # cannot come out a factor of 3600 wrong in silence.
+        return mdot * m_s * cp * c_s * (t_to - t_from) / q_s
+
+    def carried_text(self, branch, t_from, t_to):
+        """What a stream carries, with its unit, or None.
+
+        To significant figures and not to every digit of the float, for the
+        reason the `count` fold is: nobody typed 1579.375, the library
+        multiplied it out, and printing all of it would claim a precision
+        the three inputs do not have.
+        """
+        q = self.carried(branch, t_from, t_to)
+        if q is None:
+            return None
+        return f"{_sig(q)} {self.unit(branch.kind)}".strip()
 
     def fold(self, kind, value, count, arrangement):
         """What a group of `count` of these comes to, as a number.
@@ -656,6 +742,60 @@ class Diagram:
                 raise DiagramError(
                     f"branch {b.source}-{b.target}: arrangement "
                     f"{b.arrangement!r} without a count says nothing")
+            # A stream is the one branch whose number is worked out rather
+            # than written down, so both refusals below would give it the
+            # wrong advice: `value` is not where the number goes and there
+            # is no second rate to move into it. Asked first, and phrased
+            # for what a stream actually states.
+            if b.kind == "stream":
+                for name, got in (("value", b.value), ("rate", b.rate)):
+                    if got is not None:
+                        raise DiagramError(
+                            f"branch {b.source}-{b.target}: a stream states "
+                            f"`{MDOT}` and `{CP}`, and what it carries is "
+                            f"worked out from them and its two ends; got "
+                            f"`{name}` {got!r}. Stating a result as an input "
+                            "is how the two come to disagree")
+                # Both or neither, and neither is a stream that draws its
+                # label alone — which every other path may do, and which the
+                # editor needs: a dropped one arrives named and unnumbered,
+                # and a gesture must not write a diagram that cannot be
+                # drawn. One alone is the refusal, because a mass flow with
+                # no specific heat states nothing about heat.
+                for name, got, other in ((MDOT, b.mdot, CP), (CP, b.cp, MDOT)):
+                    _value(got, f"branch {b.source}-{b.target}")
+                    if got is None:
+                        if getattr(b, other) is None:
+                            continue
+                        raise DiagramError(
+                            f"branch {b.source}-{b.target}: a stream states "
+                            f"`{name}` and `{other}` together or neither. "
+                            "What it carries is their product with the rise "
+                            f"across it, so `{other}` alone says nothing "
+                            "about heat")
+                    if not self.units.get(name):
+                        raise DiagramError(
+                            f"branch {b.source}-{b.target} has `{name}` "
+                            f"{got!r} but units has no entry for {name!r}, "
+                            "so it would render bare")
+                # `fold` needs a numeric `value` and a stream has none, so a
+                # group line would read "4 in parallel" with nothing after
+                # it — the bare count the `=` was added to prevent. Series is
+                # worse than missing: segments of one stream span different
+                # rises, which is what writing two stream branches says.
+                if b.count is not None and b.count > 1:
+                    raise DiagramError(
+                        f"branch {b.source}-{b.target}: a stream does not "
+                        "take `count`. Its number is derived, so a group "
+                        "would be drawn with no value; write the strands out, "
+                        "or a chain of streams for one that is heated in "
+                        "stages")
+            elif b.mdot is not None or b.cp is not None:
+                name = MDOT if b.mdot is not None else CP
+                raise DiagramError(
+                    f"branch {b.source}-{b.target}: `{name}` belongs to a "
+                    f"`stream`, the branch a moving medium takes; a "
+                    f"`{b.kind}` states what it presents, in `value`")
             # The kinds that name no quantity state no number either, and
             # they are the two `BRANCH_SYMBOL` maps to None. `rate` is asked
             # first so that a branch carrying both is told about the same one
@@ -723,7 +863,9 @@ class Diagram:
             _text(b.sub, where, "sub")
             _value(b.value, where)
             _side(b.side, where)
-        known = set(QUANTITY.values())
+        # `mdot` and `cp` are quantities a stream states without either
+        # being its headline, so they are not values in `QUANTITY`.
+        known = set(QUANTITY.values()) | {MDOT, CP}
         for quantity in self.units:
             if quantity not in known:
                 raise DiagramError(
@@ -991,8 +1133,9 @@ def _node_dict(n):
 
 def _branch_dict(b):
     out = {"from": b.source, "to": b.target, "kind": b.kind}
-    return _keep(out, b, ("label", "sub", "value", "rate", "count",
-                          "arrangement", "via", "at", "angle", "side"))
+    return _keep(out, b, ("label", "sub", "value", "rate", "mdot", "cp",
+                          "count", "arrangement", "via", "at", "angle",
+                          "side"))
 
 
 def _source_dict(s):
