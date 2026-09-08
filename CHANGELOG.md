@@ -21,7 +21,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the check cannot disagree. Directed like `flow`, so `angle` is refused,
   and it refuses `value`, `rate` and `count` as well — its number is a
   result, and stating a result as an input is how two numbers come to
-  contradict each other. Heat is added along a run by cutting it into
+  contradict each other. The two are stated together or neither, so a
+  dropped one draws its label alone like any other unnumbered path. Heat is
+  added along a run by cutting it into
   segments, each asking its own outlet for its own share. The same furnace
   drawn as two `fixed` nodes reports nothing at all at 99,999 kW against a
   1579 kW load, because a fixed node is a reservoir and is never asked to

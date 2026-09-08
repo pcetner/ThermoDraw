@@ -756,14 +756,23 @@ class Diagram:
                             f"worked out from them and its two ends; got "
                             f"`{name}` {got!r}. Stating a result as an input "
                             "is how the two come to disagree")
+                # Both or neither, and neither is a stream that draws its
+                # label alone — which every other path may do, and which the
+                # editor needs: a dropped one arrives named and unnumbered,
+                # and a gesture must not write a diagram that cannot be
+                # drawn. One alone is the refusal, because a mass flow with
+                # no specific heat states nothing about heat.
                 for name, got, other in ((MDOT, b.mdot, CP), (CP, b.cp, MDOT)):
                     _value(got, f"branch {b.source}-{b.target}")
                     if got is None:
+                        if getattr(b, other) is None:
+                            continue
                         raise DiagramError(
-                            f"branch {b.source}-{b.target}: a stream needs "
-                            f"`{name}` as well as `{other}`. What it carries "
-                            "is their product with the rise across it, so "
-                            "one alone states nothing")
+                            f"branch {b.source}-{b.target}: a stream states "
+                            f"`{name}` and `{other}` together or neither. "
+                            "What it carries is their product with the rise "
+                            f"across it, so `{other}` alone says nothing "
+                            "about heat")
                     if not self.units.get(name):
                         raise DiagramError(
                             f"branch {b.source}-{b.target} has `{name}` "

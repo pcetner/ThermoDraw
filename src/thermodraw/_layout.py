@@ -398,6 +398,7 @@ def layout(diagram) -> List[Placement]:
             # derived line is written like any other quantity, `q = ...`,
             # and is left off when either end has no temperature to work it
             # from: an unknown is better absent than guessed at.
+            cp_text = diagram.flow_text(M.CP, b.cp)
             carried = diagram.carried_text(
                 b, _stated_t(diagram, b.source),
                 _stated_t(diagram, b.target))
@@ -405,7 +406,7 @@ def layout(diagram) -> List[Placement]:
                 user=b.label, name=S.S_(base, sub),
                 value=diagram.flow_text(M.MDOT, b.mdot),
                 extra=[x for x in (
-                    (S.S_("c", "p"), diagram.flow_text(M.CP, b.cp)),
+                    (S.S_("c", "p"), cp_text) if cp_text else None,
                     (S.S_(M.RATE), carried) if carried else None) if x],
                 half=sym.half, half_len=sym.half_len, side=b.side)
         else:

@@ -177,8 +177,8 @@ A path heat takes between two nodes.
 | `sub` | yours on the kinds whose subscript the library does not set: `cap`, where it names a place; `mixed`, where it names the part — `R_wall` — since the mechanism is what `mixed` declines to say, and it may be left off; `flow`; `stream`, where it names the medium, so `ṁ_w`. Ignored on `break`, and overridden on every resistance kind |
 | `value` | unit appended from `units.R` (`units.C` for `cap`, `units.q` for `flow`). Optional: a path with no number draws its label alone. Refused on `break` |
 | `rate` | what this path actually carries. Drawn as `q = 12 W` on its own line, in `units.q`, under the resistance it presents. Needs `units.q`. Refused on `flow`, whose value already is a rate, and on `break`. On a `count`ed branch it is the whole group's, not per item. Stating it opts the branch into `rate-does-not-match` under `--physics` |
-| `mdot` | `stream` only: mass flow rate, in `units.mdot`. Required with `cp` |
-| `cp` | `stream` only: specific heat, in `units.cp`. Required with `mdot` |
+| `mdot` | `stream` only: mass flow rate, in `units.mdot`. With `cp` or neither |
+| `cp` | `stream` only: specific heat, in `units.cp`. With `mdot` or neither |
 | `count` | how many identical ones there are |
 | `arrangement` | `parallel` or `series`. Required with `count` |
 | `via` | `[[x, y], ...]` waypoints, for a path that is not a straight line |
@@ -327,10 +327,12 @@ own share, so a preheater on `mid` and a main zone on `out` balance
 separately. That is how a distributed transfer is drawn: as the number of
 lumps you are willing to defend, each one visible.
 
-It states no `value` and no `rate` — its number is worked out, and stating a
-result as an input is how the two come to disagree — and it does not take
-`count`, since a group would be drawn with no number under it. Write the
-strands out.
+It states the two together or neither: a mass flow with no specific heat says
+nothing about heat, and a stream with neither draws its label alone, as any
+path with no number does. It states no `value` and no `rate` — its number is
+worked out, and stating a result as an input is how the two come to disagree —
+and it does not take `count`, since a group would be drawn with no number
+under it. Write the strands out.
 
 ## Sources
 

@@ -323,7 +323,16 @@ class TestAStreamStatesAFlowAndAHeatAndNothingElse:
     def test_one_of_the_two_alone_states_nothing(self, missing, named):
         with pytest.raises(DiagramError) as exc:
             self.stream(**{missing: None})
-        assert f"needs `{missing}` as well as `{named}`" in str(exc.value)
+        assert f"`{missing}` and `{named}` together or neither" in str(exc.value)
+
+    def test_neither_is_a_stream_that_draws_its_label_alone(self):
+        """Every other path may carry no number; so may this one. It is also
+        what the editor drops: a gesture must not write a diagram that
+        cannot be drawn, and a dropped path arrives named and unnumbered."""
+        d = build(branches=[{"from": "a", "to": "b", "kind": "stream",
+                             "label": "Steel strip"}])
+        assert render(layout(d))
+        assert "mdot" not in d.to_dict()["branches"][0]
 
     def test_a_unit_it_would_render_bare_is_refused(self):
         with pytest.raises(DiagramError) as exc:
