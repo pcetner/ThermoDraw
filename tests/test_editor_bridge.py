@@ -12,6 +12,7 @@ import pytest
 
 from thermodraw import Diagram, DiagramBuilder, layout, symbols
 from thermodraw import _editor as E
+from thermodraw import model as M
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 FILES = sorted(ROOT.glob("examples/*.json")) + sorted(
@@ -200,3 +201,18 @@ def test_the_editor_offers_exactly_the_kinds_the_model_has():
     assert listed == {"node": model.NODE_KINDS,
                       "branch": model.BRANCH_KINDS,
                       "source": model.SOURCE_KINDS}
+
+
+@pytest.mark.parametrize("kind", sorted(M.BRANCH_KINDS))
+def test_every_branch_kind_can_be_dropped_and_still_draws(kind):
+    """`dropPath` writes `{from, to, kind}` and nothing else, so every kind
+    has to be drawable with no numbers on it. A `stream` that demanded
+    `mdot` and `cp` broke the canvas outright the moment it was dropped,
+    which is the one thing an editor gesture may never do."""
+    scene = E.scene({
+        "nodes": [{"id": "n1", "at": [100, 100]},
+                  {"id": "n2", "at": [320, 100]}],
+        "branches": [{"from": "n1", "to": "n2", "kind": kind}]})
+    assert "error" not in scene, scene.get("error")
+    assert scene["parts"]
+
