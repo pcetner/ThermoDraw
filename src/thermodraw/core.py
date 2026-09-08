@@ -63,13 +63,57 @@ def text_w(s, size, face="regular"):
     return sum(table.get(c, fallback) for c in s) * size
 
 
+# A dot above the letter before it, as in a mass flow rate. It is the real
+# combining mark, so `Label.name` for one genuinely spells the quantity and
+# `describe` reads it back without a special case. It is *drawn* rather than
+# typed, because U+1E41 is in neither the width table nor the vendored
+# subset: a literal one would measure at the fallback mean and then render in
+# whatever face the reader happens to have, which is the mismatch the
+# embedded faces exist to remove.
+DOT_ABOVE = "̇"
+
+# Where the drawn dot goes, as fractions of the run's font size: how far
+# above the baseline its centre sits, its radius, and how far right of the
+# marked letter's centre it leans to sit over an italic stem rather than
+# beside it.
+DOT_RISE, DOT_R, DOT_SLANT = 0.70, 0.085, 0.10
+
+
 def measure(s, size, face="regular"):
-    """Width of a run that may contain one smaller <tspan> subscript."""
+    """Width of a run that may contain one smaller <tspan> subscript.
+
+    A combining dot adds nothing, which is what "combining" means: it is
+    drawn over the letter before it and the letter's own advance is the
+    whole width. Stripped first, so a subscripted one measures too.
+    """
+    s = s.replace(DOT_ABOVE, "")
     if "<tspan" not in s:
         return text_w(s, size, face)
     base, _, rest = s.partition("<tspan")
     inner = rest.partition(">")[2].partition("</tspan>")[0]
     return text_w(base, size, face) + text_w(inner, size * 0.7, face)
+
+
+def dotted(base, subscript=None):
+    """`base` wearing a dot, with an optional subscript: a rate of change."""
+    return sym_text(base + DOT_ABOVE, subscript)
+
+
+def _dot_mark(s, x, size, face):
+    """The `<circle>` for a run's combining dot, or "" when it carries none.
+
+    A sibling of the `<text>`, not a child: SVG has no way to nest one, and
+    the run cursor does not advance for it. `s[:i]` is always the plain base
+    letter and whatever precedes it — the mark sits immediately after the
+    letter it is on, before any `<tspan>` — so measuring it as text is safe.
+    """
+    i = s.find(DOT_ABOVE)
+    if i < 1:
+        return ""
+    cx = (x + text_w(s[:i - 1], size, face)
+          + text_w(s[i - 1], size, face) / 2 + DOT_SLANT * size)
+    return (f'<circle class="mark" cx="{cx:.1f}" '
+            f'cy="{-DOT_RISE * size:.1f}" r="{DOT_R * size:.2f}"/>')
 
 
 def escape(s):
@@ -507,9 +551,15 @@ def annotate(cx, cy, a, out, user=None, name=None, value=None, extra=(),
         base = y + max(s for _, s, _ in line) * 0.80
         x = left + (bw - _line_w(line)) / 2
         for txt, sz, cls in line:
+            face = CLASS_FACE.get(cls, "regular")
+            mark = _dot_mark(txt, x, sz, face)
             out.append(f'<text class="{cls}" x="{x:.1f}" y="{base:.1f}" '
-                       f'text-anchor="start">{txt}</text>')
-            x += measure(txt, sz, CLASS_FACE.get(cls, "regular")) + RUN_GAP
+                       f'text-anchor="start">'
+                       f'{txt.replace(DOT_ABOVE, "")}</text>')
+            if mark:
+                out.append(f'<g transform="translate(0,{base:.1f})">'
+                           f'{mark}</g>')
+            x += measure(txt, sz, face) + RUN_GAP
         y += lh
     # `claim=False` solves against the page without taking a place on it.
     # The hidden half of a repeated group needs exactly that: it must avoid

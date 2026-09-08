@@ -39,7 +39,7 @@ PAGE = ROOT / "Dictionary.html"
 # The three things a symbol can be: what to call it, what it means, and which
 # array of the file it is written into.
 #
-# This used to be a badge repeated on all nineteen entries, which said the
+# This used to be a badge repeated on all twenty entries, which said the
 # same three words over and over and still never defined them. The definition
 # now sits once, at the top, on the panel you pick a symbol from — and the
 # entries carry no badge at all, because the sticky heading above them already
@@ -262,6 +262,24 @@ ENTRIES = {
         code={"from": "face", "to": "baseplate", "kind": "link",
               "label": "Bolted flange"}),
 
+    "stream": dict(
+        where="branch",
+        what="A medium passing through, carrying heat away with it. It is a "
+             "path rather than a place because it has two ends: it arrives "
+             "at the temperature of one node and leaves at the temperature "
+             "of the other, and the difference is what it took. You state "
+             "the mass flow and the specific heat; the heat itself is worked "
+             "out and drawn beneath them. Streamlines say the medium is "
+             "going, the same fill a convection box has, and the chevron "
+             "says which way. Directed, so which end is the inlet is "
+             "<code>from</code> and <code>to</code>.",
+        use="Steel strip through a reheat furnace: in cold, out hot, and "
+            "what the furnace has to supply is exactly the difference. Add "
+            "the heat in stages by drawing the run as two streams with a "
+            "node between them.",
+        code={"from": "in", "to": "out", "kind": "stream",
+              "label": "Steel strip", "mdot": "2.5", "cp": "0.665"}),
+
     "diss": dict(
         where="source",
         what="Heat released at a place because energy in another form is "
@@ -422,7 +440,7 @@ def group(title, keys, by_key):
     whichever group a reader is in stays named at the top of the window until
     the next one takes over. That is what replaced the badge on every entry:
     the question "what am I looking at" is answered continuously rather than
-    nineteen times.
+    twenty times.
     """
     body = [f'<section id="grp-{_slug(title)}">'
             f'<div class="section-head"><h2>{html.escape(title)}</h2>'
@@ -459,6 +477,12 @@ SHAPES = [
      "kelvin per watt. The pattern inside names what the heat is crossing: "
      "hatching for solid material, streamlines for a moving fluid, wave "
      "arrows for radiation."),
+    ("stream", "Streamlines with a chevron are a path a medium takes",
+     "A box again, but what crosses it is not conducting: it is a fluid or a "
+     "strip on its way through, taking heat with it. What it carries is not "
+     "a number you write down. It is the mass flow times the specific heat "
+     "times the rise from one end to the other, and the library works it "
+     "out."),
     ("flow-branch", "Chevrons are a path that carries",
      "Also a path, but it states a rate rather than a resistance. A rate is "
      "heat per unit time, in watts. It is drawn without a box because nothing "
@@ -487,7 +511,7 @@ def shapes(by_key):
     It spent one revision as a single line under the contents, which is the
     wrong weight for the thing every other entry depends on: a reader holding
     it cannot badly misread any symbol here, and a reader without it learns
-    nineteen drawings one at a time.
+    twenty drawings one at a time.
     """
     out = ['<section id="grp-shapes"><div class="section-head">'
            "<h2>What the shapes mean</h2>"

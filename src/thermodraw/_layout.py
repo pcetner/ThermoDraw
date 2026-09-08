@@ -345,6 +345,16 @@ def _endpoint(diagram, ref, other):
     return tuple(diagram.node(ref).at)
 
 
+def _stated_t(diagram, node_id):
+    """A node's temperature as a number, or None. The rail has none."""
+    if node_id == M.RAIL:
+        return None
+    try:
+        return float(str(diagram.node(node_id).value).strip())
+    except (TypeError, ValueError, AttributeError, M.DiagramError):
+        return None
+
+
 def layout(diagram) -> List[Placement]:
     """Placements for everything in the diagram, back to front.
 
@@ -383,15 +393,32 @@ def layout(diagram) -> List[Placement]:
         # every quantity on the page is stated with its own symbol; without
         # one it reads as a second, unexplained number under the resistance.
         rate = diagram.rate_text(b.rate)
-        label = Label(user=b.label,
-                      name=S.S_(base, sub) if base else None,
-                      value=diagram.value_text(b.kind, b.value),
-                      extra=[x for x in (
-                          (S.S_(M.RATE), rate) if rate else None,
-                          diagram.count_text(b.count, b.arrangement,
-                                             b.kind, b.value)) if x],
-                      half=sym.half, half_len=sym.half_len,
-                      side=b.side)
+        if b.kind == "stream":
+            # A stream states two numbers and the page wants a third. The
+            # derived line is written like any other quantity, `q = ...`,
+            # and is left off when either end has no temperature to work it
+            # from: an unknown is better absent than guessed at.
+            cp_text = diagram.flow_text(M.CP, b.cp)
+            carried = diagram.carried_text(
+                b, _stated_t(diagram, b.source),
+                _stated_t(diagram, b.target))
+            label = Label(
+                user=b.label, name=S.S_(base, sub),
+                value=diagram.flow_text(M.MDOT, b.mdot),
+                extra=[x for x in (
+                    (S.S_("c", "p"), cp_text) if cp_text else None,
+                    (S.S_(M.RATE), carried) if carried else None) if x],
+                half=sym.half, half_len=sym.half_len, side=b.side)
+        else:
+            label = Label(user=b.label,
+                          name=S.S_(base, sub) if base else None,
+                          value=diagram.value_text(b.kind, b.value),
+                          extra=[x for x in (
+                              (S.S_(M.RATE), rate) if rate else None,
+                              diagram.count_text(b.count, b.arrangement,
+                                                 b.kind, b.value)) if x],
+                          half=sym.half, half_len=sym.half_len,
+                          side=b.side)
         if b.repeated:
             out += _repeat(b, ref, sym, source, target, centre, angle, label,
                            index=i)

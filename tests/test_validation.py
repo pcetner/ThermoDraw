@@ -265,7 +265,7 @@ def test_a_scale_needs_a_temperature_unit_to_sit_on():
         DiagramBuilder(R="K/W", scale="rise").node("a", at=(0, 0)).build()
 
 
-# ----------------------------------------------- the 1.1 vocabulary add
+# ------------------------------------------------- the 1.1 vocabulary adds
 class TestALinkStatesNothing:
     """A link's whole claim is that there is nothing between its ends.
 
@@ -297,3 +297,78 @@ class TestALinkStatesNothing:
         d = build(branches=[{"from": "a", "to": "b", "kind": "link",
                              "label": "Bolted flange"}])
         assert layout(d) and render(layout(d))
+
+
+class TestAStreamStatesAFlowAndAHeatAndNothingElse:
+    """A stream is the one branch whose number is worked out rather than
+    written down, so every field that would state it a second way is
+    refused, and each refusal names what a stream does state."""
+
+    UNITS = {"R": "K/kW", "T": "K", "P": "kW", "q": "kW",
+             "mdot": "kg/s", "cp": "kJ/kg·K"}
+
+    def stream(self, **extra):
+        return build(units=dict(self.UNITS),
+                     branches=[{"from": "a", "to": "b", "kind": "stream",
+                                "mdot": "2.5", "cp": "0.665", **extra}])
+
+    @pytest.mark.parametrize("field", ["value", "rate"])
+    def test_it_refuses_a_number_it_would_work_out_itself(self, field):
+        with pytest.raises(DiagramError) as exc:
+            self.stream(**{field: "1579"})
+        assert "worked out from them" in str(exc.value)
+        assert "come to disagree" in str(exc.value)
+
+    @pytest.mark.parametrize("missing,named", [("mdot", "cp"), ("cp", "mdot")])
+    def test_one_of_the_two_alone_states_nothing(self, missing, named):
+        with pytest.raises(DiagramError) as exc:
+            self.stream(**{missing: None})
+        assert f"`{missing}` and `{named}` together or neither" in str(exc.value)
+
+    def test_neither_is_a_stream_that_draws_its_label_alone(self):
+        """Every other path may carry no number; so may this one. It is also
+        what the editor drops: a gesture must not write a diagram that
+        cannot be drawn, and a dropped path arrives named and unnumbered."""
+        d = build(branches=[{"from": "a", "to": "b", "kind": "stream",
+                             "label": "Steel strip"}])
+        assert render(layout(d))
+        assert "mdot" not in d.to_dict()["branches"][0]
+
+    def test_a_unit_it_would_render_bare_is_refused(self):
+        with pytest.raises(DiagramError) as exc:
+            build(units={k: v for k, v in self.UNITS.items() if k != "cp"},
+                  branches=[{"from": "a", "to": "b", "kind": "stream",
+                             "mdot": "2.5", "cp": "0.665"}])
+        assert "units has no entry for 'cp'" in str(exc.value)
+
+    def test_a_unit_the_check_does_not_know_still_draws(self):
+        """`--physics` skips a diagram whose units it cannot scale; it does
+        not refuse to draw one. `R` has always worked that way."""
+        d = build(units={**self.UNITS, "cp": "BTU/lb·F"},
+                  branches=[{"from": "a", "to": "b", "kind": "stream",
+                             "mdot": "2.5", "cp": "0.16"}])
+        assert render(layout(d))
+
+    def test_it_refuses_angle_like_every_directed_kind(self):
+        with pytest.raises(DiagramError) as exc:
+            self.stream(angle=90)
+        assert "carries heat from one end to the other" in str(exc.value)
+
+    def test_it_refuses_count_because_the_group_would_have_no_number(self):
+        with pytest.raises(DiagramError) as exc:
+            self.stream(count=4, arrangement="parallel")
+        assert "does not take `count`" in str(exc.value)
+        assert "write the strands out" in str(exc.value)
+
+    def test_the_two_fields_belong_to_no_other_kind(self):
+        with pytest.raises(DiagramError) as exc:
+            build(units=dict(self.UNITS),
+                  branches=[{"from": "a", "to": "b", "kind": "cond",
+                             "value": "1", "cp": "0.665"}])
+        assert "`cp` belongs to a `stream`" in str(exc.value)
+
+    def test_what_it_does_state_draws(self):
+        d = self.stream()
+        assert layout(d) and render(layout(d))
+        assert d.to_dict()["branches"][0]["mdot"] == "2.5"
+

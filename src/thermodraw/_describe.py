@@ -30,6 +30,8 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Sequence, Tuple
 
 from . import _solve
+from . import model as M
+from ._layout import BRANCH_SYM
 from ._layout import layout as _layout, network, pieces as _pieces
 from ._render import PADDING, compose
 
@@ -316,6 +318,13 @@ def _kind(p):
     return p.element
 
 
+# Symbol key back to the kind the author wrote, so directedness is asked of
+# `model.DIRECTED_KINDS` rather than of a key spelled out here. Written as
+# `flow-branch` once, this said "not directed" about every kind added after
+# it, and said it in the one block a reader checks direction in.
+_KEY_KIND = {sym: kind for kind, sym in BRANCH_SYM.items()}
+
+
 def describe(diagram, size: Optional[Sequence[float]] = None,
              padding: float = PADDING,
              source: str = "diagram") -> "Description":
@@ -393,7 +402,8 @@ def describe(diagram, size: Optional[Sequence[float]] = None,
         seen.add(p.ref)
         detail.append((p.count if p.count and p.count > 1 else None,
                        p.arrangement if p.count and p.count > 1 else None,
-                       p.symbol.key == "flow-branch"))
+                       _KEY_KIND.get(p.symbol.key, p.symbol.key)
+                       in M.DIRECTED_KINDS))
     # `q.symbol is not None` is inside the generator, so mypy cannot carry
     # the narrowing out to the comprehension body; the local does.
     kept = [q for q in placements

@@ -89,7 +89,7 @@ def test_the_editor_is_on_the_site_with_its_wheel(site):
     page = (out / "editor" / "index.html").read_text(encoding="utf-8")
     assert wheel in page and build_site.PYODIDE in page
     assert "{{" not in page
-    assert page.count('class="ed-card"') == 19
+    assert page.count('class="ed-card"') == 20
     examples = json.loads((out / "editor" / "examples.json").read_text(
         encoding="utf-8"))
     assert len(examples) == 17
