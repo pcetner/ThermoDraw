@@ -7,7 +7,7 @@ it could not know rather than skip it silently.
 """
 import pytest
 
-from thermodraw import DiagramBuilder, check
+from thermodraw import Diagram, DiagramBuilder, check
 from thermodraw.__main__ import main
 
 
@@ -196,3 +196,48 @@ class TestARadiationValueOnARise:
         for scale in (None, "absolute", "rise"):
             assert "node-does-not-balance" not in codes(
                 check(self.sink(scale), physics=True))
+
+
+class TestALinkIsOnePlace:
+    """Kirchhoff is written about a place, not about a name for one.
+
+    So the merge happens before anything is summed. Without it the two ends
+    of a link balance separately, and a source on one of them looks like heat
+    arriving from nowhere at the other.
+    """
+
+    def linked(self, t_face="1520", **kw):
+        return Diagram.from_dict({
+            "units": {"R": "K/kW", "T": "K", "P": "kW", "q": "kW"},
+            "nodes": [
+                {"id": "gas", "value": "1520", "at": [0, 0]},
+                {"id": "face", "value": t_face, "at": [220, 0]},
+                {"id": "cold", "kind": "fixed", "value": "775",
+                 "at": [440, 0]}],
+            "branches": [
+                {"from": "gas", "to": "face", "kind": "link"},
+                {"from": "face", "to": "cold", "kind": "rad",
+                 "value": kw.get("r", "0.4719969589457678")}],
+            "sources": [{"to": "gas", "kind": "diss", "value": "1578.4"}]})
+
+    def test_heat_arriving_at_one_name_balances_at_the_other(self):
+        """The source is on `gas` and the resistance leaves from `face`."""
+        report = check(self.linked(), physics=True)
+        assert codes(report) == []
+
+    def test_the_group_is_named_by_every_name_it_answers_to(self):
+        report = check(self.linked(r="0.9"), physics=True)
+        found = [f for f in report.findings if f.code == "node-does-not-balance"]
+        assert len(found) == 1, "one place, not two nodes"
+        assert "'gas' (linked to 'face')" in found[0].message
+
+    def test_two_temperatures_on_one_place_is_a_contradiction(self):
+        report = check(self.linked(t_face="1480"), physics=True)
+        found = [f for f in report.findings
+                 if f.code == "link-temperatures-disagree"]
+        assert len(found) == 1
+        assert "1520 K and 1480 K" in found[0].message, "not 1.52e+03"
+
+    def test_equal_temperatures_say_nothing(self):
+        assert "link-temperatures-disagree" not in codes(
+            check(self.linked(), physics=True))

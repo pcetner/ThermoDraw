@@ -84,7 +84,7 @@ const S = {
 
 const KINDS = {
   node: ["free", "fixed", "break", "phase"],
-  branch: ["cond", "conv", "rad", "contact", "spread", "pipe", "mixed", "cap", "flow", "break"],
+  branch: ["cond", "conv", "rad", "contact", "spread", "pipe", "mixed", "cap", "flow", "break", "link"],
   source: ["diss", "radin", "flow", "flux"],
 };
 const NAMES = {};  // role:kind -> name, from the palette in the page
@@ -1480,12 +1480,13 @@ function openPopover(sel, fresh = false) {
     h += `<h4>${escapeHtml(kindName("branch", kind))} <code>${escapeHtml(el.from)} → ${escapeHtml(el.to)}</code></h4>`;
     h += field("Kind", selectBox("kind", kind, KINDS.branch, Object.fromEntries(KINDS.branch.map((k) => [k, kindName("branch", k)]))));
     h += field("Label", text("label", el.label, "e.g. Die attach"));
-    if (kind !== "break") {
+    const unvalued = kind === "break" || kind === "link";
+    if (!unvalued) {
       const q = kind === "cap" ? "C" : kind === "flow" ? "q" : "R";
       h += field(`${q}, ${escapeHtml(u[q] || "no unit")}`, text("value", el.value, "value"));
     }
     if (kind === "cap") h += field("Subscript", text("sub", el.sub, "names the place"));
-    if (kind !== "break" && kind !== "flow") h += field(`Rate q, ${escapeHtml(u.q || "no unit")}`, text("rate", el.rate, "optional"));
+    if (!unvalued && kind !== "flow") h += field(`Rate q, ${escapeHtml(u.q || "no unit")}`, text("rate", el.rate, "optional"));
     h += more();
     h += field("Count", num("count", el.count, 1));
     h += field("Arranged", selectBox("arrangement", el.arrangement || "", ["", "parallel", "series"], {"": "(one path)"}));
@@ -1652,7 +1653,7 @@ function applyField(sel, f, raw, live = false) {
       // fields the new kind refuses
       if (sel.role === "node" && !(value === "fixed" || value === "break")) delete e.wall;
       if (sel.role === "branch" && value === "flow") delete e.angle;
-      if (sel.role === "branch" && value === "break") { delete e.value; delete e.rate; }
+      if (sel.role === "branch" && (value === "break" || value === "link")) { delete e.value; delete e.rate; }
       if (sel.role === "source" && !(value === "flow" || value === "flux") && e.from != null) { e.to = e.from; delete e.from; }
       return;
     }
