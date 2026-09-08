@@ -52,6 +52,43 @@ class TestALabelIsTextNotMarkup:
         assert core.text_w("&lt;b&gt;", 13) == core.text_w("<b>", 13)
 
 
+class TestADotIsDrawnRatherThanTyped:
+    """`ṁ` is in neither the width table nor the vendored subset, so a
+    literal one would measure at the fallback mean and then render in
+    whatever face the reader happens to have. It is a combining mark in the
+    string and a `<circle>` on the page, and the two have to agree."""
+
+    def test_the_mark_adds_no_width(self):
+        """Which is what `combining` means: the letter's advance is all of
+        it. Measured short or long, every clearance `check` certifies is a
+        claim about a rendering nobody sees."""
+        assert core.measure(core.dotted("m"), 13, "italic") ==             core.text_w("m", 13, "italic")
+        assert core.measure(core.dotted("m", "w"), 13, "italic") ==             core.measure(core.sym_text("m", "w"), 13, "italic")
+
+    def test_the_mark_never_reaches_the_document_as_text(self):
+        """A combining codepoint left in the text would be handed to the
+        font that has no glyph for it, and drawn beside the circle rather
+        than instead of it."""
+        out = []
+        core.annotate(100, 100, 0, out, name=core.dotted("m"), value="2.5 kg/s")
+        drawn = "".join(out)
+        assert core.DOT_ABOVE not in drawn
+        assert '<circle class="mark"' in drawn
+        ET.fromstring(f"<g>{drawn}</g>")
+
+    def test_it_sits_over_the_letter_it_marks_and_not_over_a_subscript(self):
+        run = core.dotted("m", "w")
+        plain = core._dot_mark(core.dotted("m"), 100.0, 13, "italic")
+        assert core._dot_mark(run, 100.0, 13, "italic") == plain
+        assert core._dot_mark("R", 100.0, 13, "italic") == ""
+
+    def test_the_dot_stays_inside_the_line_it_is_on(self):
+        """`annotate` gives a line `0.80 * size` of room above the baseline
+        and the block claims no more than that, so a dot poking out of it
+        would be ink outside the rectangle the occupancy solver reserved."""
+        assert (core.DOT_RISE + core.DOT_R) < 0.80
+
+
 @pytest.mark.parametrize("name", sorted(SCENES))
 def test_render_is_deterministic(name):
     """Same input, same bytes — including across other renders in between."""

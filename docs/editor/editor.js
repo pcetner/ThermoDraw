@@ -84,7 +84,7 @@ const S = {
 
 const KINDS = {
   node: ["free", "fixed", "break", "phase"],
-  branch: ["cond", "conv", "rad", "contact", "spread", "pipe", "mixed", "cap", "flow", "break", "link"],
+  branch: ["cond", "conv", "rad", "contact", "spread", "pipe", "mixed", "cap", "flow", "break", "link", "stream"],
   source: ["diss", "radin", "flow", "flux"],
 };
 const NAMES = {};  // role:kind -> name, from the palette in the page
@@ -1480,17 +1480,27 @@ function openPopover(sel, fresh = false) {
     h += `<h4>${escapeHtml(kindName("branch", kind))} <code>${escapeHtml(el.from)} → ${escapeHtml(el.to)}</code></h4>`;
     h += field("Kind", selectBox("kind", kind, KINDS.branch, Object.fromEntries(KINDS.branch.map((k) => [k, kindName("branch", k)]))));
     h += field("Label", text("label", el.label, "e.g. Die attach"));
-    const unvalued = kind === "break" || kind === "link";
-    if (!unvalued) {
+    // A stream states neither: what it carries is worked out from `mdot`,
+    // `cp` and its two ends, so offering `value` would be offering to
+    // contradict it.
+    const unvalued = kind === "break" || kind === "link" || kind === "stream";
+    if (kind === "stream") {
+      h += field(`ṁ, ${escapeHtml(u.mdot || "no unit")}`, text("mdot", el.mdot, "mass flow"));
+      h += field(`c p, ${escapeHtml(u.cp || "no unit")}`, text("cp", el.cp, "specific heat"));
+    } else if (!unvalued) {
       const q = kind === "cap" ? "C" : kind === "flow" ? "q" : "R";
       h += field(`${q}, ${escapeHtml(u[q] || "no unit")}`, text("value", el.value, "value"));
     }
-    if (kind === "cap") h += field("Subscript", text("sub", el.sub, "names the place"));
+    if (kind === "cap" || kind === "stream") h += field("Subscript", text("sub", el.sub, kind === "stream" ? "names the medium" : "names the place"));
     if (!unvalued && kind !== "flow") h += field(`Rate q, ${escapeHtml(u.q || "no unit")}`, text("rate", el.rate, "optional"));
     h += more();
-    h += field("Count", num("count", el.count, 1));
-    h += field("Arranged", selectBox("arrangement", el.arrangement || "", ["", "parallel", "series"], {"": "(one path)"}));
-    if (kind !== "flow") h += rotateField("Symbol angle", shownAngle(sel, el), "back to turning with the wire");
+    // A stream refuses both: its number is derived, so a group would draw
+    // with no value under it. Offering the field would be offering a refusal.
+    if (kind !== "stream") {
+      h += field("Count", num("count", el.count, 1));
+      h += field("Arranged", selectBox("arrangement", el.arrangement || "", ["", "parallel", "series"], {"": "(one path)"}));
+    }
+    if (kind !== "flow" && kind !== "stream") h += rotateField("Symbol angle", shownAngle(sel, el), "back to turning with the wire");
     h += field("Label side", selectBox("side", el.side || "auto", SIDES));
     h += `<div class="ed-row"><button type="button" data-act="swap">Swap ends</button><button type="button" data-act="unpin">Let the symbol float</button></div>`;
     h += `<p style="margin:8px 0 4px;font-size:12.5px;color:var(--ink-3)">Bends</p><ul class="ed-vias">`;
@@ -1652,8 +1662,10 @@ function applyField(sel, f, raw, live = false) {
       if (value === dflt || value == null) delete e.kind; else e.kind = value;
       // fields the new kind refuses
       if (sel.role === "node" && !(value === "fixed" || value === "break")) delete e.wall;
-      if (sel.role === "branch" && value === "flow") delete e.angle;
-      if (sel.role === "branch" && (value === "break" || value === "link")) { delete e.value; delete e.rate; }
+      if (sel.role === "branch" && (value === "flow" || value === "stream")) delete e.angle;
+      if (sel.role === "branch" && (value === "break" || value === "link" || value === "stream")) { delete e.value; delete e.rate; }
+      if (sel.role === "branch" && value !== "stream") { delete e.mdot; delete e.cp; }
+      if (sel.role === "branch" && value === "stream") { delete e.count; delete e.arrangement; }
       if (sel.role === "source" && !(value === "flow" || value === "flux") && e.from != null) { e.to = e.from; delete e.from; }
       return;
     }
