@@ -284,13 +284,10 @@ class TestAStreamCarriesWhatItsTwoEndsSay:
         report = check(silent, physics=True)
         assert [f for f in report.findings if f.severity != "note"] == []
 
-    def test_heat_is_carried_off_at_the_outlet_and_not_at_the_inlet(self):
-        """The sign, asserted rather than left to a passing example. A
-        stream is not a conductance: it carries heat up the gradient
-        because the mass does the carrying, so a *cooled* one delivers
-        heat to its outlet. Reverse the sign and this fails while the
-        heated furnace above still passes."""
-        cooled = Diagram.from_dict({
+    def cooled(self, r):
+        """Water in at 80, out at 40, 2 kW/K: 80 kW arrives at the outlet
+        and has to leave through the radiator."""
+        return Diagram.from_dict({
             "units": {"R": "K/kW", "T": "°C", "P": "kW", "q": "kW",
                       "mdot": "kg/s", "cp": "kJ/kg·K"},
             "nodes": [{"id": "hot", "kind": "fixed", "value": "80"},
@@ -299,10 +296,33 @@ class TestAStreamCarriesWhatItsTwoEndsSay:
             "branches": [{"from": "hot", "to": "warm", "kind": "stream",
                           "mdot": "2", "cp": "1"},
                          {"from": "warm", "to": "room", "kind": "conv",
-                          "value": "0.25"}]})
-        # 2 kW/K over a 40 K *fall* is -80 kW: 80 kW arrives at `warm`,
-        # and (40-20)/0.25 = 80 kW leaves it through the radiator.
-        assert codes(check(cooled, physics=True)) == []
+                          "value": r}]})
+
+    def test_heat_is_carried_off_at_the_outlet_and_not_at_the_inlet(self):
+        """The sign, asserted rather than left to a passing example. A
+        stream is not a conductance: it carries heat up the gradient
+        because the mass does the carrying, so a *cooled* one delivers heat
+        to its outlet. (40-20)/0.00025 is the 80 kW the water gives up."""
+        assert codes(check(self.cooled("0.25"), physics=True)) == []
+
+    def test_the_matched_case_is_checked_and_not_merely_skipped(self):
+        """The test above passed once because the node was never asked: a
+        delivering stream drove `leave` negative, `max(arrive, leave)` came
+        out 0 and the balance short-circuited. A radiator that cannot take
+        what the water brings has to be reported, or the clean case above
+        proves nothing."""
+        found = [f for f in check(self.cooled("0.9"), physics=True).findings
+                 if f.code == "node-does-not-balance"]
+        assert len(found) == 1
+        assert "node 'warm'" in found[0].message
+
+    def test_a_cooled_stream_reads_as_delivering_not_as_carrying_off_less(self):
+        """The line a reader reaches for when a node will not close.
+        "-80000 W carried off" is arithmetic rather than English."""
+        found = [f for f in check(self.cooled("0.9"), physics=True).findings
+                 if f.code == "node-does-not-balance"]
+        assert "8e+04 W delivered by" in found[0].message
+        assert "carried off" not in found[0].message
 
     def test_an_inlet_with_no_temperature_is_named_not_guessed(self):
         """The outlet is asked and cannot answer, because what the stream
