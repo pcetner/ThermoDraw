@@ -236,3 +236,20 @@ def test_every_unit_the_editor_can_ask_for_can_also_be_set():
     wanted = set(M.QUANTITY.values()) | {M.MDOT, M.CP}
     assert wanted <= settable, f"no way to set units for {wanted - settable}"
 
+
+def test_a_new_diagram_starts_with_every_unit_the_model_has():
+    """`BLANK` defaults `R`, `C`, `T`, `P`, `q` and `q″` whether the
+    diagram uses them or not, so a card never shows "no unit" over a field
+    that refuses a number without one. `mdot` and `cp` were the exception,
+    seeded only when a stream was made, so the units card offered them as a
+    grey suggestion and an opened file got neither."""
+    js = (pathlib.Path("docs/editor/editor.js")
+          .read_text(encoding="utf-8"))
+    blank = re.search(r"const BLANK = \(\) => \(\{\s*units: \{(.*?)\}",
+                      js, re.S)
+    assert blank, "BLANK's units moved"
+    started = set(re.findall(r'(?:"([^"]+)"|(\w+)):', blank.group(1)))
+    started = {a or b for a, b in started}
+    wanted = set(M.QUANTITY.values()) | {M.MDOT, M.CP}
+    assert wanted <= started, f"a new diagram has no unit for {wanted - started}"
+
