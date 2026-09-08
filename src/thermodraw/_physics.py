@@ -295,8 +295,20 @@ def balance(diagram) -> List[Finding]:
             if b != n.id:
                 continue
             q *= q_scale
-            leave += q
-            said.append(f"{_fmt(q)} W carried off by {label}")
+            # Split on the sign and add a positive number, as the flows and
+            # paths loops above already do. `leave += q` with a negative `q`
+            # read correctly in the sum and then broke the test of it:
+            # `biggest = max(arrive, leave)` takes both for non-negative, so
+            # a cooled stream drove `leave` below zero, `biggest` came out 0
+            # and the node was skipped in silence -- the check passing
+            # because it never ran. A cooled stream delivers; hot water
+            # arriving at a radiator is not carrying off a negative amount.
+            if q >= 0:
+                leave += q
+                said.append(f"{_fmt(q)} W carried off by {label}")
+            else:
+                arrive += -q
+                said.append(f"{_fmt(-q)} W delivered by {label}")
 
         for a, b, r, label in net.paths:
             if why or n.id not in (a, b):
