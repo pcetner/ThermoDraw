@@ -66,30 +66,77 @@ def _fmt(x: float) -> str:
 
 
 class _Net:
-    """The network with its numbers read."""
+    """The network with its numbers read, and its links merged.
+
+    A `link` says its two ends are one place. Kirchhoff is written about a
+    place, not about a name for one, so the merge happens here — before
+    anything is summed — and every endpoint below is a *representative*: the
+    member of the group written first, which keeps the messages stable and
+    names the group something the author will recognise.
+    """
 
     def __init__(self, diagram):
-        self.temps: Dict[str, Optional[float]] = {
-            n.id: _num(n.value) for n in diagram.nodes}
-        self.kinds: Dict[str, str] = {n.id: n.kind for n in diagram.nodes}
+        rank = {n.id: i for i, n in enumerate(diagram.nodes)}
+        parent = {n.id: n.id for n in diagram.nodes}
+        if diagram.rail:
+            rank[M.RAIL], parent[M.RAIL] = len(rank), M.RAIL
+
+        def find(x):
+            while parent[x] != x:
+                parent[x] = parent[parent[x]]
+                x = parent[x]
+            return x
+
+        for b in diagram.branches:
+            if b.kind != "link":
+                continue
+            ra, rb = find(b.source), find(b.target)
+            if ra != rb:
+                # The one written first wins, so the group is named after the
+                # node the author introduced it by.
+                first, second = sorted((ra, rb), key=lambda i: rank[i])
+                parent[second] = first
+        self.rep: Dict[str, str] = {k: find(k) for k in parent}
+        self.group: Dict[str, List[str]] = {}
+        for node_id in sorted(parent, key=lambda i: rank[i]):
+            self.group.setdefault(self.rep[node_id], []).append(node_id)
+
+        stated = {n.id: _num(n.value) for n in diagram.nodes}
         if diagram.rail:
             # `rail.reference` "records which node the rail is, for a reader
             # and for a later version". This is the later version.
-            self.temps[M.RAIL] = self.temps.get(diagram.rail.reference)
-            self.kinds[M.RAIL] = "fixed"
+            stated[M.RAIL] = stated.get(diagram.rail.reference)
+        kind_of = {n.id: n.kind for n in diagram.nodes}
+        if diagram.rail:
+            kind_of[M.RAIL] = "fixed"
+        # A group's temperature is the first one any of its members states,
+        # and its kind is free only if every member is: one boundary in a
+        # group makes the whole place a reservoir, which is what a link to a
+        # wall means.
+        self.temps: Dict[str, Optional[float]] = {}
+        self.kinds: Dict[str, str] = {}
+        for rep, members in self.group.items():
+            temp = next((stated[m] for m in members
+                         if stated[m] is not None), None)
+            anchored = next((kind_of[m] for m in members
+                             if kind_of[m] != "free"), None)
+            for m in members:
+                self.temps[m] = temp
+                self.kinds[m] = anchored or "free"
+
         r_scale = R_SCALE[diagram.units.get("R", "K/W")]
         # (a, b, R, label) for every resistance path
         self.paths: List[Tuple[str, str, Optional[float], str]] = []
         self.flows: List[Tuple[str, str, Optional[float], str]] = []
         for i, b in enumerate(diagram.branches):
             label = f"branch {i} {b.source}->{b.target}"
+            ends = (self.rep[b.source], self.rep[b.target])
             if b.kind in RESISTANCES:
                 r = _folded(diagram, b)
-                self.paths.append((b.source, b.target,
+                self.paths.append((*ends,
                                    None if r is None else r * r_scale, label))
             elif b.kind == "flow":
-                self.flows.append((b.source, b.target,
-                                   _folded(diagram, b), label))
+                self.flows.append((*ends, _folded(diagram, b), label))
 
 
 def _grouped(skipped) -> str:
@@ -128,19 +175,59 @@ def balance(diagram) -> List[Finding]:
             return out
     p_scale, q_scale = P_SCALE[units.get("P", "W")], P_SCALE[units.get("q", "W")]
     net = _Net(diagram)
-    free = [n for n in diagram.nodes if n.kind == "free"]
+
+    # A link claims its two ends are the same place. Two different numbers on
+    # one place is a contradiction rather than a disagreement, so this is not
+    # measured against SLACK: that tolerance exists because temperatures are
+    # quoted in whole degrees, and no rounding makes 48 and 51 the same
+    # reading.
+    t_unit = units.get("T", "")
+    for i, b in enumerate(diagram.branches):
+        if b.kind != "link":
+            continue
+        ta, tb = _num(diagram.node(b.source).value), _num(
+            diagram.node(b.target).value)
+        if ta is None or tb is None or abs(ta - tb) <= 1e-9:
+            continue
+        out.append(Finding(
+            "link-temperatures-disagree", "warning",
+            f"branch {i} {b.source}->{b.target}",
+            # `:g`, not `_fmt`: that is tuned for watts, which run to seven
+            # figures, and it printed a 1520 K wall as `1.52e+03 K`.
+            f"branch {i} {b.source}->{b.target} is a link, so {b.source!r} "
+            f"and {b.target!r} are one place, and they state "
+            f"{ta:g} {t_unit} and {tb:g} {t_unit}".rstrip(),
+            remedy="give both ends the same temperature, or if heat drops "
+                   "between them, say what carries it: a link states that "
+                   "nothing does",
+            at=tuple(b.at) if b.at else None))
+
+    # One balance per place, not per name: a linked group is one node here,
+    # represented by the member written first.
+    free = [diagram.node(rep) for rep in net.group
+            if rep != M.RAIL and net.kinds.get(rep) == "free"]
     skipped: List[Tuple[str, str]] = []
 
     for n in free:
+        joined = [m for m in net.group[n.id] if m != n.id]
+        # Named as the author will recognise it: the group's own name, and
+        # the other names it answers to. The skip list does not quote its
+        # subjects and the findings do, so both forms are kept rather than
+        # changing the wording of a message this work is not about.
+        linked = (" (linked to " + ", ".join(map(repr, joined)) + ")"
+                  if joined else "")
+        who, plain = f"'{n.id}'" + linked, n.id + linked
         here = net.temps.get(n.id)
         if here is None:
-            skipped.append((n.id, "it has no temperature"))
+            skipped.append((plain, "it has no temperature"))
             continue
         arrive, leave, said = 0.0, 0.0, []
         why = None
 
         for i, s in enumerate(diagram.sources):
-            if s.node != n.id:
+            # Through the merge: heat arriving at any name for this place
+            # arrives at this place.
+            if net.rep[s.node] != n.id:
                 continue
             if s.kind == "flux":
                 why = f"source {i} is a flux, which has no area"
@@ -174,6 +261,12 @@ def balance(diagram) -> List[Finding]:
         for a, b, r, label in net.paths:
             if why or n.id not in (a, b):
                 continue
+            if a == b:
+                # A resistance whose two ends a link has merged. What it
+                # carries is not determined by the stated values — an ideal
+                # short across it decides that — so it is left out of the sum
+                # rather than counted as zero at both ends.
+                continue
             other = b if a == n.id else a
             there = net.temps.get(other)
             if r is None:
@@ -197,15 +290,15 @@ def balance(diagram) -> List[Finding]:
         if why is None and not said:
             why = "nothing is attached to it"
         if why:
-            skipped.append((n.id, why))
+            skipped.append((plain, why))
             continue
 
         biggest = max(arrive, leave)
         if biggest == 0 or abs(arrive - leave) <= SLACK * biggest:
             continue
         out.append(Finding(
-            "node-does-not-balance", "warning", f"node '{n.id}'",
-            f"node '{n.id}': {_fmt(arrive)} W arrives and {_fmt(leave)} W "
+            "node-does-not-balance", "warning", f"node {who}",
+            f"node {who}: {_fmt(arrive)} W arrives and {_fmt(leave)} W "
             f"leaves at the stated values: " + "; ".join(said),
             remedy="check the values. If one box stands for several identical "
                    "paths, give it `count` and `arrangement`; if a temperature "
@@ -239,7 +332,9 @@ def balance(diagram) -> List[Finding]:
         checked = len(free) - len(skipped)
         out.append(Finding(
             "physics-not-checked", "note", "the diagram",
-            f"checked {checked} of {len(free)} free nodes; not checked: "
+            # "places" rather than "nodes": a linked group is one of these
+            # and answers to several names.
+            f"checked {checked} of {len(free)} free places; not checked: "
             + _grouped(skipped),
             remedy="give the node, or its neighbour, a `value`, or read "
                    "those nodes as unchecked"))

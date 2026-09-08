@@ -633,7 +633,7 @@ so following the page's advice about layered walls switched the check
 off for the zone inside them, and the worst-balanced node in one diagram
 was absent from the only report that could have found it. A skip that is
 not visible from the file has to be visible in the output. One note per
-diagram, `checked 2 of 6 free nodes; not checked: ...`, with the reason
+diagram, `checked 2 of 6 free places; not checked: ...`, with the reason
 for each, and nothing on a diagram whose nodes were all asked.
 
 ### What the third clean room taught it
@@ -945,66 +945,13 @@ be; and a thing stays on this list until someone shows a drawing that says
 something false without it.** Wanting a field is not the standard. A diagram
 that states a number the author did not mean is.
 
-Two entries below meet that standard. Both are being built. The rest of the
-list stays prose.
+One entry below meets that standard, and is being built. The rest of the list
+stays prose.
 
-A note on how the second one got here: it is not one of the eight. It was found
-twice, in two runs, by agents who reached for the same three words — and it
-never reached the decision list at all, because nothing collected it. That is
-the cost of a gate with nothing behind it.
-
-### A stream has two temperatures, and a node has one
-
-**A node is a place; a stream is not a place.** `docs/schema.md` opens the node
-table with "A place with a temperature" — singular — and that is the whole of
-the difficulty. Water through a coil is 30 °C at one end and 38 °C at the other,
-and the difference *is* the transfer. `flow` is the neighbouring statement and a
-different one: heat moved from place A to place B, across a branch whose two
-ends are ordinary nodes with one temperature each.
-
-It is the most-asked-for thing in four clean-room runs, and the only gap two
-separate agents, two runs apart, each ranked first on their own list. Run 2's
-immersion rack tried three shapes before writing any JSON, took the least bad,
-and said so: 38 °C is in the data and 30 °C is *prose*, set in the same size as
-the rest of the label, not a `T` of anything, invisible to `--physics`. Run 4's
-battery pack drew the glycol loop dumping into a 25 °C reservoir that is really
-the inlet — "there is a fact the format has no slot for, and I did not invent a
-number to fill it". Run 1 ranked it first of all gaps and called it the only one
-that makes a drawing state something false; run 3 recorded it prospectively,
-having not needed it. Two agents independently refused to fake it as an
-`R_conv`, which would have named physics that is not happening.
-
-**What makes it a schema change rather than a limit is that the silence is
-total.** A furnace drawn the obvious way — strip in at 300 K and out at 1250 K
-as two `fixed` nodes, with the firing rate as a source between them — reports
-nothing, because `_physics.balance` asks only free nodes to close and a fixed
-node is a reservoir. Set that firing rate to 99,999 kW against a 1578.4 kW load
-and `check --physics` still exits 0 with no findings. Every other entry on this
-list costs a number that cannot be written down. This one costs the check.
-
-**So a stream is a node kind, and its balance is what justifies it.** It carries
-an inlet temperature in `value`, an outlet in `out`, and the enthalpy rise in
-`rate`; heat arriving must equal the rise, and that equation is the reason to
-add it rather than a fourth container. Branches and sources attach as they do to
-any node, the chain solver places it, and `Placement`'s roles stay the three the
-editor knows.
-
-**The temperature a resistive branch sees is declared, and refused when
-missing.** `inlet`, `outlet`, `mean` or `lmtd`. This is `arrangement`'s rule —
-never inferred — for `arrangement`'s reason: mean against LMTD against inlet
-moves the answer far enough that a default would be a confidently wrong number
-on a drawing, which the fold table already refused to be. The declaration is
-also what keeps the change small: it collapses a stream to one number at exactly
-the point every existing reader needs one, so `_physics` keeps a single
-temperature per node and nothing downstream is rewritten. `lmtd` is the one that
-cannot resolve there, needing the neighbour's temperature, and resolves per
-branch instead.
-
-**What it does not reach.** A stream exchanging with another stream — a
-counterflow exchanger — is still two elements with nothing relating them, which
-is the first of the deferred four and stays deferred. And a closed loop becomes
-one element rather than a severed chain, which is better than run 2's missing
-return leg but is not the same as drawing the return.
+A note on how it got here: it is not one of the eight. It was found twice, in
+two runs, by agents who reached for the same three words — and it never reached
+the decision list at all, because nothing collected it. That is the cost of a
+gate with nothing behind it.
 
 ### Two nodes that are one place
 

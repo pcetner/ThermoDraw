@@ -263,3 +263,37 @@ def test_a_scale_needs_a_temperature_unit_to_sit_on():
     from thermodraw import DiagramBuilder
     with pytest.raises(DiagramError, match="no entry for 'T'"):
         DiagramBuilder(R="K/W", scale="rise").node("a", at=(0, 0)).build()
+
+
+# ----------------------------------------------- the 1.1 vocabulary add
+class TestALinkStatesNothing:
+    """A link's whole claim is that there is nothing between its ends.
+
+    So it names no quantity, and a number on one would be a number about
+    something the element says does not exist. The refusal is the same shape
+    as a `break`'s and gives its own reason, because the two name no quantity
+    for opposite reasons: a break carries no heat, a link carries it with
+    nothing in the way.
+    """
+
+    @pytest.mark.parametrize("field", ["value", "rate"])
+    def test_it_refuses_a_number(self, field):
+        with pytest.raises(DiagramError) as exc:
+            build(units={"R": "K/W", "q": "W"},
+                  branches=[{"from": "a", "to": "b", "kind": "link",
+                             field: "0.1"}])
+        assert "ideal joint" in str(exc.value)
+        assert f"states no {field}" in str(exc.value)
+
+    def test_a_break_keeps_its_own_reason(self):
+        """Both go through one check now; the break's wording is unmoved."""
+        with pytest.raises(DiagramError) as exc:
+            build(units={"R": "K/W"},
+                  branches=[{"from": "a", "to": "b", "kind": "break",
+                             "value": "1"}])
+        assert "carries no heat" in str(exc.value)
+
+    def test_a_label_alone_is_enough(self):
+        d = build(branches=[{"from": "a", "to": "b", "kind": "link",
+                             "label": "Bolted flange"}])
+        assert layout(d) and render(layout(d))

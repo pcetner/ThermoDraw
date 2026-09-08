@@ -200,7 +200,7 @@ footer a:hover{color:var(--accent)}
 <div class="intro">
 <p class="kicker">Every symbol here is one of three things.</p>
 
-<nav class="index" aria-label="Contents"><div class="cat"><h4>Node</h4><p class="def">A point in the network. Most have a temperature.</p><ul><li><a href="#sym-free">Free node</a></li><li><a href="#sym-fixed">Fixed node</a></li><li><a href="#sym-break">Thermal break</a></li><li><a href="#sym-phase">Phase-change node</a></li></ul></div><div class="cat wide"><h4>Path</h4><p class="def">A connection between two points in the network.</p><ul><li><a href="#sym-cond">Conduction</a></li><li><a href="#sym-conv">Convection</a></li><li><a href="#sym-rad">Radiation</a></li><li><a href="#sym-contact">Contact</a></li><li><a href="#sym-spread">Spreading resistance</a></li><li><a href="#sym-pipe">Isothermal link</a></li><li><a href="#sym-mixed">Unstated mechanism</a></li><li><a href="#sym-cap">Capacitance</a></li><li><a href="#sym-flow-branch">Heat flow, along a path</a></li><li><a href="#sym-break-branch">Thermal break, in line</a></li></ul></div><div class="cat"><h4>Source</h4><p class="def">Heat entering or leaving the network at one place.</p><ul><li><a href="#sym-diss">Dissipation</a></li><li><a href="#sym-radin">Radiative input</a></li><li><a href="#sym-flow">Heat flow</a></li><li><a href="#sym-flux">Heat flux</a></li></ul></div></nav>
+<nav class="index" aria-label="Contents"><div class="cat"><h4>Node</h4><p class="def">A point in the network. Most have a temperature.</p><ul><li><a href="#sym-free">Free node</a></li><li><a href="#sym-fixed">Fixed node</a></li><li><a href="#sym-break">Thermal break</a></li><li><a href="#sym-phase">Phase-change node</a></li></ul></div><div class="cat wide"><h4>Path</h4><p class="def">A connection between two points in the network.</p><ul><li><a href="#sym-cond">Conduction</a></li><li><a href="#sym-conv">Convection</a></li><li><a href="#sym-rad">Radiation</a></li><li><a href="#sym-contact">Contact</a></li><li><a href="#sym-spread">Spreading resistance</a></li><li><a href="#sym-pipe">Isothermal link</a></li><li><a href="#sym-mixed">Unstated mechanism</a></li><li><a href="#sym-cap">Capacitance</a></li><li><a href="#sym-flow-branch">Heat flow, along a path</a></li><li><a href="#sym-break-branch">Thermal break, in line</a></li><li><a href="#sym-link">Ideal joint</a></li></ul></div><div class="cat"><h4>Source</h4><p class="def">Heat entering or leaving the network at one place.</p><ul><li><a href="#sym-diss">Dissipation</a></li><li><a href="#sym-radin">Radiative input</a></li><li><a href="#sym-flow">Heat flow</a></li><li><a href="#sym-flux">Heat flux</a></li></ul></div></nav>
 </div>
 
 <section id="grp-shapes"><div class="section-head"><h2>What the shapes mean</h2><p class="lede">The panels above say what a symbol is. Its shape says what it does.</p></div><div class="shapes"><div class="shape"><figure><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 152 56.0" width="100%" role="img"><style>
@@ -535,7 +535,7 @@ text{font-family:var(--sans);fill:var(--ink)}
   &quot;sub&quot;: &quot;pan&quot;,
   &quot;value&quot;: &quot;900&quot;
 }</pre></div></div></article></section>
-<section id="grp-paths-that-carry-a-rate-or-carry-nothing"><div class="section-head"><h2>Paths that carry a rate, or carry nothing</h2><p class="lede">Two paths that state no resistance. One carries a rate, the other carries nothing at all.</p></div><article class="entry" id="sym-flow-branch"><h3>Heat flow, along a path</h3><figure><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 152 83.83" width="100%" role="img"><style>
+<section id="grp-paths-that-are-not-resistances"><div class="section-head"><h2>Paths that are not resistances</h2><p class="lede">Three paths that state no resistance. One carries a rate, one carries nothing at all, and one carries heat with nothing in the way.</p></div><article class="entry" id="sym-flow-branch"><h3>Heat flow, along a path</h3><figure><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 152 83.83" width="100%" role="img"><style>
 .w,.sym-box{stroke:var(--sym);stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round}
 polyline{fill:none;stroke:var(--sym);stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .node-open{fill:var(--panel);stroke:var(--sym);stroke-width:1.8}
@@ -580,6 +580,28 @@ text{font-family:var(--sans);fill:var(--ink)}
   &quot;to&quot;: &quot;handle&quot;,
   &quot;kind&quot;: &quot;break&quot;,
   &quot;label&quot;: &quot;Plastic handle&quot;
+}</pre></div></div></article><article class="entry" id="sym-link"><h3>Ideal joint</h3><figure><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 152 56.41" width="100%" role="img"><style>
+.w,.sym-box{stroke:var(--sym);stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round}
+polyline{fill:none;stroke:var(--sym);stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.node-open{fill:var(--panel);stroke:var(--sym);stroke-width:1.8}
+.fillsym{fill:var(--sym);stroke:none}
+.tex line,.tex polyline{stroke:var(--tex);stroke-width:1.1;fill:none}
+.tex polygon{fill:var(--tex)}
+.gapfill{fill:var(--panel);stroke:none}
+.region{fill:none;stroke:var(--ink-2);stroke-width:1.4;stroke-dasharray:6 5}
+.tick{stroke:var(--rule);stroke-width:1}
+text{font-family:var(--sans);fill:var(--ink)}
+.lbl{font-size:13px;font-style:italic}
+.val{font-size:13px;fill:var(--ink);font-style:normal}
+.eq{font-size:13px;fill:var(--ink);font-style:normal}
+.user{font-size:11.5px;font-weight:600;font-style:normal;fill:var(--ink)}
+.ang{font-size:10px;fill:var(--ink-3);font-style:normal}
+.reg-lbl{font-size:11.5px;fill:var(--ink-2);font-style:normal;font-weight:600}
+</style><g transform="translate(76.00,42.41) rotate(0.00)"><line class="w" x1="-40" y1="0" x2="40" y2="0"/></g><text class="user" x="40.5" y="21.2" text-anchor="start">Bolted flange</text></svg></figure><div class="entry-body"><p>Two nodes that are one place, drawn twice because the reader needs both names. A plain wire, which is precisely what a thermal break declines to be: a wire says heat flows, and here it flows with nothing in the way. It names no quantity, so it takes no value and no rate. It is a claim rather than a decoration: the checker merges the two ends before balancing anything, and says so if they state different temperatures.</p><p class="example"><b>Example:</b> A baseplate bolted hard to the face it sits on. The reader counts two parts; the network has one temperature.</p><div class="written"><p class="cap">As a component in <code>"branches"</code></p><pre>{
+  &quot;from&quot;: &quot;face&quot;,
+  &quot;to&quot;: &quot;baseplate&quot;,
+  &quot;kind&quot;: &quot;link&quot;,
+  &quot;label&quot;: &quot;Bolted flange&quot;
 }</pre></div></div></article></section>
 <section id="grp-sources"><div class="section-head"><h2>Sources</h2><p class="lede">Heat entering or leaving one place, from outside the network.</p></div><article class="entry" id="sym-diss"><h3>Dissipation</h3><figure><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 152 77.83" width="100%" role="img"><style>
 .w,.sym-box{stroke:var(--sym);stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round}

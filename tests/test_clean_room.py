@@ -280,7 +280,7 @@ class TestPhysicsSaysWhatItDidNotCheck:
     def test_a_neighbour_with_no_temperature_is_reported_once(self):
         found = one(check(self.stack(), physics=True), "physics-not-checked")
         assert found.severity == "note"
-        assert found.message.startswith("checked 0 of 2 free nodes")
+        assert found.message.startswith("checked 0 of 2 free places")
         assert "a (neighbour 'm' has no temperature)" in found.message
         assert "m (it has no temperature)" in found.message
 
