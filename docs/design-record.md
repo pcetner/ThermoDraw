@@ -1089,11 +1089,25 @@ than a word in a file.
 **What it does not reach.** A stream exchanging with another stream — a
 counterflow exchanger — is still two elements with nothing relating them, which
 is the first of the deferred four and stays deferred; LMTD is a property of that
-pair, not of either stream, which is why it left with `reference`. A closed
-pumped loop becomes a chain that does not close, so run 2's missing return leg
-is still missing. And `count` is refused on a stream for now: with no `value`,
-`Diagram.fold` has nothing to fold and the group line would read "4 in parallel"
-with no number after it, which is the failure the `=` was added to prevent.
+pair, not of either stream, which is why it left with `reference`. And `count`
+is refused on a stream for now: with no `value`, `Diagram.fold` has nothing to
+fold and the group line would read "4 in parallel" with no number after it,
+which is the failure the `=` was added to prevent.
+
+**The closed loop was written down here as unreachable, and it is not.** This
+entry first said a pumped loop "becomes a chain that does not close, so run 2's
+missing return leg is still missing". Redrawing run 2's immersion rack showed
+that is wrong, and wrong in a way worth keeping rather than quietly deleting:
+**it is the solver that refuses a loop, not the format.** Three nodes in a
+triangle with `at` on each lay out in twelve placements and `check` reports
+nothing; take the coordinates away and `_solve` refuses by name, which is the
+only refusal there ever was. The immersion rack's water loop then draws clean —
+the coil heating the water on the way up, the CDU cooling it on the way back
+down, the pump on the inlet, and `check` silent — and run 2 could have drawn
+that return leg all along. What it could not do was say what the water was at
+each end of it, which is the thing this entry is actually about. A limit of the
+placer was recorded as a limit of the vocabulary because nobody drew the
+picture, which is the whole reason this record asks for one.
 
 ## The README hero
 
