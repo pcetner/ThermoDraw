@@ -1247,6 +1247,15 @@ function dropEntry(entry, p) {
 // The two nodes are not scaffolding to be tidied away -- a path between two
 // places needs two places, and these are the two the reader was going to
 // make. Both ends are loose, so both show a red dot.
+// A stream is refused outright if it carries a number with no unit for it,
+// and a gesture must not write a diagram that cannot be drawn. Seeded on the
+// two gestures that can make one; the units card can change them after.
+function ensureStreamUnits(d) {
+  if (!d.units) d.units = {};
+  if (!d.units.mdot) d.units.mdot = "kg/s";
+  if (!d.units.cp) d.units.cp = "kJ/kg·K";
+}
+
 function dropPath(kind, p) {
   const [cx, cy] = alignedSnap(p.x, p.y, null);
   const half = PITCH / 2;
@@ -1257,6 +1266,7 @@ function dropPath(kind, p) {
     d.nodes.push({id: b, at: [snap(cx + half), cy]});
     const branch = {from: a, to: b};
     if (kind !== "cond") branch.kind = kind;
+    if (kind === "stream") ensureStreamUnits(d);
     d.branches.push(branch);
   });
   setMode("idle");
@@ -1486,7 +1496,7 @@ function openPopover(sel, fresh = false) {
     const unvalued = kind === "break" || kind === "link" || kind === "stream";
     if (kind === "stream") {
       h += field(`ṁ, ${escapeHtml(u.mdot || "no unit")}`, text("mdot", el.mdot, "mass flow"));
-      h += field(`c p, ${escapeHtml(u.cp || "no unit")}`, text("cp", el.cp, "specific heat"));
+      h += field(`<i>c</i><sub>p</sub>, ${escapeHtml(u.cp || "no unit")}`, text("cp", el.cp, "specific heat"));
     } else if (!unvalued) {
       const q = kind === "cap" ? "C" : kind === "flow" ? "q" : "R";
       h += field(`${q}, ${escapeHtml(u[q] || "no unit")}`, text("value", el.value, "value"));
@@ -1665,7 +1675,7 @@ function applyField(sel, f, raw, live = false) {
       if (sel.role === "branch" && (value === "flow" || value === "stream")) delete e.angle;
       if (sel.role === "branch" && (value === "break" || value === "link" || value === "stream")) { delete e.value; delete e.rate; }
       if (sel.role === "branch" && value !== "stream") { delete e.mdot; delete e.cp; }
-      if (sel.role === "branch" && value === "stream") { delete e.count; delete e.arrangement; }
+      if (sel.role === "branch" && value === "stream") { delete e.count; delete e.arrangement; ensureStreamUnits(d); }
       if (sel.role === "source" && !(value === "flow" || value === "flux") && e.from != null) { e.to = e.from; delete e.from; }
       return;
     }
@@ -1701,6 +1711,11 @@ $("ed-settings").addEventListener("click", () => {
   // two boxes for one name was the confusion this card used to carry.
   let h = `<h4>Units &amp; rail</h4>`;
   for (const q of ["R", "C", "P", "q", "q″"]) h += field(`Unit of ${q}`, text(`unit:${q}`, u[q], q === "R" ? "K/W" : ""));
+  // A stream states these two, and without them here the branch card asked
+  // for a mass flow that validation then refused for having no unit, with
+  // nowhere in the editor to give it one.
+  h += field(`Unit of ṁ`, text("unit:mdot", u.mdot, "kg/s"));
+  h += field(`Unit of <i>c</i><sub>p</sub>`, text("unit:cp", u.cp, "kJ/kg·K"));
   h += field("Unit of T", text("unit:T", T.unit, "°C or K"));
   h += field("T scale", selectBox("scale", T.scale || "", ["", "absolute", "rise"], {"": "(unstated)"}));
   h += `<details ${d.rail ? "open" : ""}><summary>Reference rail</summary>`;

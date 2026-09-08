@@ -6,6 +6,7 @@ the placements the checker grades. Both are pinned here on every diagram
 the repository has.
 """
 import json
+import re
 import pathlib
 
 import pytest
@@ -215,4 +216,23 @@ def test_every_branch_kind_can_be_dropped_and_still_draws(kind):
         "branches": [{"from": "n1", "to": "n2", "kind": kind}]})
     assert "error" not in scene, scene.get("error")
     assert scene["parts"]
+
+
+def test_every_unit_the_editor_can_ask_for_can_also_be_set():
+    """The branch card prints `<quantity>, <unit>` and offers a box for the
+    number; the units card is the only place the unit itself is typed. A
+    quantity in the first and not the second is a dead end -- the card asks
+    for a mass flow, validation refuses it for having no unit, and the
+    editor has nowhere to give it one. That is what `mdot` and `cp` were.
+    """
+    js = (pathlib.Path("docs/editor/editor.js")
+          .read_text(encoding="utf-8"))
+    # the loop over the plain quantities, plus any written out on their own
+    loop = re.search(r'for \(const q of \[([^\]]*)\]\) h \+= field\('
+                     r'`Unit of', js)
+    assert loop, "the units card's quantity loop moved"
+    settable = set(re.findall(r'"([^"]+)"', loop.group(1)))
+    settable |= set(re.findall(r'text\("unit:([A-Za-z″]+)"', js))
+    wanted = set(M.QUANTITY.values()) | {M.MDOT, M.CP}
+    assert wanted <= settable, f"no way to set units for {wanted - settable}"
 
