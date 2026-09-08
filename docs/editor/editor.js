@@ -60,7 +60,8 @@ const rpc = (() => {
 
 // ------------------------------------------------------------------ state
 const BLANK = () => ({
-  units: {R: "K/W", C: "J/K", T: "°C", P: "W", q: "W", "q″": "W/cm²"},
+  units: {R: "K/W", C: "J/K", T: "°C", P: "W", q: "W", "q″": "W/cm²",
+          mdot: "kg/s", cp: "kJ/kg·K"},
   nodes: [], branches: [], sources: [],
 });
 
@@ -1248,12 +1249,20 @@ function dropEntry(entry, p) {
 // places needs two places, and these are the two the reader was going to
 // make. Both ends are loose, so both show a red dot.
 // A stream is refused outright if it carries a number with no unit for it,
-// and a gesture must not write a diagram that cannot be drawn. Seeded on the
-// two gestures that can make one; the units card can change them after.
+// so these are defaulted like every other unit on the card rather than left
+// as a suggestion the author has to accept before the field will take a
+// number. `BLANK` covers a new diagram; this covers one that arrives with a
+// stream already in it -- an opened file, an imported one, a share link --
+// and the two gestures that can add the first stream to a diagram that had
+// none. The units card can change them afterwards, which is the point of
+// its being a field rather than a fixed label.
 function ensureStreamUnits(d) {
+  if (!d || !Array.isArray(d.branches)) return d;
+  if (!d.branches.some((b) => b.kind === "stream")) return d;
   if (!d.units) d.units = {};
   if (!d.units.mdot) d.units.mdot = "kg/s";
   if (!d.units.cp) d.units.cp = "kJ/kg·K";
+  return d;
 }
 
 function dropPath(kind, p) {
@@ -1266,8 +1275,8 @@ function dropPath(kind, p) {
     d.nodes.push({id: b, at: [snap(cx + half), cy]});
     const branch = {from: a, to: b};
     if (kind !== "cond") branch.kind = kind;
-    if (kind === "stream") ensureStreamUnits(d);
     d.branches.push(branch);
+    ensureStreamUnits(d);
   });
   setMode("idle");
   select({role: "branch", index: S.data.branches.length - 1}, true, true);
@@ -1797,7 +1806,7 @@ function showFile() {
 function newFile(name, data) {
   const id = Math.random().toString(36).slice(2, 10);
   S.file = {id, name};
-  S.data = data;
+  S.data = ensureStreamUnits(data);
   save();
   showFile();
 }
@@ -1807,7 +1816,7 @@ function openFile(id) {
   const ix = readIndex().find((f) => f.id === id);
   if (!raw || !ix) return false;
   S.file = {id, name: ix.name};
-  S.data = JSON.parse(raw);
+  S.data = ensureStreamUnits(JSON.parse(raw));
   localStorage.setItem(STORE.last, id);
   showFile();
   return true;
