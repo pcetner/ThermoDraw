@@ -452,9 +452,10 @@ sentence after it says what would overturn it.
    a section for the rest, and each still needs its argument written there
    before it is built. What the two that shipped do *not* reach is written
    down with them: a counterflow exchanger still relates two elements and is
-   where LMTD went, run 4's one-room-drawn-twice is still a loop the chain
-   solver refuses, and a heat pipe quoted as a 0.4 K drop still wants a
-   quantity nothing has.
+   where LMTD went, and a heat pipe quoted as a 0.4 K drop still wants a
+   quantity nothing has. A loop is the **solver's** limit and not the
+   format's — run 2's pumped loop draws clean with `at` on its nodes, and
+   the record says so where it once said otherwise.
 3. Region enclosures that auto-size to their contents.
 4. Unit handling — `0.35` choosing between K/W and mK/W, with a deliberate
    per-element override.
