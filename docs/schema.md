@@ -164,7 +164,7 @@ A path heat takes between two nodes.
 | field | meaning |
 |---|---|
 | `from`, `to` | node ids, or the literal `"rail"` |
-| `kind` | `cond`, `conv`, `rad`, `contact`, `spread`, `pipe`, `mixed`, `cap`, `flow`, `break` |
+| `kind` | `cond`, `conv`, `rad`, `contact`, `spread`, `pipe`, `mixed`, `cap`, `flow`, `break`, `link` |
 | `label` | the words above the box |
 | `sub` | yours on the kinds whose subscript the library does not set: `cap`, where it names a place; `mixed`, where it names the part — `R_wall` — since the mechanism is what `mixed` declines to say, and it may be left off; `flow`. Ignored on `break`, and overridden on every resistance kind |
 | `value` | unit appended from `units.R` (`units.C` for `cap`, `units.q` for `flow`). Optional: a path with no number draws its label alone. Refused on `break` |
@@ -263,6 +263,21 @@ standoff or a mount. It names no quantity, so it takes **no `value` and no
 nothing, there being no symbol for it to sit under. Everything else on the
 table works on it. The same word is also a node `kind`, and it means the same thing there:
 a break at a boundary rather than between two nodes.
+
+`link` is the other end of that thought: two nodes that are **one place**,
+drawn twice because the reader needs both names. A bolted flange quoted as
+having no resistance worth stating, a baseplate that is the part the reader
+counts but not a separate temperature. It draws a plain wire — which is
+exactly what a `break` declines to be, since a wire says heat flows, and
+here it flows with nothing in the way — and like `break` it names no
+quantity, so it takes **no `value` and no `rate`** and its label stands
+alone.
+
+It is a claim, not a decoration. Under `--physics` the two ends are merged
+into one place before anything is summed, so heat arriving at either name
+arrives at the same balance; and if the two ends state different
+temperatures, that is `link-temperatures-disagree` — a contradiction rather
+than a disagreement, so no tolerance is allowed for it.
 
 ## Sources
 
@@ -610,7 +625,7 @@ which is what an interior junction drawn the way this page recommends does
 to the nodes either side of it; `rail` is not a neighbour, and a capacitance
 to it blinds nothing — when it carries a `flux` source, which has
 no area, or when a value is not a number. Every skip is reported, as one
-note per diagram: `physics-not-checked`, `checked 2 of 6 free nodes; not
+note per diagram: `physics-not-checked`, `checked 2 of 6 free places; not
 checked: j (source 1 is a flux, which has no area); sm, cb (neighbour 'smb'
 has no temperature); smb (it has no temperature)`. A diagram whose free
 nodes were all checked gets no note. The units it reads are `R` in `K/W`,

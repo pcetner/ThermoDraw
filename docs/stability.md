@@ -26,8 +26,8 @@ finding codes, which a script may key on:
 `wire-through-symbol`, `wire-through-wall`, `symbol-off-its-run`,
 `run-off-axis`, `frame-off-centre`, `parallel-pair-same-side`; and under
 `--physics`,
-`node-does-not-balance`, `rate-does-not-match`, `rad-needs-absolute-scale`
-and `physics-not-checked`.
+`node-does-not-balance`, `rate-does-not-match`, `rad-needs-absolute-scale`,
+`link-temperatures-disagree` and `physics-not-checked`.
 
 A code's severity may not rise within 1.x. A new code may be added, and a
 script that gates on `ok` will see it; a script that gates on a list of

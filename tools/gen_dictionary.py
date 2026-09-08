@@ -39,7 +39,7 @@ PAGE = ROOT / "Dictionary.html"
 # The three things a symbol can be: what to call it, what it means, and which
 # array of the file it is written into.
 #
-# This used to be a badge repeated on all eighteen entries, which said the
+# This used to be a badge repeated on all nineteen entries, which said the
 # same three words over and over and still never defined them. The definition
 # now sits once, at the top, on the panel you pick a symbol from — and the
 # entries carry no badge at all, because the sticky heading above them already
@@ -247,6 +247,21 @@ ENTRIES = {
         code={"from": "pan", "to": "handle", "kind": "break",
               "label": "Plastic handle"}),
 
+    "link": dict(
+        where="branch",
+        what="Two nodes that are one place, drawn twice because the reader "
+             "needs both names. A plain wire, which is precisely what a "
+             "thermal break declines to be: a wire says heat flows, and here "
+             "it flows with nothing in the way. It names no quantity, so it "
+             "takes no value and no rate. It is a claim rather than a "
+             "decoration: the checker merges the two ends before "
+             "balancing anything, and says so if they state different "
+             "temperatures.",
+        use="A baseplate bolted hard to the face it sits on. The reader "
+            "counts two parts; the network has one temperature.",
+        code={"from": "face", "to": "baseplate", "kind": "link",
+              "label": "Bolted flange"}),
+
     "diss": dict(
         where="source",
         what="Heat released at a place because energy in another form is "
@@ -305,9 +320,10 @@ LEDES = {
         "passing through.",
     "Paths: shape, phase, mechanism, storage":
         "Paths the first four cannot describe on their own.",
-    "Paths that carry a rate, or carry nothing":
-        "Two paths that state no resistance. One carries a rate, the "
-        "other carries nothing at all.",
+    "Paths that are not resistances":
+        "Three paths that state no resistance. One carries a rate, one "
+        "carries nothing at all, and one carries heat with nothing in "
+        "the way.",
     "Sources":
         "Heat entering or leaving one place, from outside the network.",
 }
@@ -406,7 +422,7 @@ def group(title, keys, by_key):
     whichever group a reader is in stays named at the top of the window until
     the next one takes over. That is what replaced the badge on every entry:
     the question "what am I looking at" is answered continuously rather than
-    eighteen times.
+    nineteen times.
     """
     body = [f'<section id="grp-{_slug(title)}">'
             f'<div class="section-head"><h2>{html.escape(title)}</h2>'
@@ -471,7 +487,7 @@ def shapes(by_key):
     It spent one revision as a single line under the contents, which is the
     wrong weight for the thing every other entry depends on: a reader holding
     it cannot badly misread any symbol here, and a reader without it learns
-    eighteen drawings one at a time.
+    nineteen drawings one at a time.
     """
     out = ['<section id="grp-shapes"><div class="section-head">'
            "<h2>What the shapes mean</h2>"

@@ -249,6 +249,24 @@ def g_branch_break(a):
             '<line class="w" x1="12" y1="0" x2="40" y2="0"/>')
 
 
+def g_link(a):
+    """Two nodes that are one place: a wire, and nothing on it.
+
+    A plain wire is exactly what `g_branch_break` declines to be — "a wire
+    says heat flows" — and here that is the whole statement. Nothing is
+    crossed, so there is no interior to texture; nothing resists, so there is
+    no box; and heat does flow, so there is no gap. It is the one branch
+    glyph that adds no mark of its own: the line is collinear with the wire
+    either side, and a reader sees one unbroken run between two circles.
+
+    That it draws nothing extra is the objection `corner` was removed for,
+    and the answer is that `corner` drew nothing *and said nothing*. This
+    says the two ends are one place, `--physics` merges them on the strength
+    of it, and it reports when their two stated temperatures disagree.
+    """
+    return '<line class="w" x1="-40" y1="0" x2="40" y2="0"/>'
+
+
 def g_flow(a):
     return '<line class="w" x1="-30" y1="0" x2="18" y2="0"/>' + S.arrowhead(30)
 
@@ -281,7 +299,7 @@ class Symbol:
 
     `reach` is the other measurement, and it is not the same one. `half` and
     `half_len` say how much room to leave a label; `reach` says how far the
-    ink goes, which for some of the eighteen is further. A box symbol runs LEAD
+    ink goes, which for some of the nineteen is further. A box symbol runs LEAD
     past each end of the box, and a capacitance draws ±40 against a
     `half_len` of 15. Mid-route those leads lie over wire the canvas already
     counts, so nothing shows; at the end of a run the canvas is sized to the
@@ -311,7 +329,7 @@ class Symbol:
                                                           self.half)
 
 
-# The order is the specification. At eighteen entries an arbitrary list stops
+# The order is the specification. At nineteen entries an arbitrary list stops
 # being readable, so they are grouped by what kind of statement they make, and
 # `render_demo.vocabulary` starts each group on a new row. `GROUPS` below is
 # the same order, and a test pins the two to each other.
@@ -402,7 +420,7 @@ SYMBOLS = [
            note="On a near-vertical branch the block moves to whichever side has "
                 "room, and stays whole."),
 
-    # -- paths that carry a rate, or carry nothing
+    # -- paths that are not resistances
     Symbol(key="flow-branch", name="Heat flow, along a path",
            draw=g_flow_branch, text=S_("q"), value="3.2 kW",
            user="Technical water", half=10, half_len=22, reach=(40, 10),
@@ -417,6 +435,16 @@ SYMBOLS = [
                 "plain wire would say heat flows and a resistance would say "
                 "how much, so it is neither. It names no quantity either, and "
                 "the label is the user's line alone."),
+    Symbol(key="link", name="Ideal joint", draw=g_link,
+           text="", value=None, user="Bolted flange",
+           half=8, half_len=12, reach=(40, 2),
+           note="Two nodes that are one place, drawn twice because the reader "
+                "needs both names. A plain wire, which is what a break "
+                "declines to be: heat flows and nothing is in the way, so "
+                "there is no box, no texture and no gap. It names no quantity "
+                "and refuses `value` and `rate`. `--physics` merges its two "
+                "ends before balancing, and says so when their stated "
+                "temperatures disagree."),
 
     # -- sources: heat crossing into or out of one node
     Symbol(key="diss", name="Dissipation", draw=g_diss,
@@ -448,8 +476,8 @@ GROUPS = [
      ("cond", "conv", "rad", "contact")),
     ("Paths: shape, phase, mechanism, storage",
      ("spread", "pipe", "mixed", "cap")),
-    ("Paths that carry a rate, or carry nothing",
-     ("flow-branch", "break-branch")),
+    ("Paths that are not resistances",
+     ("flow-branch", "break-branch", "link")),
     ("Sources", ("diss", "radin", "flow", "flux")),
 ]
 
