@@ -156,7 +156,7 @@ def _model_kind(key: str, heading: str) -> Dict[str, str]:
 
 
 def palette() -> List[Dict[str, Any]]:
-    """The eighteen symbols as the editor's palette, drawn by the library,
+    """The nineteen symbols as the editor's palette, drawn by the library,
     grouped as `symbols.GROUPS` groups them."""
     by_key = {s.key: s for s in symbols.SYMBOLS}
     out = []

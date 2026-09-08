@@ -28,7 +28,17 @@ RETIRED_KINDS = {
               "so that it has a name and states no temperature",
 }
 BRANCH_KINDS = {"cond", "conv", "rad", "contact", "cap", "break",
-                "flow", "spread", "pipe", "mixed"}
+                "flow", "spread", "pipe", "mixed", "link"}
+
+# The two kinds that state no quantity, for opposite reasons: a `break`
+# carries no heat, and a `link` carries it with nothing in the way. Both are
+# `None` in `BRANCH_SYMBOL`; this says why, in the author's words, so the
+# refusal explains itself instead of naming a table.
+UNVALUED = {
+    "break": "a break carries no heat",
+    "link": "a link is an ideal joint, and its whole claim is that there is "
+            "nothing between its two ends to state",
+}
 
 # A branch whose quantity is a rate rather than a resistance, so which end
 # is `from` and which is `to` is the direction heat travels. `angle` is
@@ -61,13 +71,16 @@ BRANCH_SUB = {"cond": "cond", "conv": "conv", "rad": "rad",
               "flow": None, "spread": "spread", "pipe": "pipe",
               # `mixed` is the one kind whose mechanism the library does
               # not know, so its subscript is the caller's to set.
-              "mixed": None}
+              "mixed": None,
+              # A link names no quantity, so there is no symbol for a
+              # subscript to sit under. Accepted and ignored, as on a break.
+              "link": None}
 # None means the branch names no quantity at all: a thermal break has neither
 # a resistance nor a capacitance, so it carries the user's label and nothing
 # else. `layout` drops the second line rather than inventing a symbol for it.
 BRANCH_SYMBOL = {"cond": "R", "conv": "R", "rad": "R", "contact": "R",
                  "cap": "C", "break": None, "flow": "q",
-                 "spread": "R", "pipe": "R", "mixed": "R"}
+                 "spread": "R", "pipe": "R", "mixed": "R", "link": None}
 SOURCE_SYMBOL = {"diss": "P", "radin": "q", "flow": "q", "flux": "q″"}
 
 # Which quantity each kind is measured in, so one units entry serves many.
@@ -308,6 +321,8 @@ def _build(cls, data, where, mapping=None):
 
 @dataclass
 class Node:
+    """A place with a temperature."""
+
     id: str
     kind: str = "free"
     label: Optional[str] = None
@@ -316,7 +331,7 @@ class Node:
     at: Optional[Sequence[float]] = None
     angle: float = 0.0
     side: str = "auto"
-    wall: str = "down"                      # `fixed` and `break` only
+    wall: str = "down"      # `fixed` and `break` only
 
 
 @dataclass
@@ -641,10 +656,19 @@ class Diagram:
                 raise DiagramError(
                     f"branch {b.source}-{b.target}: arrangement "
                     f"{b.arrangement!r} without a count says nothing")
-            if b.kind == "break" and b.rate is not None:
-                raise DiagramError(
-                    f"branch {b.source}-{b.target} is a break, which carries "
-                    f"no heat and so no rate; got {b.rate!r}")
+            # The kinds that name no quantity state no number either, and
+            # they are the two `BRANCH_SYMBOL` maps to None. `rate` is asked
+            # first so that a branch carrying both is told about the same one
+            # it always was. `UNVALUED` gives each its own reason, because
+            # they have opposite ones: a break has no heat to measure, a link
+            # has nothing in the way to measure.
+            if b.kind in UNVALUED:
+                for name, got in (("rate", b.rate), ("value", b.value)):
+                    if got is not None:
+                        raise DiagramError(
+                            f"branch {b.source}-{b.target}: "
+                            f"{UNVALUED[b.kind]}, so it states no {name}; "
+                            f"got {got!r}")
             # The other end of the same rule. A `rate` is what a path carries
             # beside the quantity it presents, so a path that already presents
             # a rate has nothing to put beside. `flow` states `q` as its own
@@ -663,10 +687,6 @@ class Diagram:
                         f"branch {b.source}-{b.target} has the rate "
                         f"{b.rate!r} but units has no entry for {RATE!r}, so "
                         "it would render bare")
-            if b.kind == "break" and b.value is not None:
-                raise DiagramError(
-                    f"branch {b.source}-{b.target} is a break, which carries "
-                    f"no heat and so no value; got {b.value!r}")
             # A branch is a path between two places. Named the same place
             # twice it validated, laid out, rendered and checked clean while
             # drawing a stub that leaves a node and returns to it; `rail` to

@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`link`, a branch kind: two nodes that are one place.** The vocabulary
+  could say two things are *not* connected — that is `break` — and could not
+  say they are the same place. Two clean-room agents reached for it in the
+  same words, and the gallery README had pre-registered "isothermal links"
+  as one of the five walls its briefs were chosen to hit. It draws a plain
+  wire, which is exactly what a `break` declines to be, and names no
+  quantity, so it refuses `value` and `rate`. It is a claim rather than a
+  decoration: `--physics` merges the two ends into one place before anything
+  is summed, so heat arriving at either name arrives at the same balance,
+  and reports **`link-temperatures-disagree`** when the two ends state
+  different numbers — a contradiction rather than a disagreement, so no
+  tolerance is allowed for it. That is the answer to the `corner`
+  precedent: `corner` was removed for drawing nothing *and saying nothing*,
+  and this makes a claim that can be wrong.
+- A test that `docs/editor/editor.js` offers exactly the kinds the model
+  has. The palette is generated from the library, so a new kind is droppable
+  the day it lands, but the inspector's Kind dropdown is a hand-written
+  literal — the one place a new kind could go missing with every test green.
+
+### Changed
+
+- `docs/design-record.md` has a section for **what the format cannot state**.
+  `CLAUDE.md` lists eight of these and says each needs its argument there
+  before it is built; none had one, and the gate pointed at a section that
+  did not exist. Its rule is the checker's read backwards: a thing stays on
+  the list until someone shows a drawing that says something false without
+  it. `link` is its first entry, and it says what it does *not* fix.
+- `--physics` counts **places**, not nodes: a linked group is one of them and
+  answers to several names, so `checked 2 of 6 free nodes` would undercount.
+
 ### Changed
 
 - **Every drop in the editor lands the component whole, where you dropped
