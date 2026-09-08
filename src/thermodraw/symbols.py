@@ -27,6 +27,7 @@ text{font-family:var(--sans);fill:var(--ink)}
 .val{font-size:13px;fill:var(--ink);font-style:normal}
 .eq{font-size:13px;fill:var(--ink);font-style:normal}
 .user{font-size:11.5px;font-weight:600;font-style:normal;fill:var(--ink)}
+.mark{fill:var(--ink);stroke:none}
 .ang{font-size:10px;fill:var(--ink-3);font-style:normal}
 .reg-lbl{font-size:11.5px;fill:var(--ink-2);font-style:normal;font-weight:600}
 """
@@ -218,6 +219,31 @@ def g_flow_branch(a):
                       for x in (-6, 6)))
 
 
+def tex_stream():
+    """Streamlines with a chevron on them: a medium going, and which way.
+
+    Streamlines alone are `conv`'s fill and say only that a fluid is
+    involved. The chevron is `flow`'s mark and says the direction is data.
+    Deliberately not `rad`'s wave-arrows, which are two wavy shafts with
+    filled heads and would read as radiation at the size this has to survive:
+    the shafts here stay wavy and unheaded, and the one straight chevron sits
+    across them.
+    """
+    return (S.streamlines(S.BW, S.BH, n=2)
+            + '<polyline class="w" fill="none" '
+              'points="-5,-9 5,0 -5,9"/>')
+
+
+def g_stream(a):
+    """A medium passing through, carrying heat away with it.
+
+    A box, because a box is what carries an interior that states something,
+    and what this one states is that the thing crossing it is going rather
+    than conducting. `ṁ` and `c_p` are on the label; the heat is worked out.
+    """
+    return leads(S.BW / 2) + tex_stream() + rect()
+
+
 def g_phase_node(a):
     """A node whose temperature is held by a phase change.
 
@@ -299,7 +325,7 @@ class Symbol:
 
     `reach` is the other measurement, and it is not the same one. `half` and
     `half_len` say how much room to leave a label; `reach` says how far the
-    ink goes, which for some of the nineteen is further. A box symbol runs LEAD
+    ink goes, which for some of the twenty is further. A box symbol runs LEAD
     past each end of the box, and a capacitance draws ±40 against a
     `half_len` of 15. Mid-route those leads lie over wire the canvas already
     counts, so nothing shows; at the end of a run the canvas is sized to the
@@ -329,7 +355,7 @@ class Symbol:
                                                           self.half)
 
 
-# The order is the specification. At nineteen entries an arbitrary list stops
+# The order is the specification. At twenty entries an arbitrary list stops
 # being readable, so they are grouped by what kind of statement they make, and
 # `render_demo.vocabulary` starts each group on a new row. `GROUPS` below is
 # the same order, and a test pins the two to each other.
@@ -445,6 +471,18 @@ SYMBOLS = [
                 "and refuses `value` and `rate`. `--physics` merges its two "
                 "ends before balancing, and says so when their stated "
                 "temperatures disagree."),
+    Symbol(key="stream", name="Stream, a medium passing through",
+           draw=g_stream, text=S.dotted("m"), value="2.5 kg/s",
+           user="Steel strip", half=22, half_len=42, reach=(62, 16),
+           note="A moving medium between an inlet node and an outlet node. "
+                "It states `mdot` and `cp`; what it carries is worked out "
+                "from those and the temperatures at its two ends, and drawn "
+                "beneath them. Streamlines say the medium is going, the same "
+                "mark a convection box is filled with, and the chevron says "
+                "which way — directed, so `from` and `to` are the direction "
+                "and `angle` is refused. Heat is added by cutting the run "
+                "into segments, not by a field: each one asks its own end "
+                "for its own share."),
 
     # -- sources: heat crossing into or out of one node
     Symbol(key="diss", name="Dissipation", draw=g_diss,
@@ -477,7 +515,7 @@ GROUPS = [
     ("Paths: shape, phase, mechanism, storage",
      ("spread", "pipe", "mixed", "cap")),
     ("Paths that are not resistances",
-     ("flow-branch", "break-branch", "link")),
+     ("flow-branch", "break-branch", "link", "stream")),
     ("Sources", ("diss", "radin", "flow", "flux")),
 ]
 

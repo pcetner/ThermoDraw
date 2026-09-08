@@ -152,7 +152,7 @@ def test_the_head_carries_the_faces_and_the_variables():
     json.dumps(h)
 
 
-def test_the_palette_is_the_nineteen_symbols_in_their_groups():
+def test_the_palette_is_the_twenty_symbols_in_their_groups():
     from thermodraw import symbols
     p = E.palette()
     assert [e["key"] for e in p] == [s.key for s in symbols.SYMBOLS]

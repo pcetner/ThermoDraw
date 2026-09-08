@@ -108,7 +108,7 @@ class TestTheDictionary:
 
     Same guarantee as the reference sheet, for the same reason. The prose is
     written by hand and the pictures are not, so what has to be pinned is that
-    the two describe the same nineteen symbols.
+    the two describe the same twenty symbols.
     """
 
     def test_the_page_is_up_to_date(self):
