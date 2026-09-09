@@ -84,7 +84,7 @@ def test_every_link_and_image_on_both_indexes_resolves(site):
 def test_the_editor_is_on_the_site_with_its_wheel(site):
     from thermodraw import __version__
     out, _ = site
-    wheel = f"thermodraw-{__version__}-py3-none-any.whl"
+    wheel = f"{build_site.editor_revision()}/thermodraw-{__version__}-py3-none-any.whl"
     assert (out / "editor" / wheel).stat().st_size > 100_000
     page = (out / "editor" / "index.html").read_text(encoding="utf-8")
     assert wheel in page and build_site.PYODIDE in page
@@ -92,8 +92,23 @@ def test_the_editor_is_on_the_site_with_its_wheel(site):
     assert page.count('class="ed-card"') == 20
     examples = json.loads((out / "editor" / "examples.json").read_text(
         encoding="utf-8"))
-    assert len(examples) == 17
+    assert len(examples) == 4
+    assert all(e["group"] == "HW2" for e in examples)
+    assert all(e["description"] and e["exercises"] for e in examples)
     for e in examples:
         target = (out / "editor" / e["path"]).resolve()
         assert target.is_file(), e
         json.loads(target.read_text(encoding="utf-8"))
+
+
+def test_examples_are_exactly_the_answered_homework_questions(site):
+    from thermodraw import Diagram
+    out, _ = site
+    examples = build_site.examples()
+    assert [e["title"].split(" - ")[0] for e in examples] == ["1.44", "1.51", "1.57a", "1.60a"]
+    assert [e["path"] for e in examples] == [f"../homework/{name}.json" for name in ("oven", "frost", "wall", "hot-plate")]
+    for entry in examples:
+        data = json.loads((out / "editor" / entry["path"]).read_text(encoding="utf-8"))
+        diagram = Diagram.from_dict(data)
+        assert diagram.regions
+        assert not diagram.check(physics=True).findings

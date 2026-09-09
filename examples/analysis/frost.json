@@ -1,0 +1,86 @@
+{
+  "title": "Solve: Frost melting: supplied storage rate on a 1 m² basis",
+  "nodes": [],
+  "regions": [
+    {
+      "id": "frost",
+      "at": [
+        100,
+        100
+      ],
+      "size": [
+        200,
+        220
+      ],
+      "label": "Frost at 0 °C"
+    },
+    {
+      "id": "air",
+      "at": [
+        300,
+        100
+      ],
+      "size": [
+        240,
+        220
+      ],
+      "label": "Air at 20 °C"
+    }
+  ],
+  "control_volumes": [
+    {
+      "id": "cv",
+      "at": [
+        80,
+        80
+      ],
+      "size": [
+        220,
+        260
+      ],
+      "label": "Melting frost",
+      "regions": [
+        "frost"
+      ],
+      "generation": 0,
+      "steady": false
+    }
+  ],
+  "control_surfaces": [
+    {
+      "id": "face",
+      "volume": "cv",
+      "edge": "right",
+      "area": 1,
+      "label": "Exposed face"
+    }
+  ],
+  "transfers": [
+    {
+      "id": "convection",
+      "surface": "face",
+      "direction": "in",
+      "flux": 40,
+      "label": "Convection"
+    }
+  ],
+  "annotations": [
+    {
+      "id": "storage",
+      "at": [
+        100,
+        370
+      ],
+      "label": "Supplied latent storage: +40 W; melting time is calculated separately."
+    }
+  ],
+  "analysis": {
+    "volumes": {
+      "cv": {
+        "entity": "volume",
+        "id": "cv",
+        "field": "storage"
+      }
+    }
+  }
+}

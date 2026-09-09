@@ -64,7 +64,7 @@ def _hits(placements, scene) -> List[Dict[str, Any]]:
                 y0, y1 = sorted((a[1], b[1]))
                 hits.append(_hit(p, "wire", (x0 - WIRE_REACH, y0 - WIRE_REACH,
                                              x1 + WIRE_REACH, y1 + WIRE_REACH)))
-        elif p.element in ("symbol", "node", "ground", "phase", "ellipsis"):
+        elif p.element in ("symbol", "node", "ground", "phase", "ellipsis", "region", "volume", "surface", "transfer", "annotation"):
             hits.append(_hit(p, p.element, _render.bounds(p)))
     for rect in scene.rects:
         owner = rect.owner
@@ -76,7 +76,7 @@ def _hits(placements, scene) -> List[Dict[str, Any]]:
 
 
 def scene(data: Dict[str, Any], notation: str = "boxes",
-          physics: bool = False) -> Dict[str, Any]:
+          physics: bool = False, adornments=None) -> Dict[str, Any]:
     """The drawing, its hit map and its findings, from one layout.
 
     `parts` is the page in page coordinates with no wrapper: the editor
@@ -90,15 +90,21 @@ def scene(data: Dict[str, Any], notation: str = "boxes",
     except DiagramError as exc:
         return _refuse(exc)
     drawn = _render.in_notation(placements, notation)
-    composed = _render.compose(drawn)
-    report = _check.check(diagram, physics=physics) if physics else \
-        _check.check(placements)
+    reserved = {(a['role'], a['index']): (float(a['width']), float(a['height'])) for a in (adornments or [])}
+    composed = _render.compose(drawn, label_adornments=reserved)
+    report = _check.check(diagram, physics=physics, _scene=composed, _placements_override=drawn)
+    from ._physical import budgets
     return {
         "parts": "".join(composed.parts),
         "ink": [float(v) for v in composed.ink],
         "labels": len(composed.rects),
         "hits": _hits(drawn, composed),
         "findings": report.to_dict()["findings"],
+        "preview": composed.preview,
+        "adornments": [{"role": r.owner.role, "index": r.owner.index,
+                         "bounds": r.adornment, "clear": r.clear}
+                        for r in composed.rects if r.adornment],
+        "budgets": budgets(diagram),
     }
 
 
@@ -144,12 +150,12 @@ def head() -> Dict[str, Any]:
 def _model_kind(key: str, heading: str) -> Dict[str, str]:
     """Which element and which `kind` a palette entry makes.
 
-    Read off the group, not the key: `break` is a node kind and a branch
+    Use stable symbol keys, independently of display group headings: `break` is a node kind and a branch
     kind, `flow` a branch kind and a source kind, and the two in-line
     glyphs carry a `-branch` suffix so the symbol keys stay distinct."""
     kind = key.removesuffix("-branch")
-    role = ("node" if heading == "Nodes" else
-            "source" if heading == "Sources" else "branch")
+    role = ("node" if key in {"free", "fixed", "break", "phase"} else
+            "source" if key in {"diss", "radin", "flow", "flux"} else "branch")
     assert kind in {"node": NODE_KINDS, "branch": BRANCH_KINDS,
                     "source": SOURCE_KINDS}[role], key
     return {"role": role, "kind": kind}
@@ -205,3 +211,22 @@ def _selftest() -> None:
     """Everything a caller gets back must survive `json.dumps`."""
     for value in (head(), palette(), quick_add("con")):
         json.dumps(value)
+
+
+def physics(data):
+    """Pure analysis plus a reviewable copy; caller guards document revisions."""
+    from ._analysis import solve_physics
+    from .model import Diagram
+    diagram = Diagram.from_dict(data)
+    result = solve_physics(diagram)
+    return {"result": result.to_dict(), "applied": result.apply(diagram).to_dict() if result.updates else None}
+
+
+def physics_session(original, scenario, systems=None):
+    from ._session import assess_physics
+    return assess_physics(original, scenario, systems)
+
+
+def physics_convert(value, source_unit, target_unit, quantity, scale=None):
+    from ._session import convert_value
+    return convert_value(value, source_unit, target_unit, quantity, scale)

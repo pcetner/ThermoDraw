@@ -20,7 +20,7 @@ model can do cheaply. This is one call whose output is text, and whose exit
 status is the answer.
 
 Exit codes: 0 clean, 1 findings, 2 no answer — the file could not be read or
-was invalid. Only `check` can exit 1. 2 is also what argparse exits with for a
+was invalid. `check` and `solve-physics` can exit 1. 2 is also what argparse exits with for a
 bad command line; a script that needs to tell the two apart has stderr.
 
 Stdlib only. SVG and HTML; PNG needs a rasteriser, a rasteriser is a
@@ -178,6 +178,38 @@ def do_solve(args):
     return 0
 
 
+def do_solve_physics(args):
+    from ._analysis import solve_physics
+    diagram = _load(args.diagram)
+    if args.scenario or args.assess or args.system:
+        from ._session import assess_physics
+        assessment = assess_physics(diagram, _load(args.scenario) if args.scenario else None, args.system)
+        if args.apply:
+            if not args.out or not assessment["applied"]:
+                raise DiagramError("--apply requires --out and a successful scenario proposal")
+            save(json.dumps(assessment["applied"], indent=2, ensure_ascii=False), args.out)
+        elif args.out:
+            save(json.dumps(assessment, indent=2, ensure_ascii=False), args.out)
+        _soften(sys.stdout).write(json.dumps(assessment, indent=2, ensure_ascii=False) + "\n")
+        return 0 if assessment["status"] == "solved" else 1
+    result = solve_physics(diagram)
+    if args.apply:
+        if not args.out:
+            raise DiagramError("--apply requires --out; the input is never overwritten implicitly")
+        if not result.updates:
+            raise DiagramError("no calculated values are available to apply")
+        save(result.apply(diagram).to_json(), args.out)
+    elif args.out:
+        save(json.dumps(result.to_dict(), indent=2, ensure_ascii=False), args.out)
+    if args.json:
+        _soften(sys.stdout).write(json.dumps(result.to_dict(), indent=2, ensure_ascii=False) + "\n")
+    else:
+        print("Physics: " + result.status)
+        for report in result.components + result.volumes:
+            print(json.dumps(report, ensure_ascii=True, indent=2))
+    return 0 if result.status == "solved" else 1
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="thermodraw",
                                  description=__doc__.split("\n\n")[0])
@@ -235,6 +267,16 @@ def main(argv=None):
     s.add_argument("diagram")
     s.add_argument("-o", "--out", help='output path, or "-" for stdout')
     s.set_defaults(fn=do_solve)
+
+    p = subs.add_parser("solve-physics", help="solve explicitly selected steady temperatures and balance unknowns")
+    p.add_argument("diagram")
+    p.add_argument("--json", action="store_true")
+    p.add_argument("--assess", action="store_true", help="assess readiness and supplied values")
+    p.add_argument("--scenario", help="temporary scenario JSON; original remains unchanged")
+    p.add_argument("--system", action="append", help="whole system ID from --assess")
+    p.add_argument("-o", "--out")
+    p.add_argument("--apply", action="store_true", help="save calculated values to an explicit output file")
+    p.set_defaults(fn=do_solve_physics)
 
     args = ap.parse_args(argv)
     try:

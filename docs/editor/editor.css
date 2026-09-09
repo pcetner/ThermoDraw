@@ -29,6 +29,8 @@ body{display:grid;font-family:var(--sans);font-size:14px;line-height:1.4;
 #ed-files-panel{grid-area:files;border-right:1px solid var(--rule)}
 #ed-palette{grid-area:palette;border-left:1px solid var(--rule)}
 .ed-panel-head{display:flex;justify-content:space-between;align-items:center;margin:2px 4px 8px}
+/* Fit the new control inside the existing heading row without moving the palette. */
+#ed-sketch{padding:0 8px;font-size:12px;line-height:14px}
 .ed-panel-head h2{margin:0;font-size:12px;font-weight:600;letter-spacing:.08em;
                   text-transform:uppercase;color:var(--ink-2)}
 .ed-panel-actions{display:flex;gap:5px;flex-wrap:wrap;margin:0 0 10px}
@@ -49,9 +51,7 @@ body{display:grid;font-family:var(--sans);font-size:14px;line-height:1.4;
 #ed-examples li:hover{background:var(--tint);color:var(--accent)}
 .ed-hint{font-size:12px;color:var(--ink-3);margin:14px 4px 0;line-height:1.45}
 
-/* The palette. Eighteen components have to be visible at once: a panel you
-   scroll to find the symbol you want is a panel that hides half the
-   vocabulary. Three columns and a 30px glyph fit them all above 800px. */
+/* Shared network card primitives; component-library sizing is below. */
 #ed-palette h3{font-size:10.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;
                color:var(--accent);margin:8px 3px 4px;line-height:1.25}
 /* four across, because every group but one has four symbols in it: at
@@ -280,3 +280,167 @@ body.ed-present #ed-tour{display:none}
   .ed-card{min-width:74px}
   .ed-help{right:6px;left:6px;width:auto}
 }
+
+/* Native controls and scrolling follow the editor's existing palette. */
+:root{color-scheme:light;scrollbar-color:var(--ink-3) var(--panel)}
+:root[data-theme="dark"]{color-scheme:dark}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){color-scheme:dark}}
+*{scrollbar-color:var(--ink-3) var(--panel);scrollbar-width:thin}
+*::-webkit-scrollbar{width:10px;height:10px}
+*::-webkit-scrollbar-track{background:var(--panel)}
+*::-webkit-scrollbar-thumb{background:var(--ink-3);border:2px solid var(--panel);border-radius:8px}
+#ed-component-tools{display:contents}
+body.ed-solving #ed-palette{overflow:hidden;padding:10px;min-height:0}
+@media(min-width:821px){body.ed-solving{grid-template-columns:212px minmax(0,1fr) clamp(340px,32vw,440px)}}
+#ed-solve-panel{height:100%;min-height:0;display:flex;flex-direction:column;font-size:13px}
+#ed-solve-panel .ed-panel-head{flex-shrink:0}
+#ed-solve-panel button{font-size:12px;padding:5px 8px}
+.ed-solve-actions{display:flex;gap:6px;padding:6px 0 10px;flex-shrink:0;border-bottom:1px solid var(--rule)}
+.ed-solve-body{overflow:auto;min-height:0;padding:0 3px 12px}
+#ed-solve-panel p{font-size:12.5px;line-height:1.4;margin:8px 0;overflow-wrap:anywhere}
+#ed-solve-panel .ed-hint{margin:10px 0}
+#ed-solve-panel details{margin:10px 0}
+#ed-solve-panel summary{cursor:pointer;color:var(--ink-2);font-size:12px}
+#ed-solve-panel label{display:flex;align-items:center;justify-content:space-between;gap:6px;margin:8px 0}
+#ed-solve-panel input:not([type="checkbox"]),#ed-solve-panel select{font:inherit;min-width:0;width:65%;padding:5px;border:1px solid var(--rule);border-radius:6px;background:var(--paper);color:var(--ink)}
+#ed-solve-panel input[type="checkbox"]{accent-color:var(--accent)}
+.ed-value-editor{padding:8px;border:1px solid var(--accent);border-radius:6px;margin:10px 0}
+.ed-value-list{display:flex;flex-direction:column;gap:4px}
+#ed-solve-panel .ed-value-list button{text-align:left;border-radius:6px;background:var(--panel)}
+.ed-value-list span,.ed-value-list small{display:block;overflow-wrap:anywhere}
+.ed-value-list small{color:var(--ink-3)}
+.ed-value-list button[aria-pressed="true"]{border-color:var(--accent)}
+#ed-solve-panel .ed-value-link{display:block;border:0;text-align:left;color:var(--accent);background:none}
+.ed-physics-marks{cursor:pointer}
+/* Solve colors express state, never decoration. */
+:root{--solve-good:#21633b;--solve-action:#21633b;--solve-action-ink:#fff;--solve-unknown:#245db0;--solve-override:#7043a0;--solve-error:#a52e28}
+:root[data-theme="dark"]{--solve-good:#86c99b;--solve-action:#86c99b;--solve-action-ink:#102117;--solve-unknown:#89b4fa;--solve-override:#c4a7e7;--solve-error:#f09282}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--solve-good:#86c99b;--solve-action:#86c99b;--solve-action-ink:#102117;--solve-unknown:#89b4fa;--solve-override:#c4a7e7;--solve-error:#f09282}}
+.ed-physics-outline{fill:transparent;stroke:none}
+.ed-physics-selected{fill:transparent;stroke:var(--ink);stroke-dasharray:none}
+.ed-physics-badge{fill:var(--panel);stroke:var(--rule)}
+.ed-physics-marks text{fill:var(--ink-2);font-family:var(--sans);pointer-events:none}
+.ed-physics-marks [data-state="unknown"] text{fill:var(--solve-unknown)}
+.ed-physics-marks [data-state="override"] text{fill:var(--solve-override)}
+.ed-physics-marks [data-state="missing"] text{fill:var(--solve-error)}
+.ed-physics-marks [data-state="calculated"] text{fill:var(--solve-good)}
+.ed-physics-marks [data-state="unknown"] rect{stroke:var(--solve-unknown)}
+.ed-physics-marks [data-state="override"] rect{stroke:var(--solve-override)}
+.ed-physics-marks [data-state="missing"] rect{stroke:var(--solve-error)}
+.ed-physics-marks [data-state="calculated"] rect{stroke:var(--solve-good)}
+.ed-solve-status{padding:10px;border:1px solid var(--rule);border-radius:6px;margin:8px 0;flex-shrink:0;max-height:35%;overflow:auto}
+.ed-solve-status strong{font-size:16px}
+.ed-solve-success{color:var(--solve-good)}
+.ed-physics-error{color:var(--solve-error)}
+#ed-solve-panel .ed-solve-status button{padding:0;border:0;background:none;color:var(--ink-2);text-decoration:underline;text-underline-offset:3px}
+#ed-solve-panel h3,.ed-solve-float h3{color:var(--ink);margin:0;font-size:13px;letter-spacing:0;text-transform:none}
+#ed-solve-panel .ed-solve-primary{min-height:44px;flex:1;width:100%;font-weight:600;font-size:15px;background:var(--solve-action);color:var(--solve-action-ink);border:0;border-radius:8px}
+#ed-solve-panel .ed-solve-primary:disabled{background:var(--panel);color:var(--ink-3);border:1px solid var(--rule)}
+.ed-solve-actions{flex-wrap:wrap}
+#ed-solve-panel [data-physics-apply]{width:100%;min-height:36px}
+#ed-solve-panel [data-session-commit]{background:var(--accent);color:var(--paper);font-weight:600}
+#ed-solve-panel .ed-value-editor{border-color:var(--rule)}
+.ed-solve-float{position:fixed;z-index:45;background:var(--panel);color:var(--ink);border:1px solid var(--rule);border-radius:10px;padding:12px;box-shadow:0 8px 26px #0003;overflow:auto;font:13px/1.4 var(--sans);box-sizing:border-box}
+.ed-solve-float .ed-panel-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
+.ed-solve-float p{margin:10px 0;color:var(--ink-2)}
+.ed-solve-float .ed-physics-error{color:var(--solve-error)}
+.ed-solve-float .ed-solve-success{color:var(--solve-good)}
+.ed-solve-float button{font:inherit;padding:5px 8px;border:1px solid var(--rule);border-radius:6px;color:var(--ink);background:var(--paper)}
+.ed-solve-float label{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:10px 0}
+.ed-solve-float input,.ed-solve-float select{font:inherit;width:65%;min-width:0;border:1px solid var(--rule);border-radius:6px;background:var(--paper);color:var(--ink);padding:7px}
+.ed-solve-float [aria-invalid="true"]{border-color:var(--solve-error)}
+.ed-value-modes{display:flex;gap:4px}
+.ed-value-modes button{flex:1}
+.ed-value-modes [aria-pressed="true"]{border-color:var(--ink)}
+.ed-value-modes [data-physics-mode="unknown"][aria-pressed="true"]{color:var(--solve-unknown);border-color:currentColor}
+.ed-value-modes [data-physics-mode="override"][aria-pressed="true"]{color:var(--solve-override);border-color:currentColor}
+.ed-solve-float button:disabled{opacity:.45;cursor:not-allowed}
+.ed-solve-float :focus-visible,.ed-solve-toolbar :focus-visible,#ed-solve-panel :focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.ed-solve-toolbar{position:fixed;z-index:40;display:flex;gap:6px;font-size:12px}
+.ed-solve-toolbar button{background:var(--panel);color:var(--ink);border:1px solid var(--rule);padding:5px 10px;border-radius:6px}
+.ed-solve-tip{position:absolute;top:36px;left:0;width:230px;padding:10px;background:var(--panel);color:var(--ink-2);border:1px solid var(--rule);border-radius:6px}
+.ed-solve-float table{width:100%;border-collapse:collapse;font-size:12px;text-align:left}
+.ed-solve-float td,.ed-solve-float th{padding:6px 3px;border-bottom:1px solid var(--rule)}
+.ed-solve-float td button{background:none;border:0;text-align:left;padding:0}
+.ed-solve-float [data-state="unknown"]{color:var(--solve-unknown)}
+.ed-solve-float [data-state="override"]{color:var(--solve-override)}
+.ed-solve-float [data-state="missing"]{color:var(--solve-error)}
+.ed-solve-float [data-state="calculated"]{color:var(--solve-good)}
+#ed-solve-close{width:min(340px,calc(100vw - 24px));height:fit-content;inset:80px 16px auto auto;margin:0}
+#ed-solve-close::backdrop{background:#0002}
+.ed-close-actions{display:flex;gap:8px;justify-content:flex-end}
+#ed-solve-close [data-session-discard]{color:var(--solve-error)}
+@media(max-width:820px){
+  body.ed-solving #ed-palette{display:block;height:50vh;max-height:50vh;overflow:hidden}
+  body.ed-solving #ed-palette .ed-panel-head,body.ed-solving #ed-palette h3,body.ed-solving #ed-palette .ed-hint{display:flex}
+}
+
+#ed-examples li small{display:block;color:var(--ink-3);margin-top:3px}
+#ed-examples li button{font:inherit;text-align:left;border:0;padding:0;background:none}
+#ed-examples ul{padding-left:8px;list-style:none}
+#ed-examples summary{cursor:pointer;padding:5px 0}
+
+.ed-solve-label[data-state="unknown"] text{fill:var(--solve-unknown)}
+.ed-solve-label[data-state="override"] text{fill:var(--solve-override)}
+.ed-solve-label[data-state="calculated"] text{fill:var(--solve-good)}
+
+#ed-solve-panel .ed-answer strong{color:var(--solve-good)}
+#ed-solve-panel .ed-solve-message{color:var(--solve-error)}
+
+#ed-solve-panel .ed-choose-unknown{color:var(--solve-unknown);font-weight:600}
+.ed-solve-toolbar [data-label-warning]{max-width:220px;background:var(--panel);padding:5px;border:1px solid var(--rule)}
+.ed-solve-toolbar{max-width:calc(100vw - 24px);flex-wrap:wrap}
+
+/* Component library: readable discovery without changing the drawing vocabulary. */
+body:not(.ed-solving){grid-template-columns:212px 1fr 320px}
+body.ed-components-collapsed:not(.ed-solving){grid-template-columns:212px 1fr 0}
+body.ed-components-collapsed:not(.ed-solving) #ed-palette{display:none}
+#ed-component-tools .ed-panel-head{position:sticky;top:0;background:var(--paper);z-index:1;padding:5px 0}
+#ed-component-tools .ed-panel-head button{font-size:12px}
+.ed-component-search{display:flex;gap:5px;margin-bottom:8px}
+.ed-component-search input{width:100%;min-width:0}
+.ed-component-categories{display:flex;gap:4px;margin-bottom:10px}
+.ed-component-categories button{flex:1;padding:6px 3px;font-size:12px}
+.ed-component-categories [aria-pressed=true]{background:var(--tint);border-color:var(--ink-3)}
+#ed-component-tools h3{color:var(--ink-2);margin:14px 0 7px}
+#ed-component-tools .ed-cards{display:grid;grid-template-columns:1fr;gap:5px}
+.ed-component-row{display:flex;align-items:stretch;gap:3px;min-width:0}
+#ed-component-tools .ed-card{flex:1;min-width:0;display:flex;flex-direction:row;align-items:center;gap:10px;padding:7px 8px;min-height:48px}
+#ed-component-tools .ed-card svg{width:65px;flex-shrink:0;height:36px}
+#ed-component-tools .ed-card span{font-size:13px;text-align:left;hyphens:none}
+.ed-shape-card{flex:1;text-align:left;min-height:44px;font-size:13px}
+.ed-component-help{width:26px;padding:0;color:var(--ink-3);border-color:transparent;background:transparent}
+#ed-component-note,#ed-component-guidance,#ed-component-empty{font-size:12px;color:var(--ink-2);padding:8px;border:1px solid var(--rule);border-radius:6px}
+#ed-component-guidance{position:sticky;bottom:0;background:var(--paper)}
+.ed-relationships{border:1px solid var(--rule);border-radius:6px;margin:10px 0;padding:8px;max-height:200px;overflow:auto}
+.ed-relationships input[type=search]{width:100%;margin-bottom:5px}
+.ed-relationships label{display:flex;align-items:center;gap:8px;padding:4px}
+.ed-relationships input[type=checkbox]{width:auto}
+.ed-relationships small{display:block;color:var(--ink-3)}
+[aria-invalid=true]{border-color:var(--danger,#d06d59)!important}
+.ed-popover{max-width:calc(100vw - 16px);max-height:calc(100dvh - 90px);overflow:auto}
+@media(max-width:820px){
+ body:not(.ed-solving),body.ed-components-collapsed:not(.ed-solving){grid-template-columns:1fr}
+ body:not(.ed-solving) #ed-palette{display:none}
+ body.ed-components-open:not(.ed-solving) #ed-palette{display:block;position:fixed;z-index:10;left:0;right:0;bottom:0;height:65dvh;max-height:65dvh;overflow-y:auto;border-top:1px solid var(--rule);padding:12px;background:var(--paper)}
+ #ed-component-tools .ed-panel-head{display:flex}
+ #ed-component-tools h3{display:block}
+ #ed-component-tools .ed-card{min-width:0}
+}
+
+.ed-component-controls{position:sticky;top:-10px;z-index:2;background:var(--paper);padding:5px 0}
+#ed-component-tools .ed-panel-head{position:static}
+.ed-component-search input,.ed-relationships input[type=search]{font:inherit;font-size:13px;padding:8px 10px;border:1px solid var(--rule);border-radius:8px;background:var(--panel);color:var(--ink)}
+.ed-component-search input:focus-visible,.ed-relationships input:focus-visible{outline:2px solid var(--ink-3);outline-offset:1px}
+.ed-component-categories [aria-pressed=true]{color:var(--ink)}
+
+.ed-shape-card[aria-pressed=true]{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
+
+.ed-component-row{display:grid;grid-template-columns:minmax(0,1fr) 26px}
+.ed-component-definition{grid-column:1 / -1;margin:0 0 5px;padding:8px 10px;font-size:13px;line-height:1.45;color:var(--ink-2);background:var(--panel);border:1px solid var(--rule);border-radius:7px}
+
+#ed-empty-start{pointer-events:auto}
+#ed-tour{width:min(340px,calc(100vw - 16px));max-height:calc(100dvh - 32px);overflow:auto}
+#ed-tour h3{margin:0 0 10px;font-size:16px;color:var(--ink)}
+#ed-tour .ed-row{flex-wrap:wrap}
+.ed-tour-mark{animation:none}

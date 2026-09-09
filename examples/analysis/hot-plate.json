@@ -1,0 +1,129 @@
+{
+  "title": "Solve: Hot plate: parallel convection and radiation",
+  "units": {
+    "T": "°C",
+    "R": "K/W",
+    "P": "W"
+  },
+  "nodes": [
+    {
+      "id": "plate",
+      "at": [
+        260,
+        320
+      ],
+      "label": "Plate"
+    },
+    {
+      "id": "ambient",
+      "at": [
+        600,
+        320
+      ],
+      "kind": "fixed",
+      "value": 25,
+      "label": "Surroundings"
+    }
+  ],
+  "branches": [
+    {
+      "id": "conv",
+      "from": "plate",
+      "to": "ambient",
+      "kind": "conv",
+      "value": 3.16,
+      "via": [
+        [
+          320,
+          320
+        ],
+        [
+          320,
+          240
+        ],
+        [
+          540,
+          240
+        ],
+        [
+          540,
+          320
+        ]
+      ],
+      "at": [
+        430,
+        240
+      ],
+      "side": "up"
+    },
+    {
+      "id": "rad",
+      "from": "plate",
+      "to": "ambient",
+      "kind": "rad",
+      "value": 1.313,
+      "via": [
+        [
+          320,
+          320
+        ],
+        [
+          320,
+          400
+        ],
+        [
+          540,
+          400
+        ],
+        [
+          540,
+          320
+        ]
+      ],
+      "at": [
+        430,
+        400
+      ],
+      "side": "down"
+    }
+  ],
+  "sources": [
+    {
+      "id": "electrical",
+      "to": "plate",
+      "kind": "diss",
+      "value": 188.6,
+      "label": "Electrical power",
+      "at": [
+        110,
+        320
+      ]
+    }
+  ],
+  "regions": [
+    {
+      "id": "plate_region",
+      "at": [
+        220,
+        40
+      ],
+      "size": [
+        300,
+        100
+      ],
+      "label": "Hot plate",
+      "links": [
+        "node:plate",
+        "source:electrical"
+      ]
+    }
+  ],
+  "analysis": {
+    "network": {
+      "steady": true,
+      "unknowns": [
+        "plate"
+      ]
+    }
+  }
+}

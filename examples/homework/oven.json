@@ -1,0 +1,150 @@
+{
+  "title": "HW2 1.44 - Annealing oven",
+  "nodes": [],
+  "regions": [
+    {
+      "id": "oven",
+      "at": [
+        250,
+        160
+      ],
+      "size": [
+        460,
+        260
+      ],
+      "label": "Oven and moving steel",
+      "label_offset": [
+        20,
+        30
+      ]
+    }
+  ],
+  "control_volumes": [
+    {
+      "id": "cv",
+      "at": [
+        230,
+        140
+      ],
+      "size": [
+        500,
+        300
+      ],
+      "label": "Oven control volume",
+      "regions": [
+        "oven"
+      ],
+      "generation": 0,
+      "steady": true,
+      "label_offset": [
+        10,
+        -30
+      ]
+    }
+  ],
+  "control_surfaces": [
+    {
+      "id": "power-in",
+      "volume": "cv",
+      "edge": "left",
+      "start": 0.3,
+      "end": 0.7,
+      "label": "Electrical input",
+      "label_offset": [
+        -170,
+        20
+      ]
+    },
+    {
+      "id": "steel-out",
+      "volume": "cv",
+      "edge": "right",
+      "start": 0.3,
+      "end": 0.7,
+      "label": "Steel energy gain",
+      "label_offset": [
+        55,
+        20
+      ]
+    },
+    {
+      "id": "air",
+      "volume": "cv",
+      "edge": "top",
+      "start": 0.15,
+      "end": 0.35,
+      "label": "Convection",
+      "area": 302.4
+    },
+    {
+      "id": "surroundings",
+      "volume": "cv",
+      "edge": "top",
+      "start": 0.65,
+      "end": 0.85,
+      "label": "Radiation",
+      "area": 302.4
+    },
+    {
+      "id": "base",
+      "volume": "cv",
+      "edge": "bottom",
+      "start": 0.35,
+      "end": 0.65,
+      "label": "Concrete base",
+      "area": 102
+    }
+  ],
+  "transfers": [
+    {
+      "id": "electrical",
+      "surface": "power-in",
+      "kind": "work",
+      "direction": "in",
+      "rate": 1834.53,
+      "unit": "kW",
+      "label": "Power",
+      "label_offset": [
+        -170,
+        -40
+      ]
+    },
+    {
+      "id": "steel",
+      "surface": "steel-out",
+      "kind": "mass",
+      "rate": 1578.4,
+      "unit": "kW",
+      "label": "Supplied net stream energy",
+      "label_offset": [
+        55,
+        -40
+      ]
+    },
+    {
+      "id": "conv",
+      "surface": "air",
+      "rate": 151.2,
+      "unit": "kW",
+      "label": "Heat to air"
+    },
+    {
+      "id": "rad",
+      "surface": "surroundings",
+      "rate": 94.73,
+      "unit": "kW",
+      "label": "Heat to surroundings"
+    },
+    {
+      "id": "cond",
+      "surface": "base",
+      "rate": 10.2,
+      "unit": "kW",
+      "label": "Conduction",
+      "label_offset": [
+        25,
+        30
+      ]
+    }
+  ]
+}

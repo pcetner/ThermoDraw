@@ -1,0 +1,130 @@
+{
+  "title": "Solve: Oven: supplied steady-state energy budget",
+  "nodes": [],
+  "regions": [
+    {
+      "id": "oven",
+      "at": [
+        250,
+        160
+      ],
+      "size": [
+        460,
+        260
+      ],
+      "label": "Oven and moving steel"
+    }
+  ],
+  "control_volumes": [
+    {
+      "id": "cv",
+      "at": [
+        230,
+        140
+      ],
+      "size": [
+        500,
+        300
+      ],
+      "label": "Oven control volume",
+      "regions": [
+        "oven"
+      ],
+      "generation": 0,
+      "steady": true
+    }
+  ],
+  "control_surfaces": [
+    {
+      "id": "power-in",
+      "volume": "cv",
+      "edge": "left",
+      "start": 0.3,
+      "end": 0.7,
+      "label": "Electrical input"
+    },
+    {
+      "id": "steel-out",
+      "volume": "cv",
+      "edge": "right",
+      "start": 0.3,
+      "end": 0.7,
+      "label": "Steel energy gain"
+    },
+    {
+      "id": "air",
+      "volume": "cv",
+      "edge": "top",
+      "start": 0.15,
+      "end": 0.35,
+      "label": "Convection",
+      "area": 302.4
+    },
+    {
+      "id": "surroundings",
+      "volume": "cv",
+      "edge": "top",
+      "start": 0.65,
+      "end": 0.85,
+      "label": "Radiation",
+      "area": 302.4
+    },
+    {
+      "id": "base",
+      "volume": "cv",
+      "edge": "bottom",
+      "start": 0.35,
+      "end": 0.65,
+      "label": "Concrete base",
+      "area": 102
+    }
+  ],
+  "transfers": [
+    {
+      "id": "electrical",
+      "surface": "power-in",
+      "kind": "work",
+      "direction": "in",
+      "unit": "kW",
+      "label": "Power"
+    },
+    {
+      "id": "steel",
+      "surface": "steel-out",
+      "kind": "mass",
+      "rate": 1578.4,
+      "unit": "kW",
+      "label": "Supplied net stream energy"
+    },
+    {
+      "id": "conv",
+      "surface": "air",
+      "rate": 151.2,
+      "unit": "kW",
+      "label": "Heat to air"
+    },
+    {
+      "id": "rad",
+      "surface": "surroundings",
+      "rate": 94.73,
+      "unit": "kW",
+      "label": "Heat to surroundings"
+    },
+    {
+      "id": "cond",
+      "surface": "base",
+      "rate": 10.2,
+      "unit": "kW",
+      "label": "Conduction"
+    }
+  ],
+  "analysis": {
+    "volumes": {
+      "cv": {
+        "entity": "transfer",
+        "id": "electrical",
+        "field": "rate"
+      }
+    }
+  }
+}

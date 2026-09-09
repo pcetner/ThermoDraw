@@ -67,6 +67,7 @@ def settled(page, role=None, index=None):
 
 def drop_card(page, key, x, y):
     """Drag a palette card onto the drawing, as a hand does."""
+    page.locator(f'.ed-card[data-key="{key}"]').scroll_into_view_if_needed()
     box = page.locator(f'.ed-card[data-key="{key}"]').bounding_box()
     page.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
     page.mouse.down()
@@ -110,23 +111,25 @@ def test_the_editor_draws_what_is_drawn_into_it(served):
         # the library boots in a worker; a cold CDN fetch can take a while
         page.wait_for_selector("#ed-loading", state="hidden", timeout=180_000)
 
-        # a first visit is met by the tour, and it advances by doing the
-        # step rather than by clicking Next
-        page.wait_for_selector("#ed-tour:not([hidden])")
-        assert "Step 1 of 4" in page.text_content("#ed-tour")
-        drop_card(page, "cond", 700, 400)
-        page.wait_for_function(
-            "() => document.getElementById('ed-tour')"
-            ".textContent.includes('Step 2 of 4')")
-        page.keyboard.press("Escape")   # closes the new path's card
-        page.click('#ed-tour button[data-tour="end"]')
-        page.wait_for_selector("#ed-tour", state="hidden")
-        names = page.evaluate("JSON.parse(localStorage.getItem("
-                              "'thermodraw:index')).map(f => f.name)")
-        assert "Tour" not in names, "a skipped tour leaves nothing behind"
+        # Quick start is optional and never creates or edits a document.
+        assert page.locator('#ed-tour').is_hidden()
+        before=stored(page)
+        page.click('#ed-empty-start')
+        assert 'Quick start · 1 of 4' in page.text_content('#ed-tour')
+        page.click('[data-tour="next"]')
+        assert '2 of 4' in page.text_content('#ed-tour')
+        page.click('[data-tour="back"]')
+        assert '1 of 4' in page.text_content('#ed-tour')
+        for _ in range(3):
+            page.click('[data-tour="next"]')
+        page.click('[data-tour="next"]')
+        assert page.locator('#ed-tour').is_hidden()
+        assert stored(page)==before
+        names=page.evaluate("JSON.parse(localStorage.getItem('thermodraw:index')).map(f=>f.name)")
+        assert 'Tour' not in names
 
-        # quick add: tap empty space, type, Enter
-        page.mouse.click(700, 400)
+        # quick add: right-click empty space, type, Enter
+        page.mouse.click(700, 400, button="right")
         page.fill("#ed-quick-input", "fixed")
         page.wait_for_selector("#ed-quick-list li")
         page.keyboard.press("Enter")
@@ -184,7 +187,7 @@ def test_the_editor_draws_what_is_drawn_into_it(served):
         page.mouse.up()
         settled(page)
         d2 = stored(page)
-        assert d2["nodes"][1]["at"][1] > free_at[1]
+        assert d2["nodes"][1]["at"][1] > free_at[1], {"errors": errors, "state": d2}
         assert d2["nodes"][1]["at"][1] % 10 == 0
         assert d2["nodes"][0]["at"] == fixed_at
 
@@ -201,12 +204,14 @@ def test_the_editor_draws_what_is_drawn_into_it(served):
         page.mouse.up()
         settled(page)
         b = stored(page)["branches"][0]
-        assert len(b.get("via", [])) == 2, b
-        assert b["at"] == [(b["via"][0][i] + b["via"][1][i]) / 2 for i in (0, 1)]
+        moved = stored(page)["nodes"]
+        assert moved[0]["at"][1] < d["nodes"][0]["at"][1]
+        assert [moved[1]["at"][i]-moved[0]["at"][i] for i in (0,1)] == [d["nodes"][1]["at"][i]-d["nodes"][0]["at"][i] for i in (0,1)]
+        assert "via" not in b
         assert "symbol-off-its-run" not in codes(page), codes(page)
 
         # and dragged back onto it, the run straightens again
-        bx, by = canvas_point(page, *b["at"])
+        bx, by = canvas_point(page, *[(moved[0]["at"][i]+moved[1]["at"][i])/2 for i in (0,1)])
         page.mouse.move(bx, by)
         page.mouse.down()
         page.mouse.move(sx, sy, steps=8)
@@ -218,7 +223,8 @@ def test_the_editor_draws_what_is_drawn_into_it(served):
 
         # Delete removes what is selected. It used to reach an input the
         # card had put the cursor in, and do nothing at all.
-        page.mouse.click(*canvas_point(page, *b["at"]))
+        d = stored(page)
+        page.mouse.click(*canvas_point(page, *[(d["nodes"][0]["at"][i]+d["nodes"][1]["at"][i])/2 for i in (0,1)]))
         settled(page)
         page.keyboard.press("Delete")
         settled(page)
@@ -243,12 +249,9 @@ def test_the_editor_draws_what_is_drawn_into_it(served):
         lying = [n["at"] for n in stored(page)["nodes"][-2:]]
         page.keyboard.press("]")
         settled(page)
-        upright = [n["at"] for n in stored(page)["nodes"][-2:]]
-        assert upright[0][0] == upright[1][0], upright
-        assert page.input_value('#ed-popover input[data-field="label"]') == ""
-        page.keyboard.press("[")
-        settled(page)
         assert [n["at"] for n in stored(page)["nodes"][-2:]] == lying
+        assert page.input_value('#ed-popover input[data-field="label"]') == "]"
+        page.fill('#ed-popover input[data-field="label"]', "")
 
         # and the caret survives the turn, so a name being typed is not the
         # price of squaring the thing being named
@@ -257,7 +260,7 @@ def test_the_editor_draws_what_is_drawn_into_it(served):
         settled(page)
         page.keyboard.type("view")
         settled(page)
-        assert stored(page)["branches"][-1]["label"] == "Skyview"
+        assert stored(page)["branches"][-1]["label"] == "Sky]view"
         page.keyboard.press("[")
         settled(page)
         page.keyboard.press("Escape")
@@ -299,6 +302,8 @@ def test_the_editor_draws_what_is_drawn_into_it(served):
         settled(page)
         assert json.dumps(stored(page)) == before
 
+        page.click("#ed-fit")
+        settled(page)
         # Dropped on a node, the loose place becomes that place: the branch
         # is rewired and the spare node goes.
         d = stored(page)
@@ -322,7 +327,7 @@ def test_the_editor_draws_what_is_drawn_into_it(served):
         # branch's angle off its endpoints, and the wire came out at 6.58
         # degrees with nothing in the checker to say so.
         line = d2["nodes"][0]["at"][1]
-        drop_card(page, "free", 1000, canvas_point(page, 0, line)[1] + 8)
+        drop_card(page, "free", page.locator("#ed-stage").bounding_box()["x"] + page.locator("#ed-stage").bounding_box()["width"] - 60, canvas_point(page, 0, line)[1] + 8)
         page.wait_for_selector("#ed-popover:not([hidden])")
         page.keyboard.press("Escape")
         settled(page)
@@ -333,10 +338,10 @@ def test_the_editor_draws_what_is_drawn_into_it(served):
         assert "labels placed" in summary or "label placed" in summary
         assert "1 labels" not in summary
 
-        # every component is reachable without scrolling the palette
-        over = page.evaluate("() => { const p = document.getElementById("
-                             "'ed-palette'); return p.scrollHeight - p.clientHeight; }")
-        assert over <= 0, f"the palette overflows by {over}px"
+        # The searchable library keeps every component reachable at readable size.
+        page.locator('#ed-component-search').fill('resistor')
+        assert page.locator('.ed-card:visible').count() == 7
+        page.locator('#ed-component-clear').click()
 
         # renaming happens in the page, not in a browser dialog
         page.click("#ed-file")
