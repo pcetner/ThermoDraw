@@ -135,6 +135,29 @@ runs this library in the browser: drag symbols on, connect nodes, edit
 values, and see the findings as you go. Files stay in your browser, and a
 link carries a diagram to anyone.
 
+## Solve physical values
+
+`solve` places drawing coordinates. `check --physics` checks supplied values.
+`solve-physics` calculates explicitly selected steady-state unknowns:
+
+```python
+from thermodraw import DiagramBuilder, solve_physics
+
+diagram = (DiagramBuilder(T="K", R="K/W")
+           .node("hot", value=400, kind="fixed")
+           .node("middle")
+           .node("cold", value=300, kind="fixed")
+           .branch("hot", "middle", value=2)
+           .branch("middle", "cold", value=3)
+           .analysis(network={"steady": True, "unknowns": ["middle"]})
+           .build())
+result = solve_physics(diagram)
+solved = result.apply(diagram)  # middle = 360 K; original is unchanged
+```
+
+The [physics guide](docs/physics-analysis.md) covers resistance identification,
+control-volume balances, scenario overrides, tolerances and supported limits.
+
 ## The symbols
 
 <p align="center">
@@ -184,3 +207,19 @@ network that a reviewer can read from the picture, this.
 
 MIT. The bundled subset of IBM Plex Sans is
 [OFL-1.1](src/thermodraw/fonts/OFL.txt).
+
+
+### Rectangular physical sketches
+
+The editor's **Components → Physical / Annotations** categories adds rectangular regions, control volumes, edge surfaces, energy transfers and annotations beside a resistance network. Drag opposite corners, resize with handles, and select a volume to enter generation and storage or steady state. Drawing dimensions are independent of physical area.
+
+`thermodraw check --physics` checks supplied heat, work and mass-carried-energy rates. Missing inputs stay explicitly unchecked; it does not solve heat-transfer laws or transient temperatures. The additive [schema](docs/schema.md) and [homework examples](examples/homework) cover an oven, frost/air, a wall beside its network, and a hot plate.
+
+Drag or click to place components and join endpoints. Shift-click or Shift-drag selects groups; Alt bypasses snapping. Drag labels for explicit placement, or choose Auto position. Escape cancels movement. Export for document previews a compact light SVG with PNG as an alternative.
+
+
+## Explicit physical solving
+
+Steady network temperatures, identifiable constant resistances and single-unknown control-volume balances are now available through `solve_physics`, `solve-physics`, and the editor’s Solve physics inspector. See [physics analysis](docs/physics-analysis.md) for the optional analysis schema, equations, workflow, diagnostics and limits. Drawing layout and existing checker tolerances retain their meanings.
+
+The editor offers only the four answered HW2 problems: oven, frost, wall and hot plate. See the [editor guide](docs/editor-guide.md) for component search, floating properties, drawing gestures, checking and solving, and the [homework guide](docs/example-guide.md) for supplied answers and limitations.

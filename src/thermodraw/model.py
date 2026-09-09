@@ -13,12 +13,20 @@ are the same list. See docs/schema.md.
 """
 import difflib
 import json
+import copy
 import math
 from dataclasses import MISSING as _MISSING
 from dataclasses import dataclass, field, fields
-from typing import Any, Dict, List, Optional, Sequence, Union
+from typing import Any, Dict, List, Optional, Sequence, Union, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ._layout import Placement
+    from ._check import Report
+    from ._describe import Description
 
 from .core import DOT_ABOVE
+from ._physical import (Region, ControlVolume, ControlSurface, Transfer,
+                        Annotation, COLLECTIONS)
 
 NODE_KINDS = {"free", "fixed", "break", "phase"}
 # Kinds that existed and were removed, and what to write instead. A file
@@ -363,6 +371,7 @@ class Node:
     angle: float = 0.0
     side: str = "auto"
     wall: str = "down"      # `fixed` and `break` only
+    label_offset: Optional[Sequence[float]] = None
 
 
 @dataclass
@@ -396,6 +405,8 @@ class Branch:
     at: Optional[Sequence[float]] = None
     angle: Optional[float] = None
     side: str = "auto"
+    id: Optional[str] = None
+    label_offset: Optional[Sequence[float]] = None
 
     @property
     def repeated(self):
@@ -433,6 +444,8 @@ class Source:
     side: str = "auto"
     count: Optional[int] = None             # several identical ones; they add
     source: Optional[str] = None            # `from`: heat leaving that node
+    id: Optional[str] = None
+    label_offset: Optional[Sequence[float]] = None
 
     @property
     def outward(self):
@@ -467,6 +480,12 @@ class Diagram:
     # is written in the file as `"T": {"unit": "K", "scale": "rise"}` and
     # split out here, so every reader of `units` sees text as it always has.
     scale: Optional[str] = None
+    regions: List[Region] = field(default_factory=list)
+    control_volumes: List[ControlVolume] = field(default_factory=list)
+    control_surfaces: List[ControlSurface] = field(default_factory=list)
+    transfers: List[Transfer] = field(default_factory=list)
+    annotations: List[Annotation] = field(default_factory=list)
+    analysis: Dict[str, Any] = field(default_factory=dict)
 
     def node(self, node_id):
         for n in self.nodes:
@@ -659,7 +678,7 @@ class Diagram:
                 raise DiagramError(
                     f"the diagram: {name} must be a list, got {got!r}")
 
-    def validate(self):
+    def validate(self) -> "Diagram":
         """Every reason a diagram cannot be drawn, reported before drawing."""
         self._validate_top()
         seen = set()
@@ -927,6 +946,10 @@ class Diagram:
             _text(s.sub, where, "sub")
             _value(s.value, where)
             _side(s.side, where)
+        from ._physical import validate as validate_physical
+        validate_physical(self)
+        from ._analysis import validate as validate_analysis
+        validate_analysis(self)
         return self
 
     def _valued(self):
@@ -937,9 +960,11 @@ class Diagram:
         for s in self.sources:
             yield f"source at {s.node}", s.kind, s.value
 
-    def to_dict(self):
+    def to_dict(self) -> Dict[str, Any]:
         """JSON-shaped, using from/to rather than the Python-safe names."""
         out: Dict[str, Any] = {}
+        if self.analysis:
+            out["analysis"] = copy.deepcopy(self.analysis)
         if self.title:
             out["title"] = self.title
         if self.units:
@@ -956,14 +981,19 @@ class Diagram:
             out["sources"] = [_source_dict(s) for s in self.sources]
         if self.rail:
             out["rail"] = _rail_dict(self.rail)
+        for key in COLLECTIONS:
+            if getattr(self, key):
+                out[key] = [_keep({"id": obj.id}, obj,
+                                  [f.name for f in fields(obj) if f.name != "id"])
+                            for obj in getattr(self, key)]
         return out
 
     @classmethod
-    def from_dict(cls, data):
+    def from_dict(cls, data: Dict[str, Any]) -> "Diagram":
         if not isinstance(data, dict):
             raise DiagramError(f"a diagram is an object, got {data!r}")
         extra = sorted(set(data) - {"title", "units", "size", "nodes",
-                                    "branches", "sources", "rail"})
+                                    "branches", "sources", "rail", "analysis"} - set(COLLECTIONS))
         if extra:
             top = ["title", "units", "size", "nodes", "branches",
                    "sources", "rail"]
@@ -974,12 +1004,13 @@ class Diagram:
                             (f" (did you mean {near!r}?)" if near else ""))
             raise DiagramError(
                 f"unknown top-level field {', '.join(said)}. Expected: "
-                "title, units, size, nodes, branches, sources, rail")
+                "title, units, size, nodes, branches, sources, rail, regions, "
+                "control_volumes, control_surfaces, transfers, annotations")
         # These are checked here rather than in `validate` because `from_dict`
         # reads them first: a non-list `nodes` died in this comprehension and
         # a non-object `units` died in the `dict()` below, both before
         # anything could name the field.
-        for name in ("nodes", "branches", "sources"):
+        for name in ("nodes", "branches", "sources", *COLLECTIONS):
             got = data.get(name, [])
             if isinstance(got, (str, bytes)) or not isinstance(got, list):
                 raise DiagramError(
@@ -1014,16 +1045,19 @@ class Diagram:
                    for i, s in enumerate(data.get("sources", []))]
         rail = _build(Rail, data["rail"], "rail") if data.get("rail") else None
         return cls(nodes=nodes, branches=branches, sources=sources, rail=rail,
-                   units=units, scale=scale,
+                   units=units, scale=scale, analysis=copy.deepcopy(data.get("analysis", {})),
+                   **{key: [_build(kind, obj, f"{key} {i}")
+                            for i, obj in enumerate(data.get(key, []))]
+                      for key, kind in COLLECTIONS.items()},
                    size=data.get("size"), title=data.get("title")).validate()
 
-    def to_json(self, **kw):
+    def to_json(self, **kw: Any) -> str:
         kw.setdefault("indent", 2)
         kw.setdefault("ensure_ascii", False)
         return json.dumps(self.to_dict(), **kw)
 
     @classmethod
-    def from_json(cls, text):
+    def from_json(cls, text: str) -> "Diagram":
         return cls.from_dict(json.loads(text))
 
     # ------------------------------------------------------- the outputs
@@ -1034,12 +1068,12 @@ class Diagram:
     # bodies: this module is what `_layout`, `_render` and `_check` import,
     # and a cycle at the top would import nothing.
 
-    def placements(self):
+    def placements(self) -> List["Placement"]:
         """The drawing as placements, solved and laid out."""
         from ._layout import layout
         return layout(self.validate())
 
-    def svg(self, mode=None, size=None, padding=None, notation="boxes"):
+    def svg(self, mode: Optional[str] = None, size: Optional[Sequence[float]] = None, padding: Optional[float] = None, notation: str = "boxes") -> str:
         """SVG for this diagram.
 
         `mode` picks a baked palette, `light` or `dark`, for Word, slides
@@ -1056,8 +1090,8 @@ class Diagram:
                      notation=notation)
         return theme.bake(out, mode) if mode else theme.with_variables(out)
 
-    def check(self, size=None, padding=None, source="diagram",
-              physics=False):
+    def check(self, size: Optional[Sequence[float]] = None, padding: Optional[float] = None, source: str = "diagram",
+              physics: bool = False) -> "Report":
         """What is wrong with this diagram, without rendering it to look."""
         from ._check import check
         from ._render import PADDING
@@ -1065,7 +1099,7 @@ class Diagram:
                      padding=PADDING if padding is None else padding,
                      source=source, physics=physics)
 
-    def describe(self, size=None, padding=None, source="diagram"):
+    def describe(self, size: Optional[Sequence[float]] = None, padding: Optional[float] = None, source: str = "diagram") -> "Description":
         """What this diagram contains, without rendering it to look."""
         from ._describe import describe
         from ._render import PADDING
@@ -1073,7 +1107,7 @@ class Diagram:
                         padding=PADDING if padding is None else padding,
                         source=source)
 
-    def page(self, size=None, padding=None, title=None, notation="boxes"):
+    def page(self, size: Optional[Sequence[float]] = None, padding: Optional[float] = None, title: Optional[str] = None, notation: str = "boxes") -> str:
         """This diagram as a self-contained HTML page, controls and all."""
         from ._page import page
         from ._render import PADDING
@@ -1128,21 +1162,21 @@ def _node_dict(n):
     if n.kind != "free":
         out["kind"] = n.kind
     return _keep(out, n, ("label", "sub", "value", "at", "angle", "side",
-                          "wall"))
+                          "wall", "label_offset"))
 
 
 def _branch_dict(b):
     out = {"from": b.source, "to": b.target, "kind": b.kind}
     return _keep(out, b, ("label", "sub", "value", "rate", "mdot", "cp",
                           "count", "arrangement", "via", "at", "angle",
-                          "side"))
+                          "side", "id", "label_offset"))
 
 
 def _source_dict(s):
     out = {"from": s.source} if s.outward else {"to": s.target}
     out["kind"] = s.kind
     return _keep(out, s, ("label", "sub", "value", "count", "at", "angle",
-                          "side"))
+                          "side", "id", "label_offset"))
 
 
 def _rail_dict(r):

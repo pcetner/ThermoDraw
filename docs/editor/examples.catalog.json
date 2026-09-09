@@ -1,0 +1,42 @@
+[
+  {
+    "title": "1.44 - Annealing oven",
+    "path": "../homework/oven.json",
+    "group": "HW2",
+    "description": "Electrical input, moving steel and three heat-loss paths.",
+    "exercises": [
+      "Inspect the rectangular control volume and each named surface.",
+      "Check the supplied values, or mark electrical input unknown and solve its balance."
+    ]
+  },
+  {
+    "title": "1.51 - Melting frost",
+    "path": "../homework/frost.json",
+    "group": "HW2",
+    "description": "Frost/air interface, incoming convection and latent storage.",
+    "exercises": [
+      "Inspect the explicit 1 m² area and 40 W/m² convection input.",
+      "Mark storage unknown to recover 40 W. The submitted melting time is an annotation, not a transient solver result."
+    ]
+  },
+  {
+    "title": "1.57a - Oven wall",
+    "path": "../homework/wall.json",
+    "group": "HW2",
+    "description": "Solid wall with surface temperatures, outward heat paths and its resistance network.",
+    "exercises": [
+      "Inspect the cross-section and its linked resistance network.",
+      "Check the submitted temperatures and rounded resistances, or choose a resistance unknown."
+    ]
+  },
+  {
+    "title": "1.60a - Hot plate",
+    "path": "../homework/hot-plate.json",
+    "group": "HW2",
+    "description": "Steady-state electrical input with parallel convection and radiation.",
+    "exercises": [
+      "Check the supplied 200 °C plate, 25 °C surroundings and 188.6 W input.",
+      "Choose Plate temperature or a resistance unknown, then solve and compare with the saved answer."
+    ]
+  }
+]

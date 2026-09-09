@@ -1,0 +1,221 @@
+{
+  "title": "HW2 1.57a - Oven wall",
+  "units": {
+    "T": "K",
+    "R": "K/W"
+  },
+  "nodes": [
+    {
+      "id": "inside",
+      "at": [
+        150,
+        450
+      ],
+      "value": 599.4,
+      "label": "Inner wall surface",
+      "kind": "fixed",
+      "angle": 180
+    },
+    {
+      "id": "wall",
+      "at": [
+        410,
+        450
+      ],
+      "value": 400,
+      "label": "Outer wall surface"
+    },
+    {
+      "id": "air",
+      "at": [
+        740,
+        450
+      ],
+      "kind": "fixed",
+      "value": 300,
+      "label": "Air and surroundings"
+    }
+  ],
+  "branches": [
+    {
+      "id": "conduction",
+      "from": "inside",
+      "to": "wall",
+      "kind": "cond",
+      "value": 0.0714
+    },
+    {
+      "id": "convection",
+      "from": "wall",
+      "to": "air",
+      "kind": "conv",
+      "value": 0.05,
+      "via": [
+        [
+          470,
+          450
+        ],
+        [
+          470,
+          350
+        ],
+        [
+          680,
+          350
+        ],
+        [
+          680,
+          450
+        ]
+      ],
+      "at": [
+        570,
+        350
+      ],
+      "side": "up"
+    },
+    {
+      "id": "radiation",
+      "from": "wall",
+      "to": "air",
+      "kind": "rad",
+      "value": 0.126,
+      "via": [
+        [
+          470,
+          450
+        ],
+        [
+          470,
+          550
+        ],
+        [
+          680,
+          550
+        ],
+        [
+          680,
+          450
+        ]
+      ],
+      "at": [
+        570,
+        550
+      ],
+      "side": "down"
+    }
+  ],
+  "regions": [
+    {
+      "id": "wall_region",
+      "at": [
+        340,
+        100
+      ],
+      "size": [
+        120,
+        180
+      ],
+      "label": "Solid wall",
+      "links": [
+        "node:inside",
+        "node:wall",
+        "branch:conduction"
+      ]
+    }
+  ],
+  "annotations": [
+    {
+      "id": "basis",
+      "at": [
+        120,
+        20
+      ],
+      "label": "Steady state; A = 1 m²; L = 0.05 m; k = 0.7 W/(m K)"
+    },
+    {
+      "id": "interior",
+      "at": [
+        120,
+        110
+      ],
+      "label": "Oven interior"
+    },
+    {
+      "id": "inner-temperature",
+      "kind": "line",
+      "at": [
+        150,
+        215
+      ],
+      "end": [
+        340,
+        215
+      ],
+      "label": "Inner surface: 599.4 K",
+      "label_offset": [
+        0,
+        -30
+      ],
+      "links": [
+        "node:inside"
+      ]
+    },
+    {
+      "id": "outer-temperature",
+      "at": [
+        475,
+        105
+      ],
+      "label": "Outer surface: 400 K",
+      "links": [
+        "node:wall"
+      ]
+    },
+    {
+      "id": "convection-path",
+      "kind": "arrow",
+      "at": [
+        460,
+        180
+      ],
+      "end": [
+        700,
+        180
+      ],
+      "label": "Convection to air at 300 K",
+      "label_offset": [
+        20,
+        -30
+      ],
+      "links": [
+        "branch:convection"
+      ]
+    },
+    {
+      "id": "radiation-path",
+      "kind": "arrow",
+      "at": [
+        460,
+        255
+      ],
+      "end": [
+        700,
+        255
+      ],
+      "label": "Radiation to surroundings at 300 K",
+      "label_offset": [
+        20,
+        -30
+      ],
+      "links": [
+        "branch:radiation"
+      ]
+    }
+  ],
+  "analysis": {
+    "network": {
+      "steady": true
+    }
+  }
+}

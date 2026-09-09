@@ -29,19 +29,23 @@ from ._layout import Placement, layout
 from ._page import page
 from ._render import render
 from ._solve import solve
+from ._analysis import PhysicsResult, solve_physics
+from ._session import assess_physics
 from .builder import DiagramBuilder
 from .io import save
 from .model import Branch, Diagram, DiagramError, Node, Rail, Source
+from .model import Region, ControlVolume, ControlSurface, Transfer, Annotation
 from .symbols import SYMBOLS, Symbol
 
 __version__ = "1.0.0"
 __all__ = [
     # the data
     "Diagram", "Node", "Branch", "Source", "Rail", "DiagramError",
+    "Region", "ControlVolume", "ControlSurface", "Transfer", "Annotation",
     # the pipeline
     "solve", "layout", "render", "Placement", "DiagramBuilder",
     # is it any good?
-    "check", "Report", "Finding",
+    "check", "Report", "Finding", "solve_physics", "PhysicsResult", "assess_physics",
     # is it the one you meant?
     "describe", "Description",
     # the same drawing, as a page you can interact with

@@ -364,55 +364,41 @@ SYMBOLS = [
     Symbol(key="free", name="Free node", draw=g_free_node,
            text=S_("T", "j"), value="112 °C", user="Junction",
            half=5.5, half_len=5.5, reach=(54, 5.5),
-           note="Subscript is identity here — you set it, and it defaults to a "
-                "bare T. The label names the same thing in words."),
+           note="A temperature node with no imposed boundary temperature. Its temperature can be supplied or solved from an energy balance."),
     Symbol(key="fixed", name="Fixed node", draw=g_fixed_node, mirror=True,
            text=S_("T", "amb"), value="40 °C", user="Still air",
            half=22, half_len=19, reach=(56, 24),
-           note="Temperature is imposed and the wire connects to the boundary. "
-                "Past vertical the symbol mirrors, so the hatch never arrives "
-                "upside down."),
+           note="A boundary held at a specified temperature, such as ambient air or a temperature-controlled surface."),
     Symbol(key="break", name="Thermal break", draw=g_break, mirror=True,
            text=S_("q"), value="0 W", user="Mounting standoff",
            half=22, half_len=22, reach=(54, 37),
-           note="Circle, gap, wall — the fixed node without its stub. A fixed "
-                "node connects to its boundary; this one does not, and the "
-                "visible gap is the entire distinction."),
+           note="An adiabatic boundary: no heat crosses the boundary."),
     Symbol(key="phase", name="Phase-change node", draw=g_phase_node,
            text=S_("T", "sat"), value="49 °C", user="Boiling surface",
            half=22, half_len=16, reach=(54, 19),
-           note="Temperature held by a phase change rather than by a boundary, "
-                "so it takes the imposed-temperature marking without the wall. "
-                "Latent heat crosses it at no temperature drop at all, which is "
-                "the whole reason a two-phase system exists. The hold lasts "
-                "only while the phase change does, and the symbol does not say "
-                "how long that is."),
+           note="A node at the temperature of a phase change, such as melting or boiling. Energy is absorbed or released as latent heat."),
 
     # -- paths: the interior states what the heat is crossing
     Symbol(key="cond", name="Conduction", draw=g_cond, texture=tex_cond,
            text=S_("R", "cond"), value="0.35 K/W", user="Die attach",
            half=S.BH / 2, half_len=S.BW / 2,
            reach=(S.BW / 2 + LEAD, S.BH / 2),
-           note="Subscript is structural and fixed. Which conduction path this "
-                "is lives in your label, so nothing is named twice."),
+           note="Resistance to heat conduction through a material. For a uniform plane wall, R = L/(kA)."),
     Symbol(key="conv", name="Convection", draw=g_conv, texture=tex_conv,
            text=S_("R", "conv"), value="1.80 K/W", user="Sink → Ambient",
            half=S.BH / 2, half_len=S.BW / 2,
            reach=(S.BW / 2 + LEAD, S.BH / 2),
-           note="Streamlines rotate with the block, since flow along the path is "
-                "what they mean."),
+           note="Resistance to heat transfer between a surface and a fluid. R = 1/(hA)."),
     Symbol(key="rad", name="Radiation", draw=g_rad, texture=tex_rad,
            text=S_("R", "rad"), value="6.40 K/W", user="Case → Ambient",
            half=S.BH / 2, half_len=S.BW / 2,
            reach=(S.BW / 2 + LEAD, S.BH / 2),
-           note="Arrows now span the box symmetrically. Dashed outline marks the "
-                "one path that is not linear in temperature."),
+           note="An equivalent resistance for thermal radiation between surfaces. Its value depends on the surface temperatures."),
     Symbol(key="contact", name="Contact", draw=g_contact, texture=tex_contact,
            text=S_("R", "contact"), value="0.15 K/W", user="Grease",
            half=S.BH / 2, half_len=S.BW / 2,
            reach=(S.BW / 2 + LEAD, S.BH / 2),
-           note="Contact rather than TIM: the other three subscripts name "
-                "mechanisms, and a TIM is a material."),
+           note="Resistance to heat flow across the interface between two contacting surfaces."),
 
     # -- paths: shape, two-phase, unstated, and storage
     Symbol(key="spread", name="Spreading resistance", draw=g_spread,
@@ -420,89 +406,56 @@ SYMBOLS = [
            text=S_("R", "spread"), value="0.15 K/W", user="CuW submount",
            half=S.BH / 2, half_len=S.BW / 2,
            reach=(S.BW / 2 + LEAD, S.BH / 2),
-           note="Hatching that fans from a point rather than running parallel: "
-                "the cross-section grows as the heat goes. Drawn as `cond` it "
-                "asserts one-dimensional conduction, which is exactly what a "
-                "spreading path is not."),
+           note="Resistance caused by heat spreading from a small area into a larger area, or constricting in the reverse direction."),
     Symbol(key="pipe", name="Isothermal link", draw=g_pipe, texture=tex_pipe,
            text=S_("R", "pipe"), value="0.10 K/W", user="Heat pipe",
            half=S.BH / 2, half_len=S.BW / 2,
            reach=(S.BW / 2 + LEAD, S.BH / 2),
-           note="Vapour out along one face, condensate back along the other. It "
-                "still takes a resistance, because a heat pipe has a small one; "
-                "what it stops doing is wearing solid-conduction hatching on a "
-                "two-phase device."),
+           note="The effective thermal resistance of a heat pipe or similar two-phase heat transport device."),
     Symbol(key="mixed", name="Unstated mechanism", draw=g_mixed,
            text=S_("R", "window"), value="0.31 K/W", user="Double glazing",
            half=S.BH / 2, half_len=S.BW / 2,
            reach=(S.BW / 2 + LEAD, S.BH / 2),
-           note="The one kind whose mechanism the library does not know, so the "
-                "subscript is yours to set. An empty interior is not an absence "
-                "here: it says mixed, or deliberately unstated. A window quoted "
-                "as one number for conduction and convection together is this."),
+           note="An equivalent resistance combining several heat-transfer mechanisms, or a resistance whose mechanism is unspecified."),
     Symbol(key="cap", name="Capacitance", draw=g_cap,
            text=S_("C", "j"), value="0.9 mJ/K", user="Die",
            half=15, half_len=15, reach=(40, 15),
-           note="On a near-vertical branch the block moves to whichever side has "
-                "room, and stays whole."),
+           note="Thermal energy storage per unit temperature change. For a body with constant specific heat, C = mcₚ."),
 
     # -- paths that are not resistances
     Symbol(key="flow-branch", name="Heat flow, along a path",
            draw=g_flow_branch, text=S_("q"), value="3.2 kW",
            user="Technical water", half=10, half_len=22, reach=(40, 10),
-           note="Boxes resist; arrows carry. Chevrons rather than a filled head, "
-                "because a filled head is the mark a source uses to land on a "
-                "node and this is a pass-through. Directed — `from` and `to` are "
-                "the way the heat goes — so `angle` is refused on one."),
+           note="A specified heat-transfer rate between two nodes. The arrow points from the sending node to the receiving node."),
     Symbol(key="break-branch", name="Thermal break, in line",
            draw=g_branch_break, text="", value=None, user="Nylon standoff",
            half=10, half_len=12, reach=(40, 8),
-           note="An open circuit: a mechanical connection carrying no heat. A "
-                "plain wire would say heat flows and a resistance would say "
-                "how much, so it is neither. It names no quantity either, and "
-                "the label is the user's line alone."),
+           note="An insulated connection between two nodes. No heat flows through this path."),
     Symbol(key="link", name="Ideal joint", draw=g_link,
            text="", value=None, user="Bolted flange",
            half=8, half_len=12, reach=(40, 2),
-           note="Two nodes that are one place, drawn twice because the reader "
-                "needs both names. A plain wire, which is what a break "
-                "declines to be: heat flows and nothing is in the way, so "
-                "there is no box, no texture and no gap. It names no quantity "
-                "and refuses `value` and `rate`. `--physics` merges its two "
-                "ends before balancing, and says so when their stated "
-                "temperatures disagree."),
+           note="An ideal connection with zero thermal resistance. The connected nodes have the same temperature."),
     Symbol(key="stream", name="Stream, a medium passing through",
            draw=g_stream, text=S.dotted("m"), value="2.5 kg/s",
            user="Steel strip", half=22, half_len=42, reach=(62, 16),
-           note="A moving medium between an inlet node and an outlet node. "
-                "It states `mdot` and `cp`; what it carries is worked out "
-                "from those and the temperatures at its two ends, and drawn "
-                "beneath them. Streamlines say the medium is going, the same "
-                "mark a convection box is filled with, and the chevron says "
-                "which way — directed, so `from` and `to` are the direction "
-                "and `angle` is refused. Heat is added by cutting the run "
-                "into segments, not by a field: each one asks its own end "
-                "for its own share."),
+           note="A flowing material between inlet and outlet nodes. Mass flow rate, specific heat and temperature change determine its sensible energy change."),
 
     # -- sources: heat crossing into or out of one node
     Symbol(key="diss", name="Dissipation", draw=g_diss,
            text=S_("P", "d"), value="45 W", user="Switching loss",
            half=7, half_len=32,
-           note="Geometry is centred on its own span, so the block sits evenly "
-                "against the shaft."),
+           note="Power converted to heat at a node, such as electrical resistance heating or friction."),
     Symbol(key="radin", name="Radiative input", draw=g_radin,
            text=S_("q", "sol"), value="3.2 W", user="Solar gain",
            half=9, half_len=32,
-           note="Amplitude now ramps linearly to zero, so the shaft flattens "
-                "into the head instead of easing out of it."),
+           note="Radiant power absorbed at a node, such as solar radiation."),
     Symbol(key="flow", name="Heat flow", draw=g_flow,
            text=S_("q"), value="38 W", user=None, half=7, half_len=30,
-           note="An annotation, sized to the arrow alone so the block sits close."),
+           note="A specified heat-transfer rate entering or leaving a node."),
     Symbol(key="flux", name="Heat flux", draw=g_flux,
            text="q″", value="1.4 W/cm²", user="Die surface",
            half=25, half_len=26, reach=(28, 24),
-           note="Several arrows leaving a surface. Flux is per unit area, so it "
-                "has no single line of action to borrow heat flow's symbol."),
+           note="Heat-transfer rate per unit area entering or leaving a node. Multiplying heat flux by area gives heat-transfer rate."),
 ]
 
 # The same order, with the boundaries that make it legible. The vocabulary

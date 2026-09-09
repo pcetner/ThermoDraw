@@ -1,5 +1,7 @@
 # The design record
 
+This is a chronological decision record. Later sections supersede earlier interface decisions; current user workflows are documented in [the editor guide](editor-guide.md).
+
 This is the argument. `CLAUDE.md` is the decision.
 
 Each heading here matches a decision listed there, and says why it was made,
@@ -1250,3 +1252,125 @@ must stop its own Escape from bubbling, or the document handler finds
 the card already shut and ends the tour anyway. And a reader who
 finishes keeps what they drew; one who skips is left with nothing,
 because they asked for nothing.
+
+
+## Functional editor and physical sketches (September 2026)
+
+Document generations and edit revisions isolate asynchronous work. Coordinates merge by node ID only into the originating revision. Gesture previews do not enter persistence or history; release commits one undo step. Python supplies symbol markup and placement anchors, while the browser transforms preview geometry. Unrelated labels retain their anchors until release.
+
+Existing visual identity remains authoritative: no palette, font, spacing, panel or canvas restyling. New controls reuse the existing menus, cards and selection marks. Brackets in inputs are text. Selection, endpoint attachment and explicit label offsets support both drag and click workflows.
+
+Regions and control volumes are rectangles only. Edge-relative surfaces follow moves and resizes. Physical geometry bypasses the chain solver, and physical-only files are valid. Region membership and network links are explicit, never inferred from overlap. Balances count declared energy transfers once, require explicit generation and storage (or steady state), and never derive heat-transfer laws. Dimensions do not imply physical area. Deletion clears references in one transaction and marks dependent balances incomplete.
+
+The additive JSON fields retain all legacy defaults. Representative homework examples live in `examples/homework`; browser transaction tests and physical-model tests protect these decisions. Earlier records describing bracket shortcuts inside inputs or broad snapping thresholds are superseded by this entry.
+
+
+## Intentional quick-add
+
+An empty-space click deselects and closes cards; dragging still pans. Quick-add uses right-click on empty space, `/` outside editable fields, or a 500 ms touch hold. Movement, cancellation and pinch cancel the hold. The keyboard form uses the last canvas pointer location, falling back to the canvas center. This keeps search available without interrupting ordinary navigation.
+
+
+## Selection clipboard and shared rectangle resizing
+
+Copy and paste use native clipboard events outside text fields. Selections carry required endpoint nodes and owned physical geometry. Paste remaps IDs and references, offsets the new objects, validates before committing, and makes one undo step. Incompatible unit definitions are refused rather than silently reinterpreting values.
+
+Rectangle edge handles adjust a single dimension across the selected rectangles by a common delta; corner handles adjust both dimensions. Different original sizes remain different. Shared resizing clamps at the smallest rectangle’s minimum size, preserving axis-aligned geometry. Previews are cancellable and commit once.
+
+
+## Explicit physical solving
+
+Steady network temperatures and single-unknown control-volume balances are now available through `solve_physics`, `solve-physics`, and the editor’s Solve physics inspector. See [physics analysis](physics-analysis.md) for the optional analysis schema, equations, workflow, diagnostics and limits. Drawing layout and existing checker tolerances retain their meanings.
+
+
+## Solve workflow and example curation (2026-09-08)
+
+The initial solve popover mixed setup, answers and raw diagnostics, hiding the
+primary action below a long scroll. The approved replacement temporarily uses
+the existing Components area, retaining its visual conventions. Canvas markers
+and list rows share one selection; missing data is distinct from explicitly
+selected unknowns, and known temperatures do not silently become fixed nodes.
+Actions stay visible, answers lead, readable equations are optional, and raw JSON
+is a technical export. Native controls and scrollbars follow the chosen theme.
+
+Three starting examples lead to a grouped, curated collection. A catalog and
+coverage tests cover every model component rather than dumping historical
+gallery runs into the picker. Guided exercises cover editing and API workflows;
+see [example guide](example-guide.md).
+
+
+## Temporary solve sessions
+
+Solve now snapshots the drawing and holds overrides, unknowns, assumptions and
+whole-system scope separately. This supports checking, answer comparison and
+what-if analysis without turning an experiment into a persisted edit. Calculation
+reports preserve effective inputs. Applying results alone would leave the drawing
+with answers derived from different inputs, so application reviews a complete
+successful scenario; copying results remains separate. Partial proposals preserve
+blocked systems, and shared network assumptions require the full network to pass.
+Native controls and the existing panel arrangement are retained.
+
+## Direct solve controls and visible state
+
+Review found that badges only selected sidebar rows, session values never reached
+the canvas renderer, and saved analysis targets took precedence over supplied
+answers when reopening Solve. The solve panel also inherited the palette's 264px
+width and separated selection from its editor with diagnostics above it.
+
+Badges now cycle supported states, and a guarded session scene renders temporary
+values through Python without altering the document or export source. Opening a
+session infers numeric values as known; the public explicit solver API is unchanged.
+Readiness stays above the scroll area, selected rows expand in place, and only
+the solve panel widens to 340–440px on desktop. Time model and whole-system scope
+use explicit labels. A control-volume target conflict explains the one-unknown
+limit without overwriting the current target. Existing colors and symbols remain.
+
+The supplied problem examples had manual label offsets. Removing those defaults
+allows the library's automatic placement to run; saved user offsets are retained.
+Auto position also resets the label-side preference, and the inspector states
+whether the position is automatic or manual.
+
+
+## Intentional solve hierarchy
+
+The approved follow-up removes the long value list and orange selection frames
+from the solve sidebar. Readiness and the primary action use green; unknowns use
+blue, actual overrides purple, and failures red. Values are edited beside their
+canvas owners in a neutral floating editor. A separate searchable navigator opens
+from the canvas toolbar or readiness counts. Scope and time assumptions are last
+under Settings. Closing a changed calculation uses a small modal with native focus
+containment; Escape dismisses the nearest temporary surface first.
+
+Override intent is distinct from an effective change: merely choosing Override
+never increments counts or requires a discard confirmation. Action button nodes
+remain stable across numeric blur commits so clicks are not lost during updates.
+Rendering, stored data, complete-scenario application and Undo remain separate.
+
+
+## Resistance identification and coordinated solve labels
+
+A separate check operation prevents a fully supplied diagram from being presented
+as a failed solve. With no selected unknown, Solve stays disabled; checking has
+its own action, titles and residual explanation. Resistance targets are additive
+and preserve legacy node-temperature targets. The solver introduces heat-rate
+variables for unknown resistances, checks rank, derives positive resistances, and
+applies branch answers with the same snapshot guards as other physical results.
+
+Browser badges previously used a fixed upward offset from a label's left edge.
+Their measured extents now participate in Python label placement. Physical labels
+use preferred, collision-checked positions instead of unconditional default offsets.
+An explicit all-label reset addresses browser-saved copies of old example layouts.
+
+
+## Homework-only example picker
+
+The example picker now shows exactly the four answered HW2 questions (1.44, 1.51, 1.57a, 1.60a), in submission order, without feature submenus. This supersedes the earlier all-components catalog requirement. Saved answers remain known; users explicitly choose what to solve. Existing gallery and analysis files remain compatibility/developer fixtures. The homework guide records rounding, the hot-plate unit discrepancy, and the distinction between supplied storage checking and melting-time calculation.
+
+
+## Searchable component library and contextual properties
+
+The old all-symbols-visible constraint is superseded by readable rows and search across Network, Physical and Annotations. Properties stay beside the object at user request. Category labels do not encode model roles. Ownership and membership remain distinct from descriptive associations, selected by label and ID. Mobile uses a dismissible drawer. Physical entities are separate from network glyphs. The stable branch `rate` contract is the whole repeated group rate; the new solver was corrected to match the legacy checker. Current workflows live in editor-guide.md; historical reports are labeled.
+
+
+## Optional Quick start
+
+The forced gesture-gated tour is replaced by four manually navigated pages. Quick start never creates a file or advances on edits. It is offered in Help and the empty state, not launched automatically. Readiness is explained by the actual Solve assessment, never inferred from completing drawing gestures.

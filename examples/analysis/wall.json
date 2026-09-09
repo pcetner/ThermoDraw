@@ -1,0 +1,198 @@
+{
+  "title": "Solve: Wall cross-section and its linked resistance network",
+  "units": {
+    "T": "K",
+    "R": "K/W"
+  },
+  "nodes": [
+    {
+      "id": "inside",
+      "at": [
+        150,
+        450
+      ],
+      "value": 599.5,
+      "label": "Inside oven",
+      "kind": "fixed",
+      "angle": 180
+    },
+    {
+      "id": "wall",
+      "at": [
+        410,
+        450
+      ],
+      "label": "Outer wall"
+    },
+    {
+      "id": "air",
+      "at": [
+        740,
+        450
+      ],
+      "kind": "fixed",
+      "value": 300,
+      "label": "Air and surroundings"
+    }
+  ],
+  "branches": [
+    {
+      "id": "conduction",
+      "from": "inside",
+      "to": "wall",
+      "kind": "cond",
+      "value": 0.0714
+    },
+    {
+      "id": "convection",
+      "from": "wall",
+      "to": "air",
+      "kind": "conv",
+      "value": 0.05,
+      "via": [
+        [
+          470,
+          450
+        ],
+        [
+          470,
+          350
+        ],
+        [
+          680,
+          350
+        ],
+        [
+          680,
+          450
+        ]
+      ],
+      "at": [
+        570,
+        350
+      ],
+      "side": "up"
+    },
+    {
+      "id": "radiation",
+      "from": "wall",
+      "to": "air",
+      "kind": "rad",
+      "value": 0.126,
+      "via": [
+        [
+          470,
+          450
+        ],
+        [
+          470,
+          550
+        ],
+        [
+          680,
+          550
+        ],
+        [
+          680,
+          450
+        ]
+      ],
+      "at": [
+        570,
+        550
+      ],
+      "side": "down"
+    }
+  ],
+  "regions": [
+    {
+      "id": "inside_region",
+      "at": [
+        120,
+        100
+      ],
+      "size": [
+        220,
+        180
+      ],
+      "label": "Inside oven",
+      "links": [
+        "node:inside"
+      ]
+    },
+    {
+      "id": "wall_region",
+      "at": [
+        340,
+        100
+      ],
+      "size": [
+        180,
+        180
+      ],
+      "label": "Wall",
+      "links": [
+        "node:wall",
+        "branch:conduction"
+      ]
+    },
+    {
+      "id": "air_region",
+      "at": [
+        520,
+        100
+      ],
+      "size": [
+        250,
+        180
+      ],
+      "label": "Air",
+      "links": [
+        "node:air"
+      ]
+    }
+  ],
+  "annotations": [
+    {
+      "id": "basis",
+      "at": [
+        120,
+        30
+      ],
+      "label": "Unit-area resistance network; regions link explicitly to network objects."
+    },
+    {
+      "id": "section-line",
+      "kind": "line",
+      "at": [
+        120,
+        365
+      ],
+      "end": [
+        740,
+        365
+      ]
+    },
+    {
+      "id": "association-arrow",
+      "kind": "arrow",
+      "at": [
+        410,
+        365
+      ],
+      "end": [
+        410,
+        400
+      ],
+      "label": "Related network"
+    }
+  ],
+  "analysis": {
+    "network": {
+      "steady": true,
+      "unknowns": [
+        "wall"
+      ]
+    }
+  }
+}

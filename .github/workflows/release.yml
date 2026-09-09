@@ -20,7 +20,11 @@ on:
     tags: ["v*"]
 
 jobs:
+  verify:
+    uses: ./.github/workflows/ci.yml
+
   publish:
+    needs: verify
     name: build and publish ${{ github.ref_name }}
     runs-on: ubuntu-latest
     environment: pypi
@@ -37,14 +41,13 @@ jobs:
       - name: The tag is the package's version
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e .
+          python -m pip install -e ".[dev]" twine
           want="v$(python -c 'import thermodraw; print(thermodraw.__version__)')"
           test "$want" = "${{ github.ref_name }}" || {
             echo "tag ${{ github.ref_name }} but the package says $want"; exit 1; }
 
       - name: Tests
         run: |
-          python -m pip install pytest
           python -m pytest -q
 
       - name: Build
@@ -53,6 +56,12 @@ jobs:
           python -m build
           python -m twine check dist/*
 
+      - name: Verify the actual release artifacts
+        run: python tools/release_smoke.py dist
+
+      - name: Prepare release notes before publication
+        run: python tools/release_notes.py "${GITHUB_REF_NAME#v}" > notes.md
+
       - name: Publish
         uses: pypa/gh-action-pypi-publish@release/v1
 
@@ -60,6 +69,5 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          python tools/release_notes.py "${GITHUB_REF_NAME#v}" > notes.md
           gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" \
             --verify-tag --notes-file notes.md dist/*

@@ -1,6 +1,6 @@
 # ThermoDraw
 
-Thermal network diagrams for Python. Emits SVG. No runtime dependencies.
+Thermal network and rectangular physical diagrams for Python. Emits SVG, checks supplied balances and solves supported steady-state unknowns. No runtime dependencies.
 
 A symbol library and label-placement engine for drawing thermal resistance
 networks — the R–C ladders and branch networks used in electronics thermal
@@ -26,7 +26,10 @@ src/thermodraw/
   builder.py   sugar over model.py, holding no state the data cannot express
   core.py      text metrics, transforms, the label solver, occupancy, textures
   _check.py    is the drawing any good? placements -> findings, no SVG
-  _physics.py  do the numbers agree with each other? behind --physics
+  _physics.py  do the network numbers agree? behind --physics
+  _physical.py rectangles, surfaces, transfers and control-volume budgets
+  _analysis.py steady temperature/resistance and single-unknown volume solving
+  _session.py  temporary scenarios and guarded application
   _describe.py is it the drawing you meant? placements -> prose, no SVG
   _page.py     the same SVG inline in HTML, with its controls
   _editor.py   what the browser editor asks, JSON in and out; private
@@ -161,27 +164,9 @@ sentence after it says what would overturn it.
   and then the box turns and the wire is re-routed to meet it, because
   `_layout` cuts the wire along the route. A directed path and a fan refuse,
   each saying which field validation forbids it. No text rotates: `angle`
-  orients a label's frame and a symbol, never a glyph. **The keys reach the
-  drawing from inside a component's card**, the one place any shortcut
-  does: a drop opens that card with the caret in the label box, which is
-  exactly when a thing that has just landed flat wants turning, so the keys
-  were dead in the only place they were wanted and put a `]` in the label
-  instead. `f`, `d`, `z` and `p` stay out, being letters someone is typing
-  a name with; a bracket is not, and no label in the corpus holds one. The
-  caret is put back where it was, so a turn costs no part of a name being
-  typed. With nothing selected they say so: silence is what "the key does
-  nothing" is made of.
-- **A node lands on a run, not on a pointer.** `at` from the raw pointer is
-  a number related to nothing else on the page, and `_layout` reads a
-  branch's angle off its endpoints, so three nodes dropped by eye drew at
-  6.58° and −4.97° and the strip said nothing to report. A drop within
-  `ALIGN_PX` of another node's x or y takes that number exactly, and one
-  within reach of the solver's pitch from it takes that; the line is drawn
-  while the drag is held. Reach is in pixels and generous — 30, where a
-  parallel pair stands 80 off its line — because there is no such thing as
-  a run meant to be twenty units off square. Both axes from one node would
-  land the drop on top of it, so the nearer line wins and the other axis
-  falls where it fell.
+  orients a label's frame and a symbol, never a glyph. **Text inputs retain all typed characters**, including brackets; rotation shortcuts run only outside editable fields.
+- **Movement is transactional.** Preview geometry comes from Python placements and is transformed in animation frames; committed data changes once on release. Cancellation and pinch restore it. Scene and solve results must match document generation and edit revision. Alignment acquires within 12 screen pixels and releases beyond 20; detours enter beyond 40 and return below 28. Alt bypasses grid and alignment snapping.
+- **Physical geometry is rectangular.** Regions and control volumes are axis-aligned rectangles, independent of chain layout. Surfaces use normalized edge coordinates; transfers use supplied rates or flux times explicit area. Membership and network associations are explicit. Preserve editor styles and thermal symbols.
 - **A diagram is named once.** The top bar names the file, and a checkbox
   there says whether the name also goes in as `title`. Nothing draws a
   title — `title` is what an exported page is called and what names the
@@ -437,30 +422,12 @@ sentence after it says what would overturn it.
 
 ## What is left to build
 
-1. **The general placer.** The chain is solved; anything a node joins three
-   others in is still the author's. The record's table of what survives a
-   solver says which checks it must satisfy, which it minimises, and which it
-   may delete, and the chain solver says which it meets by construction.
-2. **What the format cannot state.** The deferred four recurred in three
-   runs — a way to relate two elements, a stream with an inlet and an
-   outlet, a result or provisional marker on a number, a diagram-wide
-   qualifier that is drawn — and run 4 named an area basis, a boundary that
-   is one thing drawn twice, physical arrangement as distinct from page
-   layout, and an effective temperature marked as one (`FINDINGS-run-4.md`).
-   **The stream is built**, and so is a ninth that was found twice and never
-   made this list: two nodes that are one place, now `link`. The record has
-   a section for the rest, and each still needs its argument written there
-   before it is built. What the two that shipped do *not* reach is written
-   down with them: a counterflow exchanger still relates two elements and is
-   where LMTD went, and a heat pipe quoted as a 0.4 K drop still wants a
-   quantity nothing has. A loop is the **solver's** limit and not the
-   format's — run 2's pumped loop draws clean with `at` on its nodes, and
-   the record says so where it once said otherwise.
-3. Region enclosures that auto-size to their contents.
-4. Unit handling — `0.35` choosing between K/W and mK/W, with a deliberate
-   per-element override.
-5. More checks, as they earn their place: when one caught something a browser
-   was needed for, not because it was easy to compute.
+- General graph coordinate placement; the existing placer handles chains.
+- Transient integration, nonlinear heat-transfer laws and material-property derivation.
+- Coupled multiple unknowns within one control volume and stream-unknown solving.
+- Region enclosures that automatically size to contents, property plotting and reference-image import.
+
+Rectangular physical geometry, explicit associations, supplied-rate control-volume checks, steady network solving, resistance identification and temporary unit overrides are implemented. The editor guide and physics-analysis guide describe their limits.
 
 ## Conventions
 
@@ -470,3 +437,8 @@ sentence after it says what would overturn it.
   right, reference rail at the bottom.
 - Commit messages say what changed and why in the subject and body; a golden
   change carries its element diff.
+
+
+## Current editor and documentation contract
+
+Components uses Network, Physical and Annotations categories; properties stay beside objects. Display categories never determine model roles. The picker contains only four answered HW2 problems. `docs/editor-guide.md` is the workflow reference. `_physical.py` owns rectangular geometry and budgets; `_analysis.py` solves steady temperatures/resistances and single-unknown volumes; `_session.py` assesses temporary scenarios. Repeated branch resistance is per item; supplied `rate` is the group total. Historical deferred-work lists above predate rectangular regions, explicit physical associations and scenario unit overrides, now implemented. General layout, transient integration and material-law derivation remain deferred.

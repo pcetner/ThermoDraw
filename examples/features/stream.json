@@ -1,0 +1,74 @@
+{
+  "title": "Continuous reheat furnace \u2014 strip through the oven",
+  "units": {
+    "R": "K/kW",
+    "T": {
+      "unit": "K",
+      "scale": "absolute"
+    },
+    "P": "kW",
+    "q": "kW",
+    "mdot": "kg/s",
+    "cp": "kJ/kg\u00b7K"
+  },
+  "nodes": [
+    {
+      "id": "gas",
+      "label": "Furnace gas",
+      "sub": "f",
+      "value": "1520"
+    },
+    {
+      "id": "face",
+      "label": "Refractory hot face",
+      "sub": "w",
+      "value": "1520"
+    },
+    {
+      "id": "out",
+      "label": "Strip out",
+      "sub": "out",
+      "value": "1250"
+    },
+    {
+      "id": "in",
+      "kind": "fixed",
+      "label": "Strip in",
+      "sub": "in",
+      "value": "300"
+    }
+  ],
+  "branches": [
+    {
+      "from": "gas",
+      "to": "face",
+      "kind": "link",
+      "label": "One chamber"
+    },
+    {
+      "from": "face",
+      "to": "out",
+      "kind": "rad",
+      "label": "Chamber to strip",
+      "value": "0.171"
+    },
+    {
+      "from": "in",
+      "to": "out",
+      "kind": "stream",
+      "label": "Steel strip",
+      "mdot": "2.5",
+      "cp": "0.665"
+    }
+  ],
+  "sources": [
+    {
+      "to": "gas",
+      "kind": "diss",
+      "label": "Firing rate",
+      "sub": "fire",
+      "value": "1579.4",
+      "angle": 90
+    }
+  ]
+}
