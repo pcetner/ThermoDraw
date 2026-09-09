@@ -48,6 +48,7 @@ class LabelRect(tuple):
     used: float
     flipped: bool
     clear: bool
+    adornment: Any
 
     def __new__(cls, rect, owner=None, report=None):
         self = super().__new__(cls, rect)
@@ -59,6 +60,7 @@ class LabelRect(tuple):
         self.used = report.get("used", 0.0)
         self.flipped = report.get("flipped", False)
         self.clear = report.get("clear", True)
+        self.adornment = report.get("adornment")
         return self
 
     def __repr__(self):
@@ -85,6 +87,7 @@ class Scene:
     occupancy: Optional[S.Occupancy] = None
     ink: Tuple[float, float, float, float] = (0.0, 0.0, 0.0, 0.0)
     box: Tuple[float, float, float, float] = (0.0, 0.0, 0.0, 0.0)
+    preview: List[Dict[str, Any]] = field(default_factory=list)
 
 
 def wire(points):
@@ -239,6 +242,13 @@ def bounds(p):
     units above a node that draws a 5.5 circle, and count the boundary wall a
     second time when the wall is already its own placement.
     """
+    if p.element in ("region", "volume"):
+        w, h = p.geometry["size"]
+        return p.at[0], p.at[1], p.at[0] + w, p.at[1] + h
+    if p.element in ("surface", "transfer", "annotation"):
+        points = p.points or [p.at]
+        return (min(q[0] for q in points) - 5, min(q[1] for q in points) - 5,
+                max(q[0] for q in points) + 5, max(q[1] for q in points) + 5)
     if p.element == "wire":
         xs = [q[0] for q in p.points]
         ys = [q[1] for q in p.points]
@@ -261,7 +271,26 @@ def bounds(p):
     return p.at[0] - r, p.at[1] - r, p.at[0] + r, p.at[1] + r
 
 
-def compose(placements, size=None, padding=PADDING):
+def physical_markup(p):
+    """New geometry uses the existing wire and label palette."""
+    x, y = p.at
+    if p.element in ("region", "volume"):
+        w, h = p.geometry["size"]
+        style = 'fill="var(--ink)" fill-opacity=".06"' if p.element == "region" else 'fill="none" stroke-dasharray="8 5"'
+        return (f'<rect x="{x:.1f}" y="{y:.1f}" width="{w:.1f}" height="{h:.1f}" '
+                f'stroke="var(--ink)" stroke-width="1.5" {style}/>')
+    if not p.points:
+        return ""
+    mark = wire(p.points)
+    if p.geometry.get("arrow"):
+        a, b = p.points[-2:]
+        angle = math.atan2(b[1] - a[1], b[0] - a[0])
+        ends = [(b[0] - 10 * math.cos(angle + s * .45), b[1] - 10 * math.sin(angle + s * .45)) for s in (-1, 1)]
+        mark += wire([ends[0], b, ends[1]])
+    return mark
+
+
+def compose(placements, size=None, padding=PADDING, label_adornments=None):
     """Everything a render works out, as a `Scene`.
 
     Wires come first so symbols sit over them, labels last so they sit over
@@ -272,6 +301,16 @@ def compose(placements, size=None, padding=PADDING):
     glyphs: List[str] = []
     nodes: List[str] = []
     labels: List[str] = []
+    backgrounds: List[str] = []
+    preview: List[Dict[str, Any]] = []
+
+    def remember(p, markup, element=None):
+        if p.shown:
+            preview.append({"role": p.role, "index": p.index,
+                            "element": element or p.element, "at": list(p.at),
+                            "angle": p.angle, "points": [list(q) for q in p.points],
+                            "geometry": p.geometry, "markup": markup,
+                            "bounds": list(bounds(p))})
     rects: List[LabelRect] = []
     seen: Set[Any] = set()
     unshown: List[LabelRect] = []   # the hidden form's label: measured only
@@ -284,6 +323,7 @@ def compose(placements, size=None, padding=PADDING):
     variants: Dict[Any, Dict[Any, List[str]]] = collections.OrderedDict()
 
     def emit(p, markup, into):
+        remember(p, markup)
         if p.variant is None:
             into.append(markup)
         else:
@@ -308,13 +348,23 @@ def compose(placements, size=None, padding=PADDING):
         if p.element == "symbol":
             emit(p, place(p.symbol, p.at[0], p.at[1], p.angle), glyphs)
         elif p.element == "ground":
-            glyphs.append(ground(p.at[0], p.at[1], p.angle, *_wall(p)))
+            mark = ground(p.at[0], p.at[1], p.angle, *_wall(p))
+            glyphs.append(mark)
+            remember(p, mark)
         elif p.element == "phase":
-            glyphs.append(phase_mark(p.at[0], p.at[1]))
+            mark = phase_mark(p.at[0], p.at[1])
+            glyphs.append(mark)
+            remember(p, mark)
         elif p.element == "ellipsis":
             emit(p, ellipsis(p.at[0], p.at[1], p.angle), glyphs)
         elif p.element == "node":
-            nodes.append(node(p.at[0], p.at[1], p.radius))
+            mark = node(p.at[0], p.at[1], p.radius)
+            nodes.append(mark)
+            remember(p, mark)
+        elif p.element in ("region", "volume", "surface", "transfer", "annotation"):
+            mark = physical_markup(p)
+            (backgrounds if p.element in ("region", "volume") else glyphs).append(mark)
+            remember(p, mark)
 
     # What is already on the page, so each label can avoid it. A label's own
     # symbol is registered against it as owner and skipped: clear_offset
@@ -339,6 +389,15 @@ def compose(placements, size=None, padding=PADDING):
             occupied.add_box(centre, half, angle, owner=p)
         elif p.element == "node":
             occupied.add_box(p.at, (p.radius, p.radius), 0.0, owner=p)
+        elif p.element in ("region", "volume"):
+            x, y = p.at
+            w, h = p.geometry['size']
+            corners = [(x, y), (x+w, y), (x+w, y+h), (x, y+h), (x, y)]
+            for a, b in zip(corners, corners[1:]):
+                occupied.add_segment(a, b, owner=p)
+        elif p.element in ("surface", "transfer", "annotation"):
+            for a, b in zip(p.points, p.points[1:]):
+                occupied.add_segment(a, b, owner=p)
 
     for p in placements:
         lab = p.label
@@ -363,14 +422,20 @@ def compose(placements, size=None, padding=PADDING):
         # A form's label belongs to that form and fades with it. Putting the
         # visible one in the shared list left it stranded in the middle of the
         # other form when the two were swapped.
-        into = [] if p.variant is not None else labels
+        into: List[str] = []
         rect = S.annotate(p.at[0], p.at[1], p.angle, into, user=lab.user,
                           name=lab.name, value=lab.value,
                           extra=lab.extra,
                           half=lab.half, half_len=lab.half_len,
                           side=lab.side,
                           occupied=occupied, owner=p,
-                          report=report, claim=p.shown)
+                          report=report, claim=p.shown, offset=lab.offset,
+                          _preferred=lab.preferred,
+                          _search_steps=256 if label_adornments or p.role in ('region','volume','surface','transfer','annotation') else 40,
+                          _adornment=(label_adornments or {}).get((p.role, p.index)))
+        remember(p, "".join(into), "label")
+        if p.variant is None:
+            labels.extend(into)
         if p.variant is not None:
             bucket = variants.setdefault((p.ref, p.variant, p.shown), {})
             bucket.setdefault(None, []).extend(into)
@@ -378,7 +443,7 @@ def compose(placements, size=None, padding=PADDING):
             (rects if p.shown else unshown).append(
                 LabelRect(rect, owner=p, report=report))
 
-    parts = wires + glyphs + _variant_groups(variants) + nodes + labels
+    parts = backgrounds + wires + glyphs + _variant_groups(variants) + nodes + labels
     # "The canvas is sized for the larger form" — and a form is its drawing
     # and its text, not just its copies. `rects` stays the shown ones,
     # because that is what `check` grades and `describe` reports.
@@ -386,7 +451,10 @@ def compose(placements, size=None, padding=PADDING):
     ink = extent(placements, measured, 0.0)
     box = ((0.0, 0.0, float(size[0]), float(size[1])) if size is not None
            else extent(placements, measured, padding))
-    return Scene(parts=parts, rects=rects, occupancy=occupied, ink=ink, box=box)
+    # Match final paint order while the browser reuses these groups in a gesture.
+    order = {"region": 0, "volume": 0, "wire": 1, "node": 3, "label": 4}
+    preview.sort(key=lambda p: order.get(p["element"], 2))
+    return Scene(parts=parts, rects=rects, occupancy=occupied, ink=ink, box=box, preview=preview)
 
 
 def draw(placements):

@@ -8,7 +8,7 @@ version, and a removal or a change of meaning is a new major version.
 ## Stable
 
 **The JSON schema** (`docs/schema.md`). Every top-level key, every field on
-a node, a branch, a source and the rail, every `kind`, every quantity in
+a node, a branch, a source, the rail and additive physical entities, every `kind`, every quantity in
 `units`, and what each means. New fields and kinds may be added; none is
 removed or renamed. `corner` was removed before 1.0 and is the last
 removal; a file naming it is refused with the replacement named. A file
@@ -27,7 +27,8 @@ finding codes, which a script may key on:
 `run-off-axis`, `frame-off-centre`, `parallel-pair-same-side`; and under
 `--physics`,
 `node-does-not-balance`, `rate-does-not-match`, `rad-needs-absolute-scale`,
-`link-temperatures-disagree` and `physics-not-checked`.
+`link-temperatures-disagree`, `physics-not-checked`,
+`control-volume-not-checked` and `control-volume-does-not-balance`.
 
 A code's severity may not rise within 1.x. A new code may be added, and a
 script that gates on `ok` will see it; a script that gates on a list of
@@ -42,20 +43,26 @@ be added; none is removed.
 
 **`Placement`.** The fields `element`, `at`, `angle`, `symbol`, `points`,
 `label`, `radius`, `ref`, `wall`, `role`, `ends`, `via`, `count`,
-`arrangement`, `outward`, `variant`, `shown`, `copy` and `index`, and the four
-values of `element`: `symbol`, `wire`, `node`, `ground`, plus `anchor` for
-a repeated group's label.
+`arrangement`, `outward`, `variant`, `shown`, `copy` and `index`, and the original network
+elements `symbol`, `wire`, `node`, `ground`, plus `anchor` for
+a repeated group's label. Physical geometry adds `region`, `volume`, `surface`,
+`transfer` and `annotation`; phase nodes also have a `phase` placement.
 
-**The public names.** Everything in `thermodraw.__all__`: `Diagram`,
-`Node`, `Branch`, `Source`, `Rail`, `DiagramError`, `solve`, `layout`,
+**The public names.**
+
+`assess_physics` assesses temporary scenarios and proposes complete-system application without changing its inputs.
+
+`solve_physics` and `PhysicsResult` add explicit physical analysis; `solve` retains coordinate placement semantics. Everything in `thermodraw.__all__`: `Diagram`,
+`Node`, `Branch`, `Source`, `Rail`, `Region`, `ControlVolume`, `ControlSurface`,
+`Transfer`, `Annotation`, `DiagramError`, `solve`, `layout`,
 `render`, `Placement`, `DiagramBuilder`, `check`, `Report`, `Finding`,
 `describe`, `Description`, `page`, `Symbol`, `SYMBOLS`, `save`, `theme`,
 and the modules `symbols`, `core`, `model` and `io`. Those four modules are
 public as names — `symbols` places one symbol at a time, and the README
 says so — and their contents are not: a function inside `core` may change.
 
-**The command line.** The five subcommands `check`, `describe`, `render`,
-`page` and `solve`, their documented flags, and the exit codes.
+**The command line.** The six subcommands `check`, `describe`, `render`,
+`page`, `solve` and `solve-physics`, their documented flags, and the exit codes.
 
 ## Not stable
 
@@ -83,3 +90,33 @@ anything under `core` and `symbols` below the `Symbol` dataclass.
 A field or a kind is never removed within 1.x. If one has to go, the
 version before the removal refuses it with the replacement named, as
 `corner` is refused now, and the major version changes.
+
+
+Component-panel categories, search aliases and property layouts are private editor presentation. They do not alter serialized roles, IDs, units or the whole-group meaning of branch `rate`. Physical placements add region, volume, surface, transfer and annotation elements to the original network vocabulary.
+
+
+## Physics analysis contract
+
+`PhysicsResult.to_dict()` contains `status`, `input_hash`, `components`, `volumes`,
+`updates` and `coverage`. Aggregate statuses are `not-configured`, `solved`,
+`partial` and `not-solved`. Component/volume statuses include `solved`, `balanced`,
+`unbalanced`, `unchecked`, `missing-inputs`, `unsupported`, `inconsistent`,
+`underdetermined`, `numerically-unreliable` and `direction-conflict`. New fields
+and statuses may be added; consumers must handle unknown statuses conservatively.
+
+Updates contain `entity`, `id`, `field`, `value` and `unit`; branch updates also
+contain `index`. `PhysicsResult.apply(diagram)` returns a validated copy and
+rejects a stale input fingerprint. Partial results contain only successful
+systems' updates. Applying never mutates the original document.
+
+`assess_physics` always returns `status`, `systems`, `issues`, `result`, `applied`,
+`changes` and `comparisons`. Valid inputs additionally return `input_hash`,
+`scenario_hash` and `effective_inputs`; invalid inputs return status `invalid`,
+a null result/proposal and explanatory issues. A successful assessment may have
+no proposal when nothing changed or a shared assumption prevents application.
+Callers must check `applied`, and guard the original fingerprint before applying.
+
+Supplied resistance `rate` remains a whole-group magnitude; calculated report
+rates are signed from source to target. Analysis tolerances govern supplied
+assertions and volume checks, while unknown network equations retain strict
+numerical residual checks. See `physics-analysis.md` for partial-application rules.

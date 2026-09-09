@@ -27,7 +27,7 @@ import math
 import re
 from collections import Counter
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from . import _solve
 from . import model as M
@@ -195,6 +195,7 @@ class Description:
     # joined to what left out the elements that inject all the heat: three
     # readers noted a source on the wrong node would leave it byte-identical.
     sources: List[Tuple[int, str, str, bool]] = field(default_factory=list)
+    physical: Dict[str, Any] = field(default_factory=dict)
 
     def text(self):
         out = [f"{self.source}: canvas {self.canvas[0]:.0f} x "
@@ -250,10 +251,14 @@ class Description:
         if self.lines:
             out += ["", "elements:"]
             out += [l.text() for l in self.lines]
+        if self.physical:
+            import json
+            out += ["", "physical model:", json.dumps(self.physical, ensure_ascii=True, indent=2)]
         return "\n".join(out)
 
     def to_dict(self):
         return {
+            **({"physical": self.physical} if self.physical else {}),
             "source": self.source,
             "canvas": list(self.canvas),
             "counts": dict(self.counts),
@@ -364,7 +369,7 @@ def describe(diagram, size: Optional[Sequence[float]] = None,
         # wanted. The wall carries no text of its own, so the row comes out
         # `(no label)`, which is the same shape a `break` branch with no
         # label already takes.
-        if p.element not in ("symbol", "node", "anchor", "ground")                 or not p.shown:
+        if p.element not in ("symbol", "node", "anchor", "ground", "region", "volume", "surface", "transfer", "annotation") or not p.shown:
             continue
         if p.element == "symbol" and p.copy is not None:
             continue
@@ -411,6 +416,8 @@ def describe(diagram, size: Optional[Sequence[float]] = None,
     sources = [(i, p.ends[0], p.symbol.key, bool(p.outward))   # keys = kinds
                for i, p in enumerate(kept) if p.symbol is not None]
     return Description(
+        physical={key: value for key, value in diagram.to_dict().items()
+                  if key in M.COLLECTIONS},
         source=source,
         canvas=(round(bx1 - bx0, 1), round(by1 - by0, 1)),
         counts=dict(Counter(_kind(p) for p in placements)),

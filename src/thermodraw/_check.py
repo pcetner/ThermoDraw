@@ -1220,7 +1220,7 @@ def _placements(diagram):
 
 def check(diagram, size: Optional[Sequence[float]] = None,
           padding: float = PADDING, source: str = "diagram",
-          physics: bool = False) -> "Report":
+          physics: bool = False, *, _scene=None, _placements_override=None) -> "Report":
     """Everything wrong with this diagram, as a `Report`.
 
     Takes a `Diagram`, a `DiagramBuilder`, or a list of `Placement`. `size`
@@ -1237,8 +1237,9 @@ def check(diagram, size: Optional[Sequence[float]] = None,
         raise ValueError("physics=True needs a Diagram, not placements: the "
                          "numbers are on the diagram")
     model = diagram.build() if hasattr(diagram, "build") else diagram
-    placements = _placements(diagram)
-    scene = compose(placements, size, padding)
+    placements = _placements(diagram) if _placements_override is None else _placements_override
+    scene = compose(placements, size, padding) if _scene is None else _scene
+    placements = [p for p in placements if p.role not in ("region", "volume", "surface", "transfer", "annotation")]
 
     findings: List[Finding] = []
     _collisions(scene, findings)
@@ -1257,6 +1258,8 @@ def check(diagram, size: Optional[Sequence[float]] = None,
     if physics:
         from ._physics import balance          # imports Finding from here
         findings += balance(model)
+        from ._physical import findings as physical_findings
+        findings += physical_findings(model)
 
     findings.sort(key=lambda f: (ORDER[f.severity], f.code, f.where or ""))
     return Report(findings=findings, labels=len(scene.rects), source=source)

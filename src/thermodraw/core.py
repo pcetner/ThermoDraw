@@ -482,7 +482,7 @@ def _corner(cx, cy, side, d, bw, bh):
 def annotate(cx, cy, a, out, user=None, name=None, value=None, extra=(),
              half=10, half_len=None, gap=5, size=13, vsize=13, usize=11.5,
              side="auto", occupied=None, owner=None, report=None,
-             claim=True):
+             claim=True, offset=None, _adornment=None, _preferred=None, _search_steps=40):
     """Place one text block and return the rectangle it took.
 
     `occupied` is consulted for labels already placed and wires already
@@ -512,6 +512,9 @@ def annotate(cx, cy, a, out, user=None, name=None, value=None, extra=(),
     hl = half if half_len is None else half_len
     bw = max(_line_w(l) for l in lines)
     bh = sum(_line_h(l) for l in lines)
+    text_bw, text_bh = bw, bh
+    aw, ah = _adornment or (0, 0)
+    bw, bh = max(bw, aw), bh + ah
 
     chosen, left, top = None, None, None
     solved = used = 0.0
@@ -530,7 +533,7 @@ def annotate(cx, cy, a, out, user=None, name=None, value=None, extra=(),
         chosen = candidates[0]
         d = clear_offset(cx, cy, a, chosen, hl, half, bw, bh, gap)
         solved = d
-        for _ in range(40):
+        for _ in range(_search_steps):
             left, top = _corner(cx, cy, chosen, d, bw, bh)
             if occupied.free((left + bw / 2, top + bh / 2),
                              (bw / 2, bh / 2), owner):
@@ -541,10 +544,38 @@ def annotate(cx, cy, a, out, user=None, name=None, value=None, extra=(),
             clear = False
         used = d
 
+    if offset is None and _preferred is not None:
+        px, py = cx + _preferred[0] - (bw-text_bw)/2, cy + _preferred[1] - ah
+        if occupied is None or occupied.free((px+bw/2, py+bh/2), (bw/2, bh/2), owner):
+            left, top = px, py
+            clear = True
+    if offset is not None:
+        left, top = cx + offset[0], cy + offset[1]
+        left -= (bw-text_bw)/2
+        top -= ah
+        solved = used = 0.0
+        clear = occupied is None or occupied.free(
+            (left + bw / 2, top + bh / 2), (bw / 2, bh / 2), owner)
+
     if report is not None:
         report.update(side=chosen, solved=solved, used=used, clear=clear,
                       flipped=chosen is not candidates[0])
 
+    assert left is not None and top is not None
+    group_left, group_top = left, top
+    badge_top = top
+    if ah and offset is not None and occupied is not None:
+        for _ in range(100):
+            if occupied.free((left+bw/2, badge_top+ah/2), (aw/2, ah/2), None):
+                break
+            badge_top -= max(4, ah/4)
+        else:
+            clear = False
+    if report is not None and ah:
+        report['adornment'] = [left+(bw-aw)/2, badge_top, aw, ah]
+        report['clear'] = clear
+    left, top = left+(bw-text_bw)/2, top+ah
+    bw, bh = text_bw, text_bh
     y = top
     for line in lines:
         lh = _line_h(line)
@@ -566,7 +597,9 @@ def annotate(cx, cy, a, out, user=None, name=None, value=None, extra=(),
     # what is drawn, and it must not push a visible label aside for a
     # rectangle nobody can see.
     if occupied is not None and claim:
-        occupied.add_rect(left, top, bw, bh, owner=owner)
+        occupied.add_rect(group_left, group_top, max(bw, aw), bh+ah, owner=owner)
+        if ah:
+            occupied.add_rect(left+(bw-aw)/2, badge_top, aw, ah, owner=owner)
     return left, top, bw, bh
 
 

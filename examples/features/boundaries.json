@@ -1,0 +1,133 @@
+{
+  "title": "Superconducting magnet in a cryostat, persistent mode",
+  "units": {
+    "R": "K/W",
+    "T": "K",
+    "P": "W",
+    "q": "W"
+  },
+  "nodes": [
+    {
+      "id": "room",
+      "kind": "fixed",
+      "label": "Outer vessel",
+      "sub": "v",
+      "value": "300",
+      "at": [
+        200,
+        190
+      ]
+    },
+    {
+      "id": "shield",
+      "label": "Radiation shield",
+      "sub": "sh",
+      "value": "40",
+      "at": [
+        560,
+        190
+      ]
+    },
+    {
+      "id": "bath",
+      "kind": "phase",
+      "label": "Liquid helium",
+      "sub": "He",
+      "value": "4.2",
+      "at": [
+        880,
+        190
+      ]
+    },
+    {
+      "id": "magnet",
+      "label": "Magnet winding",
+      "sub": "m",
+      "value": "4.5",
+      "at": [
+        1180,
+        190
+      ],
+      "side": "right"
+    },
+    {
+      "id": "mount",
+      "kind": "break",
+      "label": "Room-temperature mount",
+      "at": [
+        1360,
+        430
+      ],
+      "side": "right"
+    }
+  ],
+  "branches": [
+    {
+      "from": "room",
+      "to": "shield",
+      "kind": "cond",
+      "label": "G-10 support straps",
+      "value": "50",
+      "rate": "5.2"
+    },
+    {
+      "from": "shield",
+      "to": "bath",
+      "kind": "cond",
+      "label": "Instrumentation leads",
+      "value": "179"
+    },
+    {
+      "from": "magnet",
+      "to": "bath",
+      "kind": "cond",
+      "label": "Winding to bath",
+      "value": "6"
+    },
+    {
+      "from": "magnet",
+      "to": "mount",
+      "kind": "break",
+      "label": "Suspension strut",
+      "angle": 90
+    }
+  ],
+  "sources": [
+    {
+      "to": "shield",
+      "kind": "radin",
+      "label": "Through the MLI",
+      "value": "30",
+      "sub": "MLI",
+      "at": [
+        560,
+        70
+      ],
+      "angle": 90
+    },
+    {
+      "from": "shield",
+      "kind": "flow",
+      "label": "Cryocooler stage 1",
+      "value": "35",
+      "sub": "1",
+      "at": [
+        420,
+        70
+      ],
+      "angle": 270
+    },
+    {
+      "to": "magnet",
+      "kind": "diss",
+      "label": "Joint heating",
+      "value": "0.05",
+      "sub": "j",
+      "at": [
+        1180,
+        40
+      ],
+      "angle": 90
+    }
+  ]
+}

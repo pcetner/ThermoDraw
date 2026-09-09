@@ -1,5 +1,66 @@
 # The diagram schema
 
+## Rectangular physical sketches and supplied energy budgets
+
+Optional top-level lists `regions`, `control_volumes`, `control_surfaces`,
+`transfers`, and `annotations` coexist with networks. A physical-only file
+may omit `nodes`. All new objects have a unique nonempty `id`, optional
+`label`, `label_offset`, and `links`. Links are descriptive references such
+as `node:wall`, `branch:r1`, or `source:p1`; they never add budget terms.
+Branches and sources accept an optional `id` for these references.
+
+| Object | Fields and defaults |
+|---|---|
+| Region | `at`: upper-left pair, default `[0,0]`; `size`: positive width/height, default `[200,120]`. Rectangles only. |
+| Control volume | `at`, `size` (default `[240,160]`), `regions`: list of region IDs; `generation`, `storage`: supplied rates; `steady`: false; `unit`: `W`; `incomplete`: false. |
+| Control surface | Required `volume` ID; `edge`: `left`, `right` (default), `top`, `bottom`; `start`: 0.25, `end`: 0.75, fractions of that edge with `0 <= start < end <= 1`; `area`, `area_unit`: `m²`, `cm²`, or `mm²`. Normal points outward. |
+| Transfer | `surface`: optional surface ID; `kind`: `heat` (default), `work`, or `mass`; `direction`: `out` (default) or `in`; `rate`, `unit` (`W`, `kW`, `mW`); alternatively `flux`, `flux_unit` (`W/m²`, `W/cm²`, `kW/m²`), for heat only; `length`: 80 drawing units; `at`: fallback anchor for detached arrows. |
+| Annotation | `kind`: `text` (default), `line`, or `arrow`; `at`: `[0,0]`; `end`: `[100,0]`, used by lines/arrows. |
+
+Drawing coordinates never imply physical area. Surface fractions and attached
+arrows follow the volume when it moves or resizes. A region's membership in a
+volume is explicit. Overlap does not establish physical membership.
+
+`label_offset` is an optional pair on nodes, branches, sources and physical
+objects: the label's upper-left corner relative to its element anchor. It
+overrides `side` and automatic positioning. Remove it to restore automatic
+positioning. Manual labels still participate in collision checks.
+
+Under `check --physics`, each volume checks incoming rates minus outgoing
+rates plus generation minus storage. Positive storage means accumulation;
+negative means release. Supply storage explicitly or set `steady: true`.
+Generation must be explicit, including zero. Mass transfers state energy
+rates, not just mass flow. Flux requires explicit physical surface area.
+Do not supply both rate and flux. All supplied transfer magnitudes must be
+nonnegative. Symbolic values are allowed in sketches but are not evaluated.
+
+The tolerance is the larger of 0.001 W and 1% of the larger balance-side
+magnitude. `control-volume-does-not-balance` is a warning with the residual;
+`control-volume-not-checked` is a note naming missing terms. Detached arrows
+are unchecked. The editor sets `incomplete: true` when boundary terms are
+deleted; review the remaining terms before clearing it. Network links never
+duplicate energy contributions. No heat-transfer laws, temperatures, or
+melting times are solved by this check.
+
+Python exports `Region`, `ControlVolume`, `ControlSurface`, `Transfer`, and
+`Annotation`. `DiagramBuilder` provides `region`, `control_volume`,
+`control_surface`, `transfer`, and `annotation` methods with these fields as
+keyword arguments. Existing files retain their network meaning.
+
+```python
+from thermodraw import DiagramBuilder
+
+d = (DiagramBuilder()
+     .region("oven", at=(100, 100), size=(300, 160), label="Oven")
+     .control_volume("cv", at=(90, 90), size=(320, 180),
+                     regions=["oven"], generation=0, steady=True)
+     .control_surface("input", "cv", edge="left")
+     .control_surface("loss", "cv", edge="right")
+     .transfer("power", surface="input", kind="work", direction="in", rate=100)
+     .transfer("heat", surface="loss", rate=100)
+     .build())
+```
+
 A ThermoDraw diagram is plain data. This page is the whole format; it is
 written to be pasted into a prompt.
 
@@ -789,3 +850,13 @@ and nothing fetched from anywhere, plus a control for each repeated group.
 Both forms are already in the markup with stable ids, so the control flips two
 `display` attributes; it does not rebuild anything. The script lives in the
 page and never in the SVG.
+
+
+## Explicit physical solving
+
+Steady network temperatures, identifiable resistance values, and single-unknown control-volume balances are now available through `solve_physics`, `solve-physics`, and the editor’s Solve physics inspector. See [physics analysis](physics-analysis.md) for the optional analysis schema, equations, workflow, diagnostics and limits. Drawing layout and existing checker tolerances retain their meanings.
+
+
+## Editor representation
+
+The [editor guide](editor-guide.md) documents Network, Physical and Annotations categories and floating properties. Display categories do not change model roles or kinds. Region membership and associations use stable IDs. A repeated resistance value is per item; its optional `rate` is the whole group heat rate in both checking and solving. Analysis time assumptions are not drawn automatically; use text annotations for exported callouts.

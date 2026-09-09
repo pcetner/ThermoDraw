@@ -23,7 +23,9 @@ phase-change node is holding latent heat that this cannot see, so it is not
 asked either. A `flux` source is per unit area with no area to hand, so a node
 carrying one is skipped rather than guessed at.
 """
+import math
 from typing import Dict, List, Optional, Tuple
+from ._physical import number
 
 from . import model as M
 from ._check import Finding
@@ -44,10 +46,7 @@ RESISTANCES = {k for k, q in M.QUANTITY.items()
 
 
 def _num(value) -> Optional[float]:
-    try:
-        return float(str(value).strip())
-    except (TypeError, ValueError):
-        return None
+    return number(value)
 
 
 def _folded(diagram, b) -> Optional[float]:
@@ -59,7 +58,7 @@ def _folded(diagram, b) -> Optional[float]:
     branch's per-item value went in raw.
     """
     folded = diagram.fold(b.kind, b.value, b.count, b.arrangement)
-    return _num(b.value) if folded is None else folded
+    return _num(b.value) if folded is None else number(folded)
 
 
 def _fmt(x: float) -> str:
@@ -138,7 +137,7 @@ class _Net:
             if b.kind in RESISTANCES:
                 r = _folded(diagram, b)
                 self.paths.append((*ends,
-                                   None if r is None else r * r_scale, label))
+                                   None if r is None else number(r * r_scale), label))
             elif b.kind == "flow":
                 self.flows.append((*ends, _folded(diagram, b), label))
             elif b.kind == "stream":
@@ -204,8 +203,11 @@ def balance(diagram) -> List[Finding]:
     for i, b in enumerate(diagram.branches):
         if b.kind != "link":
             continue
-        ta, tb = _num(diagram.node(b.source).value), _num(
-            diagram.node(b.target).value)
+        def stated_temperature(node_id):
+            if node_id == M.RAIL:
+                node_id = diagram.rail.reference
+            return _num(diagram.node(node_id).value)
+        ta, tb = stated_temperature(b.source), stated_temperature(b.target)
         if ta is None or tb is None or abs(ta - tb) <= 1e-9:
             continue
         out.append(Finding(
@@ -256,12 +258,13 @@ def balance(diagram) -> List[Finding]:
                 why = f"source {i} has no numeric value"
                 break
             v *= (p_scale if s.kind == "diss" else q_scale) * (s.count or 1)
-            if s.outward:
-                leave += v
-                said.append(f"{_fmt(v)} W out by source {i}")
+            inward = -v if s.outward else v
+            if inward < 0:
+                leave += -inward
+                said.append(f"{_fmt(-inward)} W out by source {i}")
             else:
-                arrive += v
-                said.append(f"{_fmt(v)} W in by source {i}")
+                arrive += inward
+                said.append(f"{_fmt(inward)} W in by source {i}")
 
         for a, b, q, label in net.flows:
             if why or n.id not in (a, b):
@@ -270,12 +273,13 @@ def balance(diagram) -> List[Finding]:
                 why = f"{label} has no numeric value"
                 break
             q *= q_scale
-            if a == n.id:
-                leave += q
-                said.append(f"{_fmt(q)} W out by {label}")
+            outward = q if a == n.id else -q
+            if outward >= 0:
+                leave += outward
+                said.append(f"{_fmt(outward)} W out by {label}")
             else:
-                arrive += q
-                said.append(f"{_fmt(q)} W in by {label}")
+                arrive += -outward
+                said.append(f"{_fmt(-outward)} W in by {label}")
 
         for a, b, q, label in net.streams:
             if why or n.id not in (a, b):
@@ -339,6 +343,8 @@ def balance(diagram) -> List[Finding]:
                 arrive += -q
                 said.append(f"{_fmt(-q)} W in by {label} "
                             f"({_fmt(there - here)} K over {_fmt(r)} K/W)")
+        if not all(math.isfinite(v) for v in (arrive, leave)):
+            why = "energy calculation exceeded numerical range"
         if why is None and not said:
             why = "nothing is attached to it"
         if why:
@@ -360,16 +366,27 @@ def balance(diagram) -> List[Finding]:
 
     # A branch that states what it carries, beside what its ends imply.
     r_scale = R_SCALE[units.get("R", "K/W")]
+    def unchecked_rate(index, reason):
+        out.append(Finding("physics-not-checked", "note", f"branch {index}",
+                           f"branch {index}: rate not checked: {reason}",
+                           remedy="Supply finite temperatures, a positive resistance and a finite rate in supported units."))
     for i, b in enumerate(diagram.branches):
         if b.rate is None or b.kind not in RESISTANCES:
             continue
         rate, r = _num(b.rate), _num(b.value)
         ta, tb = net.temps.get(b.source), net.temps.get(b.target)
         if rate is None or r is None or ta is None or tb is None or r <= 0:
+            unchecked_rate(i, "missing or nonfinite numeric inputs")
             continue
         r_eff = (_folded(diagram, b) or r) * r_scale
+        if not math.isfinite(r_eff) or r_eff <= 0:
+            unchecked_rate(i, "resistance exceeded numerical range")
+            continue
         implied = abs(ta - tb) / r_eff
         stated = rate * q_scale
+        if not all(math.isfinite(v) for v in (implied, stated)):
+            unchecked_rate(i, "rate calculation exceeded numerical range")
+            continue
         if abs(implied - stated) <= SLACK * max(implied, stated, 1e-12):
             continue
         out.append(Finding(

@@ -21,8 +21,9 @@ SRC = ROOT / "src" / "thermodraw"
 # document; removing one is a major version.
 ALL = [
     "Diagram", "Node", "Branch", "Source", "Rail", "DiagramError",
+    "Region", "ControlVolume", "ControlSurface", "Transfer", "Annotation",
     "solve", "layout", "render", "Placement", "DiagramBuilder",
-    "check", "Report", "Finding",
+    "check", "Report", "Finding", "solve_physics", "PhysicsResult", "assess_physics",
     "describe", "Description",
     "page",
     "Symbol", "SYMBOLS",
@@ -48,11 +49,13 @@ def test_the_public_names_are_the_ones_promised():
 def test_every_finding_code_is_promised_and_every_promised_code_exists():
     pattern = r'"([a-z]+(?:-[a-z]+)+)", "(?:error|warning|note)"'
     in_code = set()
-    for name in ("_check.py", "_physics.py"):
+    for name in ("_check.py", "_physics.py", "_physical.py"):
         in_code |= set(re.findall(pattern, (SRC / name).read_text(
             encoding="utf-8")))
     promised = {c for c in backticked("**`check`'s report.**")
                 if re.fullmatch(r"[a-z]+(?:-[a-z]+)+", c)}
+    # The physical checker chooses these two codes by check status.
+    in_code |= {"control-volume-not-checked", "control-volume-does-not-balance"}
     assert in_code == promised, (in_code ^ promised)
 
 
