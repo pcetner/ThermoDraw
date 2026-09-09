@@ -57,6 +57,8 @@ class Label:
     half: float = 5.5
     half_len: float = 5.5
     side: str = "auto"
+    offset: Optional[Sequence[float]] = None
+    preferred: Optional[Sequence[float]] = None
 
 
 @dataclass
@@ -121,6 +123,7 @@ class Placement:
     # them. An editor that maps a click back to a field needs the number
     # as a number. None on the rail.
     index: Optional[int] = None
+    geometry: Dict = field(default_factory=dict)
 
 
 def _angle(a, b):
@@ -555,7 +558,12 @@ def layout(diagram) -> List[Placement]:
             out.append(Placement(
                 "ground", at=(at[0] + dx * BREAK_GAP, at[1] + dy * BREAK_GAP),
                 angle=wall_angle, ref=ref, wall=BREAK_WALL, **who))
-    return out
+    for p in out:
+        if p.label and p.role in ("node", "branch", "source") and p.index is not None:
+            entries = getattr(diagram, {"node": "nodes", "branch": "branches", "source": "sources"}[p.role])
+            p.label.offset = entries[p.index].label_offset
+    from ._physical import placements as physical_placements
+    return physical_placements(diagram) + out
 
 
 # ---------------------------------------------------------------- topology

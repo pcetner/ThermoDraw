@@ -45,6 +45,11 @@ def test_the_release_workflow_guards_the_tag():
     assert "tools/release_notes.py" in text
     assert "gh release create" in text
     assert "contents: write" in text
+    assert "needs: verify" in text
+    assert "uses: ./.github/workflows/ci.yml" in text
+    assert text.index('pip install -e ".[dev]"') < text.index("python -m pytest")
+    assert text.index("tools/release_smoke.py") < text.index("pypa/gh-action-pypi-publish")
+    assert text.index("tools/release_notes.py") < text.index("pypa/gh-action-pypi-publish")
 
 
 class TestTheReleaseNotesAreTheChangelogsSection:

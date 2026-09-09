@@ -141,6 +141,9 @@ def bake(svg: str, theme: str = "light", embed_font: bool = True) -> str:
     # out of here as a hex triplet.
     head, sep, tail = svg.partition("</style>")
     svg = _VAR_RE.sub(colour, head) + sep + tail
+    # Physical rectangles carry presentation attributes; bake their colours
+    # too, without interpreting variable-like text inside user labels.
+    svg = re.sub(r'<rect\b[^>]*>', lambda m: _VAR_RE.sub(colour, m.group()), svg)
     if embed_font:
         css = "".join(font_face(f) for f in faces_used(svg))
         svg = svg.replace("<style>", "<style>" + css, 1)

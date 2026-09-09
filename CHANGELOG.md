@@ -7,6 +7,66 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Release engineering fixes
+
+- Prevent nonfinite inputs and overflow from certifying a legacy physics balance.
+- Preserve whole-group rate magnitudes across reversed resistance endpoints;
+  use branch indices internally so user IDs cannot replace solver variables.
+- Honor analysis tolerances in supplied control-volume checks and retain them in
+  applied scenarios, with all-system guards for shared tolerance changes.
+- Annotate the builder, model serialization and analysis entry points; verify
+  consumer typing and support stream `mdot`/`cp` through the builder.
+- Gate publication on the full CI workflow, install build prerequisites before
+  testing, and exercise both wheel and sdist in isolated environments.
+
+- Replaced the automatic practice-file tour with optional Quick start. Back, Next and Close explain build, edit, check/solve and export without changing the drawing.
+
+### Component library and documentation
+
+- Searchable Network, Physical and Annotations categories, readable rows, contextual help and narrow-screen drawer. Properties remain beside objects.
+- Searchable membership/association choices and explicit rate versus flux editing.
+- Reconciled group heat-rate semantics between the steady solver and legacy checker.
+- Added the editor guide and corrected stale example, solver and workflow documentation.
+
+### Explicit physics analysis
+
+- Added dependency-free steady network solving, single-unknown volume balances, pure result reports and explicit guarded application.
+- Added editor configuration, calculation review and undoable application using existing controls and styling.
+- Added CLI solve-physics, worked analysis examples and numerical/browser regression coverage.
+
+
+### Solve workflow cleanup
+
+- Replaced the long solve popover with a temporary Components-area workspace, canvas/list value selection and visible Calculate/Apply actions.
+- Added explicit Known, Unknown, Missing and Calculated markers; preserved boundary roles, unknown restrictions, stale guards and Undo.
+- Added theme-aware native controls and scrollbars.
+- The picker contains four answered HW2 questions; earlier feature catalogs were superseded.
+
+
+### Temporary solve scenarios
+
+- Added isolated session overrides, per-value unit normalization, resets, original-answer comparisons and guarded scenario application.
+- Added shared assess_physics API and CLI --assess/--scenario/--system support, whole-system readiness and partial proposals.
+- Known-only assessments report tolerance and residuals without changing the legacy checker. Calculation reports retain effective inputs; diagram exports remain unchanged.
+
+
+### Editor and physical-model corrections
+
+- Resize the widths or heights of Shift-selected rectangles together using edge handles.
+
+- Quick-add now uses right-click, `/`, or a cancellable touch hold; ordinary empty clicks deselect.
+- Ctrl+C/Ctrl+V copy selected objects and groups with remapped IDs, preserved connections and one-step paste undo. Text fields retain native clipboard behavior.
+
+- Keep drag previews separate from committed data; cancel movement without
+  leaving unsaved edits and reject obsolete scene and placement responses.
+- Add flexible endpoint attachment, isolated-component movement, multiple
+  selection, draggable labels, snap hysteresis and document-export preview.
+  Preserve the editor's existing visual identity.
+- Add rectangular regions and control volumes, edge-attached control
+  surfaces, energy transfers and annotations in Python, JSON and the editor.
+- Check supplied control-volume rates and flux times area, with explicit
+  unknown terms, signed storage and independent residual reporting.
+
 ### Added
 
 - **`stream`, a branch kind: a medium passing through.** A node is "a place

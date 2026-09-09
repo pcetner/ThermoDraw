@@ -15,6 +15,7 @@ if it wrote anything else.
 """
 import argparse
 import html
+import hashlib
 import json
 import pathlib
 import re
@@ -77,6 +78,11 @@ def entries() -> List[Entry]:
     return out
 
 
+def editor_revision() -> str:
+    return hashlib.sha256(b"".join(p.read_bytes() for p in sorted(
+        list((ROOT / "src" / "thermodraw").glob("*.py")) + list(EDITOR.glob("*.*"))))).hexdigest()[:16]
+
+
 def paths() -> List[str]:
     """Every file the site holds, relative to its root, in order."""
     fixed = ["index.html", "site.css", "dictionary.html",
@@ -84,57 +90,60 @@ def paths() -> List[str]:
              "raptor.html", "raptor.svg", "raptor.json", "hero.json",
              "gallery/index.html", ".nojekyll",
              "editor/index.html", "editor/editor.css", "editor/editor.js",
-             "editor/worker.js", f"editor/{WHEEL}", "editor/examples.json"]
+             "editor/worker.js", f"editor/{editor_revision()}/{WHEEL}", "editor/examples.json"]
     per = [f"gallery/{e.name}.{ext}" for e in entries()
            for ext in ("html", "svg", "json")]
-    return fixed + per
+    return fixed + per + [f"{folder}/{p.name}" for folder in ("homework", "analysis", "features") for p in sorted((ROOT / "examples" / folder).glob("*.json"))]
 
 
 def examples() -> List[dict]:
-    """What the editor's New offers besides a blank canvas: every diagram
-    on the site, by title, with its JSON's path from the editor's page."""
-    out = [{"title": "The README hero: a Raptor-class throat wall",
-            "path": "../raptor.json"},
-           {"title": "The schema's worked example: a power device to air",
-            "path": "../hero.json"}]
-    for e in entries():
-        out.append({"title": f"{e.number:02d} {e.title}",
-                    "path": f"../gallery/{e.name}.json"})
-    return out
+    """The four answered HW2 problems, in submission order."""
+    return json.loads((EDITOR / "examples.catalog.json").read_text(encoding="utf-8"))
 
 
 def _palette_markup() -> str:
     """The twenty cards, drawn by the library, grouped as it groups them,
     baked into the page so the palette is there before Python is."""
     out = []
-    group = None
-    for e in _editor.palette():
-        if e["group"] != group:
-            if group is not None:
-                out.append("</div>")
-            group = e["group"]
-            out.append(f'<h3>{html.escape(group)}</h3><div class="ed-cards">')
-        # Ids are content-addressed, so a card's clip path has the same id
-        # as the drawing's, and `url(#id)` resolves to the first in the
-        # document: the card's, in a hidden SVG when the palette is hidden,
-        # and the drawing's hatching escaped its box in present mode.
-        svg = re.sub(r'(id="|url\(#)clip-',
-                     lambda m: m.group(1) + f'pal-{e["key"]}-clip-',
-                     e["svg"])
-        out.append(
-            f'<button type="button" class="ed-card" data-key="{e["key"]}" '
-            f'data-role="{e["role"]}" data-kind="{e["kind"]}" '
-            f'title="{html.escape(e["note"] or e["name"])}">'
-            f'{svg}<span>{html.escape(e["name"])}</span></button>')
-    out.append("</div>")
+    groups = [("Temperature nodes", ("free", "fixed", "break", "phase")),
+              ("Thermal resistances", ("cond", "conv", "rad", "contact", "spread", "pipe", "mixed")),
+              ("Other connections", ("cap", "flow-branch", "break-branch", "link", "stream")),
+              ("Sources", ("diss", "radin", "flow", "flux"))]
+    entries = {e["key"]: e for e in _editor.palette()}
+    names = {"pipe": "Heat-pipe resistance", "mixed": "Mixed resistance", "stream": "Mass-flow stream", "flow-branch": "Heat-flow connection", "flow": "Heat-flow source", "break-branch": "Inline thermal break"}
+    for heading, keys in groups:
+        out.append(f'<section data-component-group data-category="Network"><h3>{heading}</h3><div class="ed-cards">')
+        for key in keys:
+            e = entries[key]
+            svg = re.sub(r'(id="|url\(#)clip-', lambda m: m.group(1) + f'pal-{key}-clip-', e["svg"])
+            name = names.get(key, e["name"])
+            aliases = "resistor resistance" if key in groups[1][1] else "boundary" if key in ("fixed", "break") else "heat input power" if e["role"] == "source" else ""
+            out.append(f'<div class="ed-component-row" data-search="{html.escape(name + " " + key + " " + aliases)}">'
+                       f'<button type="button" class="ed-card" data-key="{key}" data-role="{e["role"]}" data-kind="{e["kind"]}" title="{html.escape(e["note"] or name)}">'
+                       f'{svg}<span>{html.escape(name)}</span></button>'
+                       f'<button type="button" class="ed-component-help" aria-label="About {html.escape(name)}" aria-expanded="false" aria-controls="ed-definition-{key}" data-component-note>?</button><p class="ed-component-definition" id="ed-definition-{key}" hidden>{html.escape(e["note"] or name)}</p></div>')
+        out.append('</div></section>')
+    for category, entries in [("Physical", [("region", "Region rectangle", "A rectangular material layer or spatial region. It defines geometry, not an energy balance."), ("volume", "Control-volume rectangle", "A region of space chosen for an energy balance. Heat, work and mass can cross its boundary."), ("surface", "Control surface", "A segment of a control-volume boundary through which energy or mass can pass."), ("transfer", "Energy transfer", "Heat, work or energy carried by mass across a control surface. The direction sets whether energy enters or leaves.")]), ("Annotations", [("text", "Text", "A label, assumption or equation placed independently on the drawing."), ("line", "Line", "A line used for dimensions, boundaries or callouts. It creates no thermal connection."), ("arrow", "Arrow", "An arrow used to indicate direction or identify a feature. It contributes no energy to a balance.")])]:
+        out.append(f'<section data-component-group data-category="{category}" hidden><h3>{category}</h3><div class="ed-cards">')
+        for key, name, note in entries:
+            out.append(f'<div class="ed-component-row" data-search="{name.lower()}"><button type="button" class="ed-shape-card" data-sketch="{key}">{name}</button><button type="button" class="ed-component-help" aria-label="About {name}" aria-expanded="false" aria-controls="ed-definition-{key}" data-component-note>?</button><p class="ed-component-definition" id="ed-definition-{key}" hidden>{note}</p></div>')
+        out.append('</div></section>')
     return "".join(out)
 
 
 def _wheel(into: pathlib.Path) -> None:
     """Build the wheel the editor loads, from this checkout."""
     with tempfile.TemporaryDirectory() as tmp:
+        # Setuptools writes build/ and egg-info beside its sources. Keep site
+        # builds isolated from simultaneous tests and stale build artifacts.
+        project = pathlib.Path(tmp) / "project"
+        project.mkdir()
+        for name in ("pyproject.toml", "README.md", "LICENSE", "NOTICE"):
+            shutil.copyfile(ROOT / name, project / name)
+        shutil.copytree(ROOT / "src" / "thermodraw", project / "src" / "thermodraw",
+                        ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
         run = subprocess.run([sys.executable, "-m", "build", "--wheel",
-                              "--outdir", tmp, str(ROOT)],
+                              "--outdir", tmp, str(project)],
                              capture_output=True, text=True)
         if run.returncode:
             sys.exit("the wheel did not build (is `build` installed? it is "
@@ -148,9 +157,11 @@ def _wheel(into: pathlib.Path) -> None:
 
 
 def _editor_pages(out: pathlib.Path) -> None:
+    revision = editor_revision()
     template = (EDITOR / "editor.template.html").read_text(encoding="utf-8")
     page = (template.replace("{{VERSION}}", __version__)
-                    .replace("{{WHEEL}}", WHEEL)
+                    .replace("{{REVISION}}", revision)
+                    .replace("{{WHEEL}}", f"{revision}/{WHEEL}")
                     .replace("{{PYODIDE}}", PYODIDE)
                     .replace("{{PALETTE}}", _palette_markup()))
     assert "{{" not in page, "unfilled placeholder in the editor template"
@@ -159,7 +170,7 @@ def _editor_pages(out: pathlib.Path) -> None:
         shutil.copyfile(EDITOR / name, out / "editor" / name)
     _write(out / "editor" / "examples.json",
            json.dumps(examples(), indent=1, ensure_ascii=False) + "\n")
-    _wheel(out / "editor" / WHEEL)
+    _wheel(out / "editor" / revision / WHEEL)
 
 
 def _gallery_index(items: List[Entry], prefix: str = "") -> str:
@@ -231,6 +242,15 @@ def build(out: pathlib.Path) -> List[str]:
         _write(out / "gallery" / f"{e.name}.svg", _svg(e.json))
         shutil.copyfile(e.json, out / "gallery" / f"{e.name}.json")
     _editor_pages(out)
+    for p in sorted((ROOT / "examples" / "homework").glob("*.json")):
+        (out / "homework").mkdir(exist_ok=True)
+        shutil.copyfile(p, out / "homework" / p.name)
+    for p in sorted((ROOT / "examples" / "analysis").glob("*.json")):
+        (out / "analysis").mkdir(exist_ok=True)
+        shutil.copyfile(p, out / "analysis" / p.name)
+    for p in sorted((ROOT / "examples" / "features").glob("*.json")):
+        (out / "features").mkdir(exist_ok=True)
+        shutil.copyfile(p, out / "features" / p.name)
     _write(out / ".nojekyll", "")
 
     written = sorted(str(p.relative_to(out)).replace("\\", "/")
