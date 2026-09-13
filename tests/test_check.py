@@ -1109,12 +1109,13 @@ class TestRepeatedBranches:
                   for l in describe(self.group(20, "series")).lines}
         assert "20 in series" in series["branch 0 a->b"]
 
-    def test_a_repeated_branch_cannot_also_be_routed(self):
-        with pytest.raises(DiagramError, match="via"):
-            (DiagramBuilder(R="K/W", T="C")
+    def test_a_repeated_branch_preserves_outer_routing(self):
+        diagram = (DiagramBuilder(R="K/W", T="C")
              .node("a", "A", "72", at=(0, 0)).node("b", "B", "61", at=(720, 0))
              .branch("a", "b", "cond", "X", "0.3", count=8,
                      arrangement="parallel", via=[(300, 120)]).build())
+        assert diagram.branches[0].via == [(300, 120)]
+        assert layout(diagram)
 
 
 class TestPhaseNode:
@@ -1368,7 +1369,7 @@ class TestTheWireGraph:
             if p.symbol is None:
                 continue
             r = math.radians(p.angle)
-            hl = p.symbol.half_len
+            hl = p.symbol.terminals[1][0]
             ends = tuple(sorted(
                 (round(p.at[0] + s * math.cos(r) * hl, 1),
                  round(p.at[1] + s * math.sin(r) * hl, 1)) for s in (-1, 1)))

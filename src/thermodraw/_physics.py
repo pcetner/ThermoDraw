@@ -334,15 +334,16 @@ def balance(diagram) -> List[Finding]:
             if r <= 0:
                 why = f"{label} has a resistance of zero"
                 break
-            q = (here - there) / r
+            interval = 5 / 9 if units.get('T') in ('°F', 'F') else 1
+            q = (here - there) * interval / r
             if q >= 0:
                 leave += q
                 said.append(f"{_fmt(q)} W out by {label} "
-                            f"({_fmt(here - there)} K over {_fmt(r)} K/W)")
+                            f"({_fmt((here - there) * interval)} K over {_fmt(r)} K/W)")
             else:
                 arrive += -q
                 said.append(f"{_fmt(-q)} W in by {label} "
-                            f"({_fmt(there - here)} K over {_fmt(r)} K/W)")
+                            f"({_fmt((there - here) * interval)} K over {_fmt(r)} K/W)")
         if not all(math.isfinite(v) for v in (arrive, leave)):
             why = "energy calculation exceeded numerical range"
         if why is None and not said:
@@ -382,7 +383,8 @@ def balance(diagram) -> List[Finding]:
         if not math.isfinite(r_eff) or r_eff <= 0:
             unchecked_rate(i, "resistance exceeded numerical range")
             continue
-        implied = abs(ta - tb) / r_eff
+        interval = 5 / 9 if units.get('T') in ('°F', 'F') else 1
+        implied = abs(ta - tb) * interval / r_eff
         stated = rate * q_scale
         if not all(math.isfinite(v) for v in (implied, stated)):
             unchecked_rate(i, "rate calculation exceeded numerical range")
@@ -393,7 +395,7 @@ def balance(diagram) -> List[Finding]:
             "rate-does-not-match", "warning", f"branch {i} {b.source}->{b.target}",
             f"branch {i} {b.source}->{b.target} says it carries "
             f"{_fmt(stated)} W, and its ends imply {_fmt(implied)} W "
-            f"({_fmt(abs(ta - tb))} K over {_fmt(r_eff)} K/W)",
+            f"({_fmt(abs(ta - tb) * interval)} K over {_fmt(r_eff)} K/W)",
             remedy="one of `rate`, `value` or an end temperature is wrong",
             at=tuple(b.at) if b.at else None))
 

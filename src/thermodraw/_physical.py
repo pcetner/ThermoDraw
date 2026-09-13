@@ -85,6 +85,10 @@ ROLES = dict(zip(COLLECTIONS, ("region", "volume", "surface", "transfer", "annot
 POWER = {"W": 1.0, "kW": 1000.0, "mW": .001}
 AREA = {"m²": 1.0, "cm²": .0001, "mm²": .000001}
 FLUX = {"W/m²": 1.0, "W/cm²": 10000.0, "kW/m²": 1000.0}
+from ._units import UnitScales
+POWER = UnitScales('P', POWER)
+AREA = UnitScales('area', AREA)
+FLUX = UnitScales('flux', FLUX)
 
 
 def number(value: object) -> Optional[float]:
@@ -234,6 +238,11 @@ def placements(diagram):
                     value = f"{obj.rate} {obj.unit}"
                 elif obj.flux is not None:
                     value = f"{obj.flux} {obj.flux_unit}"
+                if diagram.display:
+                    from ._units import format_quantity
+                    mode=diagram.display.get('mode','automatic')
+                    value=(format_quantity(obj.rate,obj.unit,'q',mode) if obj.rate is not None
+                           else format_quantity(obj.flux,obj.flux_unit,'flux',mode))
             elif obj.kind != "text":
                 points = [at, tuple(obj.end)]
                 geometry["arrow"] = obj.kind == "arrow"

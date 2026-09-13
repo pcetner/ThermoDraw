@@ -14,6 +14,10 @@ GPOS for the same reason, so the model and the render agree.
 """
 import argparse
 import pathlib
+import sys
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / 'src'))
+from thermodraw._catalogue import SCIENTIFIC_CHARS
+from font_scientific import complete
 
 from fontTools.ttLib import TTFont
 
@@ -24,7 +28,7 @@ FACES = {"regular": "IBMPlexSans-Regular.ttf",
 # Printable ASCII, Latin-1, and the characters the symbol set reaches for.
 EXTRA = "\u00b0\u2192\u2033\u00b2\u00b3\u00d7\u00b1\u2212\u2013\u2014\u2034\u00b7\u0394\u0398\u03a9\u03bb\u03bc\u2018\u2019\u201c\u201d\u2026"
 CHARS = ([chr(c) for c in range(32, 127)]
-         + [chr(c) for c in range(160, 256)] + list(EXTRA))
+         + [chr(c) for c in range(160, 256)] + list(EXTRA + SCIENTIFIC_CHARS))
 
 HEADER = '''"""Character advance widths, as a fraction of the font size.
 
@@ -100,7 +104,7 @@ def main(argv=None):
         path = args.src / name
         if not path.exists():
             raise SystemExit(f"missing {path}")
-        font = TTFont(path)
+        font = complete(TTFont(path))
         tables[face] = widths(font)
         if face == "regular":
             family, version = family_name(font), version_name(font)

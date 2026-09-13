@@ -41,9 +41,9 @@ window.THERMODRAW = {version: "{{VERSION}}", revision: "{{REVISION}}", wheel: "{
   <div class="ed-group ed-wide-only" role="group" aria-label="Diagram">
     <span class="ed-cap">Diagram</span>
     <button type="button" id="ed-analysis" title="Choose physical unknowns, solve and review calculated values">Solve physics</button>
-    <button type="button" id="ed-settings" title="The unit of each quantity, whether K is absolute or a rise, and the reference rail">Units &amp; rail</button>
+    <button type="button" id="ed-settings" title="Choose units and number formatting">Units</button>
     <button type="button" id="ed-share" title="Copy a link that carries this whole diagram; anyone who opens it gets a copy">Copy share link</button>
-    <button type="button" id="ed-export" title="Save as SVG, PNG, an HTML page or the JSON file">Export…</button>
+    <button type="button" id="ed-export" title="Save as SVG, PNG, an HTML page or the JSON file">Export</button>
   </div>
   <button type="button" id="ed-more" class="ed-narrow-only" title="View, diagram and export" aria-expanded="false">⋯</button>
   <button type="button" id="ed-help" class="ed-help-btn" title="How this editor works" aria-expanded="false">?</button>
@@ -52,7 +52,7 @@ window.THERMODRAW = {version: "{{VERSION}}", revision: "{{REVISION}}", wheel: "{
 <aside id="ed-files-panel" aria-label="Your files">
   <div class="ed-panel-head">
     <h2>Files</h2>
-    <button type="button" id="ed-files-close" class="ed-narrow-only" title="Close">Close</button>
+    <button type="button" id="ed-files-close" title="Collapse Files" aria-label="Collapse Files">‹</button>
   </div>
   <div class="ed-panel-actions">
     <button type="button" id="ed-new" title="A blank drawing with the usual units">New</button>
@@ -97,31 +97,16 @@ window.THERMODRAW = {version: "{{VERSION}}", revision: "{{REVISION}}", wheel: "{
   <div id="ed-menu" class="ed-menu card" hidden></div>
   <div id="ed-toast" class="ed-toast" hidden></div>
   <div id="ed-present-label" class="ed-present-label" hidden></div>
-  <section id="ed-help-panel" class="ed-help card" hidden aria-label="How this editor works">
-    <div class="ed-panel-head"><h2>How this works</h2><button type="button" id="ed-help-close">Close</button></div>
-    <p class="ed-tour-offer"><button type="button" id="ed-take-tour">Quick start</button>
-      Four short pages: build, edit, check or solve, export.</p>
-    <dl>
-      <dt>Components</dt><dd>Search Network, Physical and Annotations. Click a component then place it, or drag a network part. Properties stay beside the selected object. On narrow screens Components opens a drawer.</dd>
-      <dt>Quick add</dt><dd>Right-click empty space or press / outside a text field, then type a component name. On touch, hold empty space for half a second; moving or pinching cancels. An ordinary empty-space click only deselects.</dd>
-      <dt>Adding and joining</dt><dd>Drag a component onto the drawing, or click it and then click to place. Sources attach when dropped onto a highlighted node. Path endpoints can attach to highlighted nodes; the body never merges nodes. Drag an endpoint handle, or click it and then its target. A red dot marks a loose end. Double-click a node to start a connection.</dd>
-      <dt>Rectangular sketches</dt><dd>Use Components → Physical to add regions and control volumes by dragging opposite corners, then resize with corner handles. Shift-click multiple rectangles, then drag an edge handle to adjust all widths or all heights together. Add surfaces to volume edges and transfers to surfaces. Region membership is explicit. Select objects together to move their network associations too.</dd>
-      <dt>Labels</dt><dd>Drag a label to position it. Auto position in its card restores automatic placement. Auto-position all labels resets the whole drawing in one undo step.</dd>
-      <dt>Turning</dt><dd><b>[</b> and <b>]</b> turn the selected network component to the next quarter turn. Text fields accept brackets normally. Rectangles stay axis aligned.</dd>
-      <dt>Copy and paste</dt><dd>Ctrl+C copies selected objects; Ctrl+V pastes an offset copy with new IDs. Groups retain internal connections. Control volumes carry their surfaces and transfers. Text fields keep normal text copying and pasting.</dd>
-      <dt>Undo, Redo, Delete</dt><dd>Each movement is one undo step. Esc, pointer cancellation and pinch restore the committed drawing. Delete removes the selection and its owned geometry; affected balances become incomplete.</dd>
-      <dt>Fit to screen</dt><dd>Brings the whole drawing into view. Scroll to zoom, drag empty space to pan, pinch on touch. Shift-click adds to the selection; Shift-drag empty space selects a group. Alt bypasses grid and alignment snapping.</dd>
-      <dt>Notation</dt><dd>Textured boxes, the default, or circuit zigzags for every resistance. Nothing else moves.</dd>
-      <dt>Theme, Present</dt><dd>Light or dark page. Present shows the drawing alone, full window: Esc leaves, ← → step through your files.</dd>
-      <dt>Solve physics</dt><dd>Numeric values start Known. Click a schematic badge to cycle its supported states; click a component or list row to edit. Overrides appear on the drawing until you close Solve. Readiness explains missing inputs and solver limits. Choose the steady-state time model, solve, then review and apply in one undoable step.</dd>
-      <dt>Check the numbers</dt><dd>Checks network node balances and supplied control-volume energy rates independently. Select a volume for signed totals. Supply generation, including zero, and storage or steady state; missing inputs remain unchecked. Drawing dimensions never imply physical area.</dd>
-      <dt>Units &amp; rail</dt><dd>The unit of each quantity, whether K is absolute or a rise, and the reference rail.</dd>
-      <dt>Copy share link</dt><dd>A link that carries the whole diagram inside it. Nothing is stored on any server; whoever opens it gets a copy.</dd>
-      <dt>Export</dt><dd>Export for document previews a tightly cropped light SVG, with Save SVG and Save PNG. Other choices include themed SVG, HTML and the JSON file itself.</dd>
-      <dt>Files</dt><dd>Everything you draw is kept in this browser, saved as you go. New, Example and Import make a file; rename, copy and delete are in each file's menu. A diagram's name can travel inside the file too, so an export or a share link carries it.</dd>
-    </dl>
-    <p class="ed-hint">Keys: Ctrl+Z undo · Ctrl+Shift+Z redo · Delete · Esc · [ ] turn · F fit · Z notation · D theme · P check the numbers.</p>
-  </section>
+  <dialog id="ed-help-panel" class="ed-help-dialog" hidden aria-label="Quick start">
+    <div class="ed-panel-head"><h2>Quick start</h2><button type="button" id="ed-help-close">Close</button></div>
+    <h3>Add</h3><p>Choose a component, then click or drag it onto the drawing.</p>
+    <h3>Connect</h3><p>Connect nodes with ideal links. Drop a resistance onto a lead for series insertion, or onto a resistance for parallel insertion.</p>
+    <h3>Enter values</h3><p>Select a component to edit its properties. Units and the notation picker help with temperature and scientific symbols.</p>
+    <h3>Solve</h3><p>Open the Solve tab in the right panel, supply known values, and choose the unknowns. Review the proposed results before applying them.</p>
+    <h3>Export</h3><p>Use File → Export to save an image, interactive HTML page, or raw JSON diagram.</p>
+    <p><a href="guide.html" target="_blank" rel="noopener">Full editor documentation</a></p>
+    <button type="button" id="ed-take-tour" hidden>Quick start tour</button>
+  </dialog>
 </main>
 
 <div id="ed-tour" class="ed-tour card" hidden role="region" aria-label="Quick start"></div>
@@ -144,8 +129,9 @@ window.THERMODRAW = {version: "{{VERSION}}", revision: "{{REVISION}}", wheel: "{
 <section id="ed-findings" aria-label="Findings">
   <div class="ed-findings-bar">
     <button type="button" id="ed-findings-toggle" class="ed-findings-summary" aria-expanded="false" title="What thermodraw check says about this drawing">
-      <span id="ed-findings-count">No findings</span><span class="ed-findings-more">▾</span>
+      <span id="ed-findings-count">No drawing issues</span><span class="ed-findings-more">▾</span>
     </button>
+    <button type="button" id="ed-all-issues" aria-expanded="false">All issues</button>
     <label class="ed-check ed-physics-check" title="Kirchhoff at every node: from the values you typed, the heat arriving at a node must equal the heat leaving it (P)">
       <input type="checkbox" id="ed-physics"><span>Check the numbers</span>
     </label>

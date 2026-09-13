@@ -3,6 +3,7 @@ import copy
 import hashlib
 import json
 import math
+from ._units import temperature
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, NoReturn, Set, TYPE_CHECKING, Union, cast
 
@@ -203,14 +204,15 @@ def _network(d, result, check_supplied=False):
         if not config.get("steady"):
             missing.append("declare steady state for network analysis")
         unit = d.units.get("T")
-        if unit not in ("K", "°C", "C"):
-            missing.append("temperature unit must be K or °C")
-        offset = 273.15 if unit in ("°C", "C") and d.scale != "rise" else 0
+        if unit not in ("K", "°C", "C", "°F", "F"):
+            missing.append("temperature unit must be K, °C, or °F")
         for g in ordered:
             vals = [number(n.value) for n in groups[g] if n.id not in unknowns]
-            if any(v is None for v in vals):
+            if (vals and all(v is None for v in vals)) or any(
+                    n.id not in unknowns and n.value not in (None, '') and number(n.value) is None
+                    for n in groups[g]):
                 missing.append(f"{g}: supply temperature or mark it unknown")
-            nums = [v+offset for v in vals if v is not None]
+            nums = [temperature(v,unit,'K',d.scale) for v in vals if v is not None] if unit in ('K','°C','C','°F','F') else []
             if nums:
                 known[g] = nums[0]
                 if max(nums)-min(nums) > 1e-8:
@@ -393,7 +395,7 @@ def _network(d, result, check_supplied=False):
                 report["diagnostics"].append(f"branch:{i}: supplied rate disagrees with the temperature drop and resistance")
         if report["status"] != "solved":
             continue
-        report["temperatures"] = {n.id: temps[g]-offset for g in ordered for n in groups[g]}
+        report["temperatures"] = {n.id: temperature(temps[g],'K',unit,d.scale) for g in ordered for n in groups[g]}
         report["temperature_unit"] = unit
         result.updates.extend(resistance_updates)
         for n in report["nodes"]:

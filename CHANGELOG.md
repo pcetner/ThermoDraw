@@ -7,6 +7,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Editor UI redesign
+
+- Insert a resistance into a parallel group's shared terminal lead in one drop,
+  retaining every parallel path and expanding space without a bypass wire.
+
+- Keep Components/Properties/Solve available as permanent panel views; move
+  example files below saved files and replace Edit commands with toolbar icons.
+- Restore Components scrolling, enlarge previews, add a prominent shortcuts
+  close button, and suppress pointer-triggered canvas focus outlines.
+
+- Preserve right-angle risers when dragging horizontal or vertical parallel lanes,
+  keeping endpoint nodes and connection leads stationary.
+
+- Dock component properties beside the drawing with Properties, Connections and
+  Appearance tabs; preserve Count drafts and Solve sessions across panel views.
+- Introduce flat keyboard-accessible menus, icon Undo/Redo, horizontal panel
+  controls, compact inputs, contextual help and responsive overlay panels.
+- Replace the long in-app guide with Quick start and a dedicated shortcuts dialog.
+- Present prioritized actionable issues in a fixed strip and overlay drawer;
+  retain multiple targets, stable issue keys and raw technical details.
+- Hide hit-test rectangles and omit stylistic parallel-label advice in the editor
+  while preserving Python checker compatibility and genuine collision findings.
+
+### Editor interaction resolution
+
+- Preserve attached components when deleting junctions; clean only unused empty
+  endpoints. Merge exact compatible overlaps, preserve target properties and
+  references, review semantic conflicts, and prevent physical short circuits.
+- Add connected junctions, ideal Connect actions, endpoint disconnection, and
+  series/parallel resistance insertion with geometry previews and expansion.
+  Crossing leads offer an explicit connection choice.
+- Make Count/Arrangement validated draft transactions with Apply, Cancel, a
+  combined value, one-step Undo, routed groups and bounded large-count rendering.
+- Share boxed/zigzag terminal positions, reroute rotated connections, reverse
+  endpoint and waypoint order together, and retain authored routes on Reset.
+- Add File/Edit/View/Physics/Help menus, direct Units access, automatic Files
+  sizing, local panel collapse controls, centered export options, Enter rename,
+  actionable warning targets, stable findings layout, and full-viewport Present.
+- Add Fahrenheit and interval conversions, independent Kelvin temperature state,
+  engineering prefixes/scientific formatting, a documented scientific picker,
+  and embedded glyph coverage for its catalogue.
+- Use shared definitions for the interaction legend, inspector explanations and
+  generated documentation. Keep editor helper modules and the Python wheel under
+  the same build revision.
+
 ### Release engineering fixes
 
 - Prevent nonfinite inputs and overflow from certifying a legacy physics balance.

@@ -444,3 +444,222 @@ body.ed-components-collapsed:not(.ed-solving) #ed-palette{display:none}
 #ed-tour h3{margin:0 0 10px;font-size:16px;color:var(--ink)}
 #ed-tour .ed-row{flex-wrap:wrap}
 .ed-tour-mark{animation:none}
+
+/* Presentation owns the entire grid, including while a Solve session is open. */
+body.ed-present,body.ed-present:not(.ed-solving),body.ed-present.ed-solving {
+  grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr);
+  grid-template-areas:"stage";
+}
+body.ed-present #ed-stage{grid-area:stage;min-width:0;min-height:0;width:100%;height:100dvh}
+body.ed-present #ed-analysis-panel,body.ed-present #ed-solve-toolbar,body.ed-present #ed-solve-values,
+body.ed-present #ed-files,body.ed-present #ed-component-tools,body.ed-present #ed-findings{display:none!important}
+#ed-findings{position:relative;height:38px;box-sizing:border-box;min-height:38px}
+#ed-findings-list{position:absolute;bottom:100%;left:0;right:0;max-height:min(40dvh,320px);overflow:auto;background:var(--panel);border:1px solid var(--rule);z-index:12}
+#ed-findings-list li[role=button]{cursor:pointer}
+#ed-findings-list li:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+
+body:not(.ed-present){--left-column:var(--files-width,280px);--right-column:320px;grid-template-columns:var(--left-column) minmax(0,1fr) var(--right-column)}
+body.ed-solving:not(.ed-present){--right-column:clamp(340px,32vw,440px)}
+body.ed-components-collapsed:not(.ed-solving):not(.ed-present){--right-column:0px;grid-template-columns:var(--left-column) minmax(0,1fr) var(--right-column)}
+body.ed-files-collapsed:not(.ed-present),body.ed-files-overlay:not(.ed-present){--left-column:0px}
+body.ed-files-collapsed #ed-files-panel{display:none}
+#ed-files-panel{position:relative;min-width:0;width:var(--files-width,280px);box-sizing:border-box}
+#ed-files li{display:grid;grid-template-columns:minmax(0,1fr) 28px;gap:4px;align-items:start}
+#ed-files .ed-fname{white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere;grid-column:1;line-height:1.4}
+#ed-files li small{grid-column:1;grid-row:2}
+#ed-files li .ed-more{grid-column:2;grid-row:1 / 3}
+.ed-files-resizer{position:absolute;right:0;top:0;bottom:0;width:6px;cursor:ew-resize;touch-action:none}
+#ed-files-reopen{position:fixed;left:5px;top:70px;z-index:20;writing-mode:vertical-rl}
+body.ed-files-overlay #ed-files-panel{position:fixed;left:0;top:64px;bottom:0;z-index:25;background:var(--paper);box-shadow:5px 0 20px #0003;display:none}
+body.ed-files-overlay #ed-files-panel.ed-open{display:block}
+body.ed-files-overlay #ed-files-toggle{display:inline-flex}
+body.ed-present #ed-files-panel,body.ed-present #ed-files-reopen{display:none!important}
+body.ed-present .ed-solve-float,body.ed-present .ed-solve-toolbar,body.ed-present #ed-solve-panel{display:none!important}
+#ed-popover{max-height:calc(100dvh - 100px);overflow:auto}
+#ed-popover h4{position:sticky;top:0;background:var(--panel);z-index:1}
+.ed-common-controls>summary{pointer-events:none;list-style:none;font-weight:600}
+#ed-top{display:flex;align-items:center;gap:12px;flex-wrap:nowrap}
+#ed-top>[hidden]{display:none!important}
+.ed-primary,.ed-menu-categories{display:flex;gap:6px;align-items:center;min-width:0}
+.ed-primary{flex:1}.ed-primary #ed-file{max-width:360px;min-width:60px;margin-right:auto}
+.ed-category-menu{position:fixed;z-index:60;max-height:calc(100dvh - 90px);overflow:auto;min-width:220px;max-width:calc(100vw - 16px);padding:8px}
+.ed-category-menu button,.ed-category-menu label{display:block;text-align:left;width:100%;box-sizing:border-box;margin:3px 0}
+.ed-mobile-menu{display:none}
+#ed-export-dialog{width:min(680px,calc(100vw - 48px));max-height:calc(100dvh - 48px);overflow:auto;background:var(--panel);color:var(--ink);border:1px solid var(--rule);border-radius:12px;padding:20px}
+#ed-export-dialog label{display:flex;justify-content:space-between;gap:12px;margin:10px 0}
+#ed-export-dialog [data-export-preview] img{display:block;max-width:100%;max-height:45dvh;margin:auto}
+#ed-export-dialog::backdrop{background:#0006}
+.ed-mini-picker{position:fixed;z-index:100;width:min(340px,calc(100vw - 32px));max-height:calc(100dvh - 100px);overflow:auto;padding:12px}
+.ed-mini-picker button{margin:3px;min-width:30px}.ed-mini-picker input{width:100%;box-sizing:border-box}
+.ed-mini-picker h4{margin:10px 0 4px}.ed-mini-picker p{font-size:12px}
+.ed-picker-button{padding:3px 6px!important;min-width:26px}
+.ed-field-picker{display:flex;align-items:center;gap:3px;min-width:0}
+.ed-field-picker>input,.ed-field-picker>select{min-width:0;width:100%;flex:1}
+.ed-control-help{padding:2px 6px!important;min-width:20px;font-size:12px}
+.ed-drop-hint{position:fixed;z-index:80;pointer-events:none;padding:8px 12px;max-width:280px;font-size:13px}
+.ed-conflict-review{max-width:min(580px,calc(100vw - 32px));max-height:80dvh;overflow:auto;background:var(--panel);color:var(--ink);border:1px solid var(--rule);border-radius:12px;padding:20px}
+.ed-conflict-review label{display:flex;gap:12px;margin:10px 0;align-items:center}
+.ed-example-menu{position:fixed;z-index:65;width:min(400px,calc(100vw - 32px));max-height:calc(100dvh - 100px);overflow:auto;background:var(--panel);border:1px solid var(--rule);padding:12px;box-sizing:border-box}
+#ed-components-reopen{display:none;position:fixed;right:5px;top:70px;z-index:20;writing-mode:vertical-rl}
+body.ed-components-collapsed:not(.ed-present) #ed-components-reopen{display:block}
+@media(max-width:759px){
+  .ed-mobile-menu{display:block;position:relative}
+  .ed-mobile-menu>.ed-menu-categories{position:absolute;top:100%;left:0;background:var(--panel);z-index:60;padding:8px;flex-direction:column}
+  .ed-primary{gap:3px}.ed-primary #ed-file{max-width:130px}.ed-primary button{padding:5px;font-size:12px}
+  body:not(.ed-present),body.ed-components-collapsed:not(.ed-solving):not(.ed-present){grid-template-columns:minmax(0,1fr);grid-template-areas:"top" "stage" "findings";grid-template-rows:auto minmax(0,1fr) 38px}
+  #ed-palette{position:fixed;right:0;top:60px;bottom:38px;width:min(320px,calc(100vw - 24px));z-index:24}
+}
+
+/* Editor UI system: navigation, content controls, and overlays. */
+body{--editor-right:360px;grid-template-columns:var(--files-width,212px) minmax(0,1fr) var(--editor-right)}
+button,.btn,input,select{border-radius:6px!important}
+button,.btn{min-height:32px;box-sizing:border-box}
+.card,dialog{border-radius:8px!important}
+#ed-top button{display:inline-flex;align-items:center;justify-content:center}
+#ed-undo,#ed-redo{width:32px;padding:5px}
+.ed-menu-categories>button{border:0;background:transparent;border-radius:4px!important;font-weight:500}
+.ed-menu-categories>button:hover,.ed-menu-categories>button[aria-expanded=true]{background:var(--tint);color:var(--accent)}
+.ed-category-menu [role^=menuitem]{border:0;background:transparent;border-radius:4px!important;min-height:32px;padding:6px 10px;text-align:left}
+.ed-category-menu [role=menuitemcheckbox]::before{content:' ';display:inline-block;width:18px}
+.ed-category-menu [aria-checked=true]::before{content:'✓'}
+#ed-stage{display:flex;flex-direction:column;min-width:0;min-height:0}
+#ed-canvas-header{height:36px;min-height:36px;display:flex;align-items:center;justify-content:space-between;padding:0 8px;border-bottom:1px solid var(--rule);background:var(--panel)}
+#ed-canvas{position:relative;flex:1;min-height:0;height:0;width:100%}
+#ed-files-reopen,#ed-components-reopen{position:static!important;writing-mode:horizontal-tb!important;z-index:auto!important;margin:0;font-size:12px}
+#ed-components-reopen{margin-left:auto}
+#ed-palette{width:auto!important;min-width:0;padding:0;display:flex;flex-direction:column;overflow:hidden}
+#ed-panel-views{display:flex;gap:3px;padding:6px;border-bottom:1px solid var(--rule);flex-shrink:0}
+#ed-panel-views button{flex:1;font-size:12px;padding:4px;border:0;background:transparent}
+#ed-panel-views [aria-pressed=true],[data-inspector-tabs] [aria-pressed=true]{background:var(--tint);color:var(--accent)}
+#ed-component-tools,#ed-solve-panel{min-height:0;overflow:auto;padding:10px;flex:1}
+#ed-popover.ed-docked{position:static!important;inset:auto!important;box-sizing:border-box;width:100%;max-width:100%;max-height:none;height:100%;min-height:0;padding:0;border:0;box-shadow:none;display:flex;flex-direction:column;overflow:hidden}
+.ed-inspector-head{padding:12px;display:flex;align-items:flex-start;gap:8px;border-bottom:1px solid var(--rule);flex-shrink:0}
+#ed-popover .ed-inspector-head h4{position:static;font-size:15px;color:var(--ink);letter-spacing:0;text-transform:none;display:block;overflow-wrap:anywhere;flex:1;margin:0}
+.ed-inspector-head h4 small,.ed-inspector-head h4 code{display:block;font:12px/1.4 var(--sans);color:var(--ink-2);margin-top:4px}
+.ed-inspector-head button{width:32px;flex-shrink:0}
+[data-inspector-tabs]{display:flex;padding:6px;gap:3px;border-bottom:1px solid var(--rule);flex-shrink:0}
+[data-inspector-tabs] button{flex:1;padding:4px;font-size:12px;border:0;background:transparent}
+[data-inspector-section]{overflow-y:auto;overflow-x:hidden;min-height:0;padding:12px;flex:1}
+.ed-docked label{grid-template-columns:88px minmax(0,1fr);gap:8px;margin-bottom:10px}
+.ed-field-picker{display:flex;min-width:0;gap:4px;align-items:center}
+.ed-field-picker input,.ed-field-picker select{flex:1;min-width:0}
+.ed-field-picker button{flex:0 0 30px;width:30px;padding:4px;font-size:13px}
+.ed-docked input,.ed-docked select{box-sizing:border-box;min-height:32px}
+.ed-docked .ed-rot-c{display:grid;grid-template-columns:30px minmax(36px,1fr) 30px;gap:4px;min-width:0}
+.ed-docked .ed-rot-reset{grid-column:1/-1}
+.ed-docked [data-inspector-section]>button{margin:3px;padding:5px 8px;font-size:12px}
+.ed-docked .ed-section-help{display:block;margin:0 0 10px auto;padding:2px 7px;color:var(--ink-2);background:transparent}
+.ed-section-explanation{font-size:12px;line-height:1.5;padding:8px;background:var(--tint);margin-bottom:10px}
+.ed-inspector-footer{padding:10px 12px;border-top:1px solid var(--rule);flex-shrink:0}
+.ed-inspector-footer [data-group-actions]{margin:0 0 8px}
+.ed-help-dialog{width:min(520px,calc(100vw - 32px));max-height:calc(100dvh - 40px);overflow:auto;box-sizing:border-box;border:1px solid var(--rule);background:var(--panel);color:var(--ink);padding:20px}
+.ed-help-dialog::backdrop{background:#0006}
+.ed-help-dialog h2{font-size:20px;margin:0 0 14px}.ed-help-dialog h3{font-size:14px;margin:14px 0 4px}
+.ed-help-dialog p{font-size:13px;line-height:1.5;margin:5px 0 12px}
+.ed-help-dialog p:has(kbd){display:flex;justify-content:space-between;gap:12px}
+kbd{font:12px var(--mono);padding:2px 5px;border:1px solid var(--rule);border-radius:4px}
+#ed-hits rect.ed-hover,#ed-hits rect.ed-flash{stroke:none;fill:transparent;animation:none}
+.ed-hover-ink{stroke:var(--accent);stroke-opacity:.55;stroke-width:3;vector-effect:non-scaling-stroke;pointer-events:none}
+#ed-findings{height:38px;display:flex;align-items:center;gap:10px;padding:0 10px;font-size:12px}
+.ed-findings-bar{flex:1;min-width:0;display:flex;flex-wrap:nowrap}
+#ed-findings-count{display:flex;gap:12px;align-items:center;min-width:0}
+#ed-findings-toggle{min-width:0;flex:1;overflow:hidden;font-size:12px}
+.ed-first{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#ed-findings-count>span:not(.ed-first){white-space:nowrap}
+.ed-findings-more{display:none}
+#ed-all-issues{flex-shrink:0;font-size:12px;padding:4px 8px}
+#ed-physics-said{margin:0;font-size:11px;white-space:nowrap;color:var(--ink-2)}
+#ed-findings-list{max-height:40dvh;margin:0;padding:8px}
+#ed-findings-list li.ed-issue{display:block;padding:0;cursor:default}
+.ed-issue>button{width:100%;text-align:left;border:0;background:transparent;padding:8px}
+.ed-issue-detail{padding:4px 12px 12px;font-size:13px}.ed-issue-detail p{margin:8px 0}
+body.ed-present #ed-canvas-header{display:none}
+@media(max-width:1100px){
+ body{grid-template-columns:minmax(0,1fr);grid-template-areas:'top' 'stage' 'findings'}
+ #ed-files-panel{position:fixed;left:0;top:80px;bottom:38px;z-index:24;background:var(--panel)}
+ #ed-palette{position:fixed;right:0;top:80px;bottom:38px;width:360px!important;z-index:24;background:var(--panel);border-left:1px solid var(--rule)}
+ body[data-panel-view=Properties] #ed-palette{top:auto;left:0;width:100%!important;height:65dvh;border-top:1px solid var(--rule)}
+}
+@media(pointer:coarse){button,.btn,input,select{min-height:44px!important}}
+body:not(.ed-present):not(.ed-components-collapsed){--right-column:360px}
+body.ed-solving:not(.ed-present){--right-column:360px}
+body.ed-present #ed-panel-views,body.ed-present #ed-popover{display:none!important}
+#ed-palette #ed-popover.ed-docked{flex:1}
+body.ed-files-overlay #ed-files-reopen{display:inline-flex!important}
+body:not(.ed-present) .ed-menu-categories button:focus-visible{outline:2px solid var(--accent)}
+@media(max-width:1100px){
+ body:not(.ed-present){grid-template-columns:minmax(0,1fr)!important}
+ #ed-files-panel{display:none}
+ #ed-files-panel.ed-open{display:block}
+ #ed-files-reopen{display:inline-flex!important}
+}
+#ed-findings{flex-direction:row}
+#ed-findings-count{width:100%}
+#ed-component-tools{padding:12px!important}
+#ed-popover.ed-docked>[data-leave]{flex-shrink:0}
+body:not([data-panel-view=Solve]) .ed-solve-float,body:not([data-panel-view=Solve]) .ed-solve-toolbar,body:not([data-panel-view=Solve]) .ed-physics-marks{display:none!important}
+.ed-endpoint-control{display:flex;flex-direction:column;gap:4px;min-width:0}.ed-endpoint-control button{align-self:flex-end;font-size:11px;padding:3px 6px}
+[data-group-leave]{flex-shrink:0;padding:10px;background:var(--tint);font-size:12px}
+
+/* Shared overlay order; modal dialogs use the browser top layer. */
+:root{--ed-layer-panel:20;--ed-layer-overlay:30;--ed-layer-menu:60;--ed-layer-popover:70}
+#ed-findings-list{z-index:var(--ed-layer-overlay)}
+.ed-category-menu{z-index:var(--ed-layer-menu)}
+.ed-mini-picker{z-index:var(--ed-layer-popover)}
+.ed-docked .ed-rot input{width:100%!important}
+@media(max-width:760px){
+ body:not(.ed-present),body.ed-components-collapsed:not(.ed-solving):not(.ed-present){grid-template-rows:auto minmax(0,1fr) 88px}
+ #ed-top{overflow:visible}
+ .ed-mobile-menu>summary{min-height:32px;padding:5px 8px;box-sizing:border-box;border:1px solid var(--rule);border-radius:6px}
+ #ed-findings{height:88px;min-height:88px;padding-bottom:22px}
+ #ed-findings-count{display:grid;grid-template-columns:repeat(3,max-content);gap:4px 8px;font-size:11px}
+ #ed-findings-count .ed-first{display:block;grid-column:1/-1;text-align:left;max-width:calc(100vw - 140px)}
+ #ed-physics-said{display:block;position:absolute;bottom:4px;left:10px}
+ #ed-palette,#ed-files-panel{bottom:88px!important}
+}
+
+.ed-docked .ed-vias li{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto;gap:4px;margin:6px 0}
+.ed-docked .ed-vias input{min-width:0;width:100%}
+@media(max-width:1100px){
+ body:not(.ed-present){grid-template-rows:auto minmax(0,1fr) var(--ed-status-height,38px)}
+ body:not(.ed-present) #ed-palette,body.ed-components-open:not(.ed-present) #ed-palette,body.ed-solving:not(.ed-present) #ed-palette{display:flex;position:fixed;left:auto;right:0;top:80px;bottom:var(--ed-status-height,38px);height:auto;max-height:none;padding:0;align-items:stretch;overflow:hidden}
+ body.ed-components-collapsed:not(.ed-solving):not(.ed-present) #ed-palette{display:none}
+ body[data-panel-view=Properties]:not(.ed-present) #ed-palette,body.ed-components-open[data-panel-view=Properties]:not(.ed-present) #ed-palette{left:0;top:auto;height:65dvh}
+ #ed-top{overflow:visible}
+}
+@media(max-width:760px){body{--ed-status-height:88px}}
+
+/* The library owns its scroll box; display:contents loses it inside the dock. */
+#ed-component-tools{display:block;flex:1 1 0;min-height:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain}
+#ed-component-tools .ed-card{min-height:76px;gap:12px;padding:8px}
+#ed-component-tools .ed-card svg{width:104px;height:58px}
+#ed-component-tools .ed-card span{flex:1;min-width:0}
+#ed-canvas:focus{outline:none}
+body.ed-keyboard-navigation #ed-canvas:focus-visible{outline:1px solid var(--accent);outline-offset:-1px}
+#ed-edit-actions{display:flex;gap:4px;align-items:center;border-left:1px solid var(--rule);padding-left:6px;flex-shrink:0}
+#ed-top .ed-icon-button,#ed-top #ed-delete{display:inline-flex;width:32px;height:32px;min-width:32px;padding:5px}
+#ed-example-section{margin-top:24px;padding-top:12px;border-top:1px solid var(--rule)}
+#ed-open-example{width:100%;text-align:left;border:0;background:transparent;font-weight:600}
+#ed-open-example::before{content:'▸ ';font-size:11px}
+#ed-open-example[aria-expanded=true]::before{content:'▾ '}
+#ed-examples li{margin:6px 0 12px;padding:0}
+#ed-examples li>button{display:block;width:100%;white-space:normal;text-align:left;padding:8px;font-size:12px}
+#ed-examples small{display:block;padding:4px 8px;color:var(--ink-2);font-size:11px}
+.ed-help-dialog:has(.ed-dialog-close){padding-top:22px}
+.ed-help-dialog:has(.ed-dialog-close) h2{padding-right:38px}
+.ed-dialog-close{position:absolute;top:10px;right:10px;width:32px;height:32px;padding:0;font-size:22px;line-height:1;color:var(--ink);background:var(--tint);border:1px solid var(--rule)}
+.ed-dialog-heading{position:sticky;top:0;z-index:1;display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--panel);padding-bottom:8px}
+.ed-help-dialog .ed-dialog-heading h2{padding:0;margin:0}
+.ed-dialog-heading .ed-dialog-close{position:static;flex-shrink:0}
+@media(pointer:coarse){.ed-dialog-close,#ed-top .ed-icon-button{min-width:44px}}
+@media(max-width:760px){
+ #ed-top{align-items:flex-start}
+ .ed-primary{flex-wrap:wrap}
+ .ed-primary #ed-file{flex:1;max-width:none}
+ #ed-edit-actions{order:2;flex-basis:100%;justify-content:flex-end;border-left:0;padding:4px 0 0}
+}
+@media(max-width:1100px){
+ body:not(.ed-present) #ed-palette,body.ed-components-open:not(.ed-present) #ed-palette,body.ed-solving:not(.ed-present) #ed-palette{top:calc(var(--ed-toolbar-height,45px) + 36px)}
+ body.ed-files-overlay #ed-files-panel,#ed-files-panel{top:calc(var(--ed-toolbar-height,45px) + 36px)}
+ body[data-panel-view=Properties]:not(.ed-present) #ed-palette,body.ed-components-open[data-panel-view=Properties]:not(.ed-present) #ed-palette{top:auto}
+}

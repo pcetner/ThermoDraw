@@ -129,11 +129,16 @@ MDOT, CP = "mdot", "cp"
 # `P`; they live here, and not beside the check, because the label needs
 # them too and a second copy is how the drawn number and the checked number
 # come to disagree.
+from ._units import UnitScales
 R_SCALE = {"K/W": 1.0, "°C/W": 1.0, "C/W": 1.0, "mK/W": 1e-3, "K/kW": 1e-3}
 P_SCALE = {"W": 1.0, "kW": 1e3, "mW": 1e-3}
 MDOT_SCALE = {"kg/s": 1.0, "g/s": 1e-3, "kg/h": 1 / 3600, "kg/min": 1 / 60}
 CP_SCALE = {"J/kg·K": 1.0, "kJ/kg·K": 1e3, "J/kgK": 1.0,
             "kJ/kgK": 1e3}
+R_SCALE = UnitScales('R', R_SCALE)
+P_SCALE = UnitScales('P', P_SCALE)
+MDOT_SCALE = UnitScales('mdot', MDOT_SCALE)
+CP_SCALE = UnitScales('cp', CP_SCALE)
 
 RAIL = "rail"
 
@@ -486,6 +491,7 @@ class Diagram:
     transfers: List[Transfer] = field(default_factory=list)
     annotations: List[Annotation] = field(default_factory=list)
     analysis: Dict[str, Any] = field(default_factory=dict)
+    display: Dict[str, Any] = field(default_factory=dict, repr=False, init=False)
 
     def node(self, node_id):
         for n in self.nodes:
@@ -503,6 +509,9 @@ class Diagram:
         drawn `q = 12 W`, because a bare quantity under a resistance is an
         unexplained second number.
         """
+        if self.display:
+            from ._units import format_quantity
+            return format_quantity(value,self.units.get(RATE,''),RATE,self.display.get('mode','automatic'),self.scale)
         text = _fmt(value)
         if text is None:
             return None
@@ -515,6 +524,9 @@ class Diagram:
         they are not any kind's headline, so they do not go through
         `unit_for`, which reads `QUANTITY`.
         """
+        if self.display:
+            from ._units import format_quantity
+            return format_quantity(value,self.units.get(quantity,''),quantity,self.display.get('mode','automatic'),self.scale)
         text = _fmt(value)
         if text is None:
             return None
@@ -544,7 +556,8 @@ class Diagram:
             return None
         # Through SI and back, so `kg/h` against `kJ/kg·K` against `kW`
         # cannot come out a factor of 3600 wrong in silence.
-        return mdot * m_s * cp * c_s * (t_to - t_from) / q_s
+        interval = 5 / 9 if self.units.get('T') in ('°F', 'F') else 1
+        return mdot * m_s * cp * c_s * (t_to - t_from) * interval / q_s
 
     def carried_text(self, branch, t_from, t_to):
         """What a stream carries, with its unit, or None.
@@ -557,6 +570,8 @@ class Diagram:
         q = self.carried(branch, t_from, t_to)
         if q is None:
             return None
+        if self.display:
+            return self.value_text(branch.kind,q)
         return f"{_sig(q)} {self.unit(branch.kind)}".strip()
 
     def fold(self, kind, value, count, arrangement):
@@ -580,6 +595,8 @@ class Diagram:
         folded = self.fold(kind, value, count, arrangement)
         if folded is None:
             return None
+        if self.display:
+            return self.value_text(kind,folded)
         return f"{_sig(folded)} {self.unit(kind)}".strip()
 
     def count_text(self, count, arrangement, kind=None, value=None):
@@ -620,9 +637,14 @@ class Diagram:
         # characters were the difference between the immersion rack checking
         # clean and its junction label being pushed 96 past its clearance.
         # The shape now matches a branch group's, `8 in parallel = 0.4 K/W`.
+        if self.display:
+            return f"{base} = {self.value_text(kind,total)}"
         return f"{base} = {_sig(total)} {self.unit(kind)}".strip()
 
     def value_text(self, kind, value):
+        if self.display:
+            from ._units import format_quantity
+            return format_quantity(value,self.unit(kind),QUANTITY.get(kind,''),self.display.get('mode','automatic'),self.scale)
         text = _fmt(value)
         if text is None:
             return None
@@ -745,11 +767,6 @@ class Diagram:
                     "route it with `via` instead")
             if b.count is not None:
                 _count(b.count, f"branch {b.source}-{b.target}")
-                if b.count > 1 and b.via:
-                    raise DiagramError(
-                        f"branch {b.source}-{b.target}: a repeated branch is "
-                        "drawn as a fan between its two nodes, so it cannot "
-                        "also take `via`. Drop one or the other")
                 if b.count > 1 and b.arrangement not in ARRANGEMENTS:
                     raise DiagramError(
                         f"branch {b.source}-{b.target}: count {b.count} needs "
