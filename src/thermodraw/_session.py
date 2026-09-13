@@ -5,8 +5,9 @@ from typing import Any, Dict, List, Optional, Union, cast
 from ._analysis_types import AssessmentReport, ValidAssessmentReport
 
 from ._analysis import fingerprint, solve_physics, resistance_index
-from .model import Diagram, DiagramError, R_SCALE, P_SCALE, CP_SCALE, MDOT_SCALE
-from ._physical import POWER, AREA, FLUX, number
+from .model import Diagram, DiagramError
+from ._physical import number
+from ._units import temperature, unit_scale
 
 EDITABLE = {"nodes": {"value"}, "branches": {"value", "rate", "mdot", "cp"},
             "sources": {"value"}, "control_volumes": {"generation", "storage", "steady"},
@@ -19,19 +20,12 @@ def convert_value(value, source_unit, target_unit, quantity, scale=None):
     if n is None:
         raise DiagramError("A unit override requires a finite numeric value")
     if quantity == "T":
-        if source_unit not in ("K", "C", "°C") or target_unit not in ("K", "C", "°C"):
-            raise DiagramError("Temperature overrides support K and °C")
-        offset = lambda u: 273.15 if u in ("C", "°C") and scale != "rise" else 0
-        result = n + offset(source_unit) - offset(target_unit)
+        try: result = temperature(n, source_unit, target_unit, scale)
+        except ValueError as exc: raise DiagramError(str(exc)) from exc
     else:
-        tables: Dict[str, Dict[str, float]] = {"R": R_SCALE, "P": P_SCALE, "q": P_SCALE, "rate": POWER,
-                  "generation": POWER, "storage": POWER, "area": AREA,
-                  "flux": FLUX, "q″": FLUX, "cp": CP_SCALE,
-                  "mdot": MDOT_SCALE, "C": {"J/K": 1, "kJ/K": 1000}}
-        table = tables.get(quantity, {})
-        if source_unit not in table or target_unit not in table:
-            raise DiagramError("Unsupported unit conversion for " + quantity)
-        result = n * table[source_unit] / table[target_unit]
+        try: result = n * unit_scale(source_unit, quantity) / unit_scale(target_unit, quantity)
+        except (ValueError, KeyError, OverflowError) as exc:
+            raise DiagramError("Unsupported unit conversion for " + quantity + ': ' + str(exc)) from exc
     if not math.isfinite(result):
         raise DiagramError("Unit conversion exceeded numerical range")
     return result

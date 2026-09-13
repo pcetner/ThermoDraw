@@ -115,12 +115,18 @@ which only a `stream` states. `radin` and `flow` are both powers and share
 `q`; a heat **flux** is per unit area, so it is measured in something else and
 reads `q″`.
 
-`--physics` works in SI and needs to recognise the unit it is given, so it
-knows `K/W`, `°C/W`, `C/W`, `mK/W` and `K/kW` for `R`; `W`, `kW` and `mW` for
-`P` and `q`; `kg/s`, `g/s`, `kg/min` and `kg/h` for `mdot`; and `J/kg·K` or
-`kJ/kg·K` for `cp`. Anything else still **draws** — the unit is text on the
-page — and `check --physics` says in one note that it checked nothing rather
-than guessing at a factor.
+`--physics` uses dimensionally checked SI units and all 24 SI prefixes.
+Compound forms such as `kJ/(kg*K)`, `kJ/kg/K`, `kJ/kg·K` and `kJ/kg\cdot K`
+are equivalent. Prefixes are case-sensitive; `u` and Greek mu normalize to `µ`.
+Mass prefixes attach to grams, not kilograms. Unsupported units remain explicit
+and are never assigned a guessed scale factor.
+
+Temperatures support `°C`, `°F`, and `K`. Numeric calculations use Kelvin;
+JSON values remain full-precision numbers in the declared unit. Absolute
+conversions use `K = °C + 273.15` and `K = (°F − 32) × 5/9 + 273.15`.
+Differences and compound temperature units use interval factors, without
+absolute offsets. Editor display preferences are separate file metadata and
+do not rewrite physical values when switching number-format modes.
 
 `T` may also say which scale its temperatures are on, because `K` is
 byte-identical whether you mean absolute kelvin or a rise above ambient:
@@ -323,9 +329,13 @@ The canvas is sized for the *larger* form either way, so a condensed group
 leaves the room its expansion will need. That is deliberate: expanding one
 group then moves that group and nothing else on the page.
 
-A repeated branch is drawn between its two nodes, so it cannot also take
-`via`. A `series` group needs its nodes far enough apart to hold the whole
-chain; `check` reports the overlap if they are not.
+A repeated branch may carry `via`: these coordinates describe its outer route.
+The repeated assembly occupies the selected segment (nearest `at`, or the longest
+segment when automatic), preserving the exterior route. Internal decorative
+group lines are not independent connection targets. Groups above 100 copies
+render only the compact assembly, avoiding unbounded SVG allocation.
+A `series` group needs sufficient space; the editor previews expansion when
+increasing Count. Reducing Count does not automatically compact the drawing.
 
 `break` is the odd one out: it draws an open circuit — wire, crossbar, gap,
 crossbar, wire — for a mechanical connection that carries no heat, such as a

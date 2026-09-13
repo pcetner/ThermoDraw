@@ -10,6 +10,7 @@ whole path, that a red dot joins a loose end and only ever onto a node,
 that `[` and `]` turn what is selected, that an export is the library's
 SVG, and that a share link round-trips.
 """
+from editor_actions import action as editor_action, menu as editor_menu
 import functools
 import http.server
 import json
@@ -78,7 +79,7 @@ def drop_card(page, key, x, y):
 def codes(page):
     """The finding codes the strip is showing, in its own words."""
     return page.eval_on_selector_all(
-        "#ed-findings-list .ed-code", "els => els.map((e) => e.textContent)")
+        "#ed-findings-list [data-code]", "els => els.map((e) => e.dataset.code)")
 
 
 def loose(page):
@@ -168,6 +169,9 @@ def test_the_editor_draws_what_is_drawn_into_it(served):
         page.mouse.click(tx, ty)
         page.wait_for_selector("#ed-mode", state="hidden")
         page.wait_for_selector("#ed-popover:not([hidden])")
+        assert stored(page)['branches'][0]['kind']=='link'
+        assert page.locator('#ed-popover input[data-field="value"]').count()==0
+        page.select_option('#ed-popover select[data-field="kind"]','cond')
         page.fill('#ed-popover input[data-field="value"]', "0.5")
         page.keyboard.press("Escape")
         settled(page, "branch", 0)
@@ -302,7 +306,7 @@ def test_the_editor_draws_what_is_drawn_into_it(served):
         settled(page)
         assert json.dumps(stored(page)) == before
 
-        page.click("#ed-fit")
+        editor_action(page, 'ed-fit')
         settled(page)
         # Dropped on a node, the loose place becomes that place: the branch
         # is rewired and the spare node goes.
@@ -335,7 +339,8 @@ def test_the_editor_draws_what_is_drawn_into_it(served):
 
         # the findings strip reports what the checker says, in its words
         summary = page.text_content("#ed-findings-count")
-        assert "labels placed" in summary or "label placed" in summary
+        assert "warning" in summary.lower()
+        assert "labels placed" not in summary
         assert "1 labels" not in summary
 
         # The searchable library keeps every component reachable at readable size.
@@ -357,31 +362,36 @@ def test_the_editor_draws_what_is_drawn_into_it(served):
 
         # the files panel lists the file, and the help panel opens
         assert page.locator("#ed-files li.ed-current").count() == 1
-        page.click("#ed-help")
+        editor_action(page, 'ed-help')
         assert page.is_visible("#ed-help-panel")
         page.keyboard.press("Escape")
         assert not page.is_visible("#ed-help-panel")
 
-        # a phone gets one row of chrome, not four
+        # A phone keeps primary controls and edit icons in two compact rows.
         page.set_viewport_size({"width": 375, "height": 812})
         page.wait_for_timeout(200)
         bar = page.locator("#ed-top").bounding_box()
-        assert bar["height"] < 60, bar
+        assert bar["height"] < 100, bar
+        assert page.locator('#ed-top').evaluate('e=>e.scrollWidth<=e.clientWidth+1')
+        for control in ['ed-undo','ed-redo','ed-settings','ed-copy','ed-paste','ed-delete','ed-merge']:
+            bounds=page.locator('#'+control).bounding_box()
+            assert bounds and 0<=bounds['x'] and bounds['x']+bounds['width']<=375
         page.set_viewport_size({"width": 1280, "height": 800})
         page.wait_for_timeout(200)
 
         # export is the library's own SVG, with both labels in it
         with page.expect_download() as dl:
-            page.click("#ed-export")
-            page.click('#ed-menu button[data-x="svg-light"]')
+            editor_action(page, 'ed-export')
+            page.locator('[data-export-save]').click()
         svg = pathlib.Path(dl.value.path()).read_text(encoding="utf-8")
         assert svg.startswith("<?xml") or svg.startswith("<svg")
         assert "Ambient" in svg and "Junction" in svg
         assert "var(--" not in svg, "light export is baked"
+        page.locator('[data-export-close]').click()
 
         # a share link carries the diagram to a second page, as it stands
         d2 = stored(page)
-        page.click("#ed-share")
+        editor_action(page, 'ed-share')
         page.wait_for_timeout(500)
         link = page.evaluate("navigator.clipboard.readText()")
         assert "#d=" in link or "#j=" in link

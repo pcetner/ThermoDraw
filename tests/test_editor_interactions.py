@@ -1,4 +1,5 @@
 """Gesture transactions, delayed responses and physical authoring in Chromium."""
+from editor_actions import action as editor_action, menu as editor_menu
 import copy
 import json
 import pathlib
@@ -19,8 +20,8 @@ def page(served):
         p = context.new_page()
         def expose(route):
             response = route.fetch()
-            hook = "\nObject.assign(window,{newFile,S,rpc,edit,select,removeSelected,undo,bake,setView,alignedSnap,unitsPerPixel,moveGroup,cancelGesture});"
-            hook += "Object.defineProperties(window,{baking:{get:()=>baking},previewFrame:{get:()=>previewFrame}});"
+            hook = "\nObject.assign(window,{newFile,S,rpc,edit,select,removeSelected,undo,bake,setView,alignedSnap,unitsPerPixel,moveGroup,cancelGesture,changeQuantityUnit,canonicalTemperatures,fitFromCommand});"
+            hook += "Object.defineProperties(window,{baking:{get:()=>baking},previewFrame:{get:()=>previewFrame},groupDraft:{get:()=>groupDraft}});"
             route.fulfill(response=response, body=response.text() + hook)
         p.route("**/editor/editor.js*", expose)
         errors = []
@@ -287,18 +288,18 @@ def test_pinch_interrupts_preview_without_committing(page):
 def test_narrow_sketch_and_document_preview(page):
     load(page,{"nodes":[],"regions":[{"id":"r","at":[300,200],"size":[200,100]}]})
     page.set_viewport_size({"width":375,"height":720})
-    page.click("#ed-more")
-    page.click('[data-go="ed-sketch"]')
+    editor_menu(page,'View')
+    if not page.locator('#ed-component-tools').is_visible():
+        page.get_by_label('View menu',exact=True).get_by_role('menuitemcheckbox',name='Components',exact=True).click()
+    page.keyboard.press('Escape')
     page.click('[data-category-tab="Physical"]')
     assert page.locator('[data-sketch="region"]').is_visible()
     page.keyboard.press("Escape")
-    page.click("#ed-more")
-    page.click('[data-go="ed-export"]')
-    page.click('[data-x="document"]')
-    page.wait_for_function("document.querySelector('#ed-document-preview img')?.naturalWidth > 0")
-    assert page.locator("#ed-document-preview img").count() == 1
-    assert not page.locator("#ed-document-preview .ed-sel").count()
-    assert page.locator("#ed-save-svg").is_visible()
+    editor_action(page,'ed-export')
+    page.wait_for_function("document.querySelector('[data-export-preview] img')?.naturalWidth > 0")
+    assert page.locator("[data-export-preview] img").count() == 1
+    assert not page.locator("[data-export-preview] .ed-sel").count()
+    assert page.locator("[data-export-save]").is_visible()
     page.keyboard.press("Escape")
     page.set_viewport_size({"width":1280,"height":800})
 
@@ -516,7 +517,7 @@ def physics_network():
 
 def test_physics_configure_review_apply_and_undo(page):
     load(page, physics_network())
-    page.locator('#ed-analysis').click()
+    editor_action(page, 'ed-analysis')
     page.locator('[data-set-time]').click()
     page.locator('[data-analysis-steady]').select_option('steady')
     pick_value(page,'node:1:value')
@@ -540,10 +541,9 @@ def test_physics_delayed_result_cannot_apply_after_edit_or_switch(page):
         d = physics_network()
         d['analysis'] = {'network': {'steady': True, 'unknowns': ['mid']}}
         load(page, d)
-        page.locator('#ed-analysis').click()
+        editor_action(page, 'ed-analysis')
         page.wait_for_function("!document.querySelector('[data-physics-run]').disabled")
         page.evaluate("""() => {window.realPhysicsCall=rpc.call;rpc.call=(op,...args)=>op==='physics_session'?new Promise(resolve=>{window.finishPhysics=()=>realPhysicsCall(op,...args).then(resolve)}):realPhysicsCall(op,...args)}""")
-        page.locator('#ed-analysis').click()
         page.locator('[data-physics-run]').click()
         if switch:
             page.evaluate("newFile('Other', {nodes:[]})")
@@ -552,7 +552,7 @@ def test_physics_delayed_result_cannot_apply_after_edit_or_switch(page):
         expected=stored(page)
         page.evaluate('async () => {await finishPhysics();rpc.call=realPhysicsCall}')
         settled(page)
-        page.locator('#ed-analysis').click()
+        editor_action(page, 'ed-analysis')
         assert page.locator('[data-physics-apply]').count() == 0
         assert stored(page) == expected
 
@@ -562,7 +562,7 @@ def test_physics_volume_unknown_control(page):
        "control_surfaces":[{"id":"s","volume":"cv","area":2}],
        "transfers":[{"id":"in","surface":"s","direction":"in","rate":100},{"id":"out","surface":"s"}]}
     load(page,d)
-    page.locator('#ed-analysis').click()
+    editor_action(page, 'ed-analysis')
     pick_value(page,'transfer:1:rate')
     page.locator('[data-physics-mode="unknown"]').click()
     page.locator('[data-physics-run]').click()
@@ -576,7 +576,7 @@ def test_physics_volume_unknown_control(page):
 def test_simple_canvas_selection_known_edit_and_export(page):
     load(page, physics_network())
     before = stored(page)
-    page.locator('#ed-analysis').click()
+    editor_action(page, 'ed-analysis')
     page.locator('.ed-physics-marks [data-physics-pick="node:1:value"]').last.click()
     assert page.locator('#ed-solve-value').is_visible()
     assert stored(page) == before
@@ -605,7 +605,7 @@ def test_simple_missing_area_and_one_unknown_guidance(page):
        "control_surfaces":[{"id":"s","volume":"cv"}],
        "transfers":[{"id":"in","surface":"s","direction":"in","flux":100},{"id":"out","surface":"s"}]}
     load(page,d)
-    page.locator('#ed-analysis').click()
+    editor_action(page, 'ed-analysis')
     pick_value(page,'transfer:1:rate')
     page.locator('[data-physics-mode="unknown"]').click()
     pick_value(page,'transfer:0:flux')
@@ -622,7 +622,7 @@ def test_simple_missing_area_and_one_unknown_guidance(page):
 
 def test_simple_narrow_dark_scroll_and_close(page):
     load(page,physics_network())
-    page.locator('#ed-analysis').click()
+    editor_action(page, 'ed-analysis')
     page.evaluate("document.documentElement.dataset.theme='dark'")
     assert page.evaluate("getComputedStyle(document.documentElement).colorScheme") == 'dark'
     assert page.locator('.ed-solve-body').evaluate("e=>getComputedStyle(e).scrollbarColor") != 'auto'
@@ -639,7 +639,7 @@ def test_simple_narrow_dark_scroll_and_close(page):
 
 def test_examples_show_only_answered_homework(page):
     load(page,physics_network())
-    page.locator('#ed-open-example').click()
+    editor_action(page, 'ed-open-example')
     page.locator('#ed-examples li[data-path]').first.wait_for(state='visible')
     assert page.locator('#ed-examples li[data-path]:visible').count() == 4
     assert page.locator('#ed-examples summary').count() == 0
@@ -647,15 +647,15 @@ def test_examples_show_only_answered_homework(page):
         page.locator(f'#ed-examples li[data-path="../homework/{slug}.json"] button').click()
         page.wait_for_function("title => S.data.title === title", arg=title)
         assert page.evaluate('S.data.regions.length') > 0
-        page.locator('#ed-open-example').click()
-    page.locator('#ed-open-example').click()
+        editor_action(page, 'ed-open-example')
+    editor_action(page, 'ed-open-example')
 
 
 def test_session_override_unit_reset_and_discard_preserves_document(page):
     d=physics_network();d['nodes'][1]['value']=360
     d['analysis']={'network':{'steady':True,'unknowns':['mid']}}
     load(page,d);before=stored(page)
-    page.locator('#ed-analysis').click()
+    editor_action(page, 'ed-analysis')
     pick_value(page,'node:1:value')
     page.locator('[data-physics-mode="unknown"]').click()
     pick_value(page,'branch:0:value')
@@ -687,7 +687,7 @@ def test_session_override_unit_reset_and_discard_preserves_document(page):
 def test_session_underlying_edit_requires_restart(page):
     d=physics_network();d['analysis']={'network':{'steady':True,'unknowns':['mid']}}
     load(page,d)
-    page.locator('#ed-analysis').click()
+    editor_action(page, 'ed-analysis')
     page.locator('[data-physics-run]').click()
     page.locator('[data-physics-apply]').wait_for()
     page.evaluate('edit(d=>d.nodes[0].value=450)')
@@ -703,7 +703,7 @@ def test_session_complete_scenario_applies_inputs_and_result_together(page):
     d=physics_network();d['nodes'][1]['value']=360
     d['analysis']={'network':{'steady':True,'unknowns':[]}}
     load(page,d);before=stored(page)
-    page.locator('#ed-analysis').click()
+    editor_action(page, 'ed-analysis')
     assert page.locator('[data-physics-run]').is_disabled()
     assert page.locator('[data-physics-check]').inner_text()=='Check supplied values'
     pick_value(page,'node:1:value')
@@ -729,7 +729,7 @@ def test_session_complete_scenario_applies_inputs_and_result_together(page):
 def test_session_auto_placement_invalidates_snapshot(page):
     d=physics_network();d['analysis']={'network':{'steady':True,'unknowns':['mid']}}
     load(page,d)
-    page.locator('#ed-analysis').click()
+    editor_action(page, 'ed-analysis')
     page.locator('[data-physics-run]').click()
     page.locator('[data-physics-apply]').wait_for()
     # Exercise the automatic placement path, which does not add an undo entry.
@@ -741,7 +741,7 @@ def test_session_auto_placement_invalidates_snapshot(page):
 def test_session_assistive_input_commits_on_blur(page):
     d=physics_network();d['analysis']={'network':{'steady':True,'unknowns':['mid']}}
     load(page,d);before=stored(page)
-    page.locator('#ed-analysis').click()
+    editor_action(page, 'ed-analysis')
     pick_value(page,'node:0:value')
     field=page.locator('[data-physics-number]');field.focus()
     field.evaluate("e=>{e.value='450';e.dispatchEvent(new Event('input',{bubbles:true}))}")
@@ -757,7 +757,7 @@ def test_solve_badges_cycle_and_preview_restores_saved_drawing(page):
     d=physics_network();d['nodes'][1]['value']=360
     d['analysis']={'network':{'steady':True,'unknowns':['mid']}}
     load(page,d);before=stored(page)
-    page.locator('#ed-analysis').click()
+    editor_action(page, 'ed-analysis')
     badge=page.locator('[data-physics-cycle="node:1:value"]')
     assert badge.get_attribute('data-state')=='known'
     badge.click()
@@ -786,7 +786,7 @@ def test_solve_multiple_network_unknowns_and_visible_limits(page):
                    {'from':'mid','to':'second','value':2},
                    {'from':'second','to':'cold','value':2}]
     d['analysis']={'network':{'steady':True,'unknowns':[]}}
-    load(page,d);page.locator('#ed-analysis').click()
+    load(page,d);editor_action(page, 'ed-analysis')
     for index in (1,2):
         page.locator(f'[data-physics-cycle="node:{index}:value"]').click()
     page.wait_for_function("document.querySelector('.ed-solve-status')?.textContent.includes('2 unknown')")
@@ -805,7 +805,7 @@ def test_solve_second_volume_unknown_explains_without_replacing(page):
        'control_surfaces':[{'id':'left','volume':'cv','edge':'left'}, {'id':'right','volume':'cv','edge':'right'}],
        'transfers':[{'id':'in','surface':'left','direction':'in','rate':100},
                     {'id':'out','surface':'right','rate':100}]}
-    load(page,d);page.locator('#ed-analysis').click()
+    load(page,d);editor_action(page, 'ed-analysis')
     page.locator('[data-physics-cycle="transfer:0:rate"]').click()
     page.locator('[data-physics-cycle="transfer:1:rate"]').click()
     assert page.locator('[data-physics-cycle="transfer:0:rate"]').get_attribute('data-state')=='unknown'
@@ -818,10 +818,11 @@ def test_solve_second_volume_unknown_explains_without_replacing(page):
 def test_auto_label_restores_side_and_preserves_manual_until_requested(page):
     d=nodes();d['nodes'][0].update(label='Manual label',side='down',label_offset=[40,40])
     load(page,d);before=stored(page)
-    page.locator('#ed-analysis').click()
+    editor_action(page, 'ed-analysis')
     page.locator('[data-physics-close]').click()
     assert stored(page)==before
     page.evaluate("select({role:'node',index:0})")
+    page.get_by_role('navigation',name='Property sections').get_by_role('button',name='Appearance',exact=True).click()
     assert 'Label position: Manual' in page.locator('#ed-popover').inner_text()
     page.locator('[data-act="auto-label"]').click();settled(page)
     assert 'label_offset' not in stored(page)['nodes'][0]
@@ -838,7 +839,7 @@ def test_solve_delayed_schematic_preview_cannot_return_after_close(page):
       rpc.call=(op,...args)=>oldSceneRpc(op,...args).then(result=>op==='scene'
         ?new Promise(resolve=>window.releaseSolveScene=()=>resolve(result)):result);
     }""")
-    page.locator('#ed-analysis').click()
+    editor_action(page, 'ed-analysis')
     page.wait_for_function('window.releaseSolveScene!==null')
     page.locator('[data-physics-close]').click()
     page.evaluate('async()=>{releaseSolveScene();rpc.call=oldSceneRpc;await new Promise(r=>setTimeout(r,50))}')
@@ -849,7 +850,7 @@ def test_solve_delayed_schematic_preview_cannot_return_after_close(page):
 
 def test_solve_semantic_color_and_floating_navigator(page):
     d=physics_network();d['analysis']={'network':{'steady':True,'unknowns':['mid']}}
-    load(page,d);page.locator('#ed-analysis').click()
+    load(page,d);editor_action(page, 'ed-analysis')
     page.wait_for_function("document.querySelector('.ed-solve-status')?.classList.contains('ed-solve-success')")
     assert page.locator('#ed-solve-panel [data-physics-number]').count()==0
     assert page.locator('#ed-solve-panel .ed-value-list').count()==0
@@ -869,14 +870,14 @@ def test_solve_semantic_color_and_floating_navigator(page):
 
 def test_override_mode_is_not_a_change_and_close_uses_modal(page):
     d=physics_network();d['analysis']={'network':{'steady':True,'unknowns':['mid']}}
-    load(page,d);before=stored(page);page.locator('#ed-analysis').click()
+    load(page,d);before=stored(page);editor_action(page, 'ed-analysis')
     pick_value(page,'node:0:value')
     page.locator('[data-physics-mode="override"]').click()
     assert page.locator('[data-physics-cycle="node:0:value"]').get_attribute('data-state')=='known'
     page.locator('[data-physics-close]').click()
     assert page.locator('#ed-solve-panel').is_hidden()
     assert not page.locator('#ed-solve-close').is_visible()
-    page.locator('#ed-analysis').click();pick_value(page,'node:0:value')
+    editor_action(page, 'ed-analysis');pick_value(page,'node:0:value')
     page.locator('[data-physics-number]').fill('410');page.locator('[data-physics-number]').press('Tab')
     page.locator('[data-physics-close]').click()
     assert page.locator('#ed-solve-close').is_visible()
@@ -891,7 +892,7 @@ def test_override_mode_is_not_a_change_and_close_uses_modal(page):
 
 def test_value_blur_does_not_swallow_close_click(page):
     d=physics_network();d['analysis']={'network':{'steady':True,'unknowns':['mid']}}
-    load(page,d);page.locator('#ed-analysis').click();pick_value(page,'node:0:value')
+    load(page,d);editor_action(page, 'ed-analysis');pick_value(page,'node:0:value')
     page.locator('[data-physics-number]').fill('410')
     page.locator('[data-value-close]').click()
     assert page.locator('#ed-solve-value').is_hidden()
@@ -903,7 +904,7 @@ def test_value_blur_does_not_swallow_close_click(page):
 def test_no_unknown_check_is_not_a_failed_solve(page):
     d=physics_network();d['nodes'][1]['value']=350
     d['analysis']={'network':{'steady':True,'unknowns':[]}}
-    load(page,d);page.locator('#ed-analysis').click()
+    load(page,d);editor_action(page, 'ed-analysis')
     assert 'No unknown selected' in page.locator('.ed-solve-status').inner_text()
     assert page.locator('[data-physics-run]').is_disabled()
     page.locator('[data-physics-check]').click()
@@ -917,7 +918,7 @@ def test_no_unknown_check_is_not_a_failed_solve(page):
 def test_editor_resistance_unknown_and_apply(page):
     d=physics_network();d['nodes'][1]['value']=360;d['branches'][0]['value']=99
     d['analysis']={'network':{'steady':True,'unknowns':[]}}
-    load(page,d);before=stored(page);page.locator('#ed-analysis').click()
+    load(page,d);before=stored(page);editor_action(page, 'ed-analysis')
     pick_value(page,'branch:0:value');page.locator('[data-physics-mode="unknown"]').click()
     page.locator('[data-physics-run]').click();page.locator('[data-physics-apply]').wait_for()
     assert 'Calculated: 2 ' in page.locator('.ed-answer').inner_text()
@@ -930,7 +931,7 @@ def test_all_labels_auto_is_one_undoable_action(page):
     d=physics_network()
     for n in d['nodes']:n.update(label_offset=[30,30],side='down')
     load(page,d);before=stored(page)
-    page.locator('#ed-auto-labels').click();settled(page)
+    editor_action(page, 'ed-auto-labels');settled(page)
     assert all('label_offset' not in n and n['side']=='auto' for n in stored(page)['nodes'])
     assert page.evaluate('S.undo.length')==1
     page.evaluate('undo()');settled(page);assert stored(page)==before

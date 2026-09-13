@@ -14,6 +14,10 @@ it, and the metrics are identical either way.
 """
 import argparse
 import pathlib
+import sys
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / 'src'))
+from thermodraw._catalogue import SCIENTIFIC_CHARS
+from font_scientific import complete
 
 from fontTools import subset
 from fontTools.ttLib import TTFont
@@ -25,7 +29,7 @@ RENAMED = "ThermoDraw Sans"
 # the stack, and user labels are arbitrary text.
 CHARS = ("".join(chr(c) for c in range(32, 127))
          + "".join(chr(c) for c in range(160, 256))
-         + "°→″²³×±−–—‴·ΔΘΩλμ‘’“”…†‡‰€№⁄")
+         + "°→″²³×±−–—‴·ΔΘΩλμ‘’“”…†‡‰€№⁄" + SCIENTIFIC_CHARS)
 
 FACES = {"IBMPlexSans-Regular.ttf": ("normal", 400),
          "IBMPlexSans-Italic.ttf": ("italic", 400),
@@ -67,7 +71,7 @@ def build(src, out):
         # time by default, so two runs over the same TTFs gave two different
         # woff2s — in a repository that pins its fonts and its width table to
         # each other byte for byte.
-        font = TTFont(path, recalcTimestamp=False)
+        font = complete(TTFont(path, recalcTimestamp=False))
         version = next((str(r) for r in font["name"].names if r.nameID == 5),
                        "unknown version")
         options = subset.Options()
