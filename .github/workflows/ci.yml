@@ -133,7 +133,12 @@ jobs:
           python -m pip install -e ".[dev]" playwright
           python -m playwright install --with-deps chromium
       - name: Drive it
-        run: python -m pytest -q tests/test_editor_ui.py tests/test_editor_interactions.py
+        run: python -m pytest -q tests/test_editor_ui.py tests/test_editor_interactions.py tests/test_editor_resolution.py tests/test_editor_ui_redesign.py tests/test_editor_panel_controls.py
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Topology and group transactions
+        run: node --test tests/editor_topology.mjs tests/editor_group.mjs
 
   types:
     name: the py.typed promise holds

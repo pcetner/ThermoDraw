@@ -233,6 +233,7 @@ def test_every_unit_the_editor_can_ask_for_can_also_be_set():
     assert loop, "the units card's quantity loop moved"
     settable = set(re.findall(r'"([^"]+)"', loop.group(1)))
     settable |= set(re.findall(r'text\("unit:([A-Za-z″]+)"', js))
+    settable |= set(re.findall(r'''selectBox\(["']unit:([A-Za-z]+)["']''', js))
     wanted = set(M.QUANTITY.values()) | {M.MDOT, M.CP}
     assert wanted <= settable, f"no way to set units for {wanted - settable}"
 

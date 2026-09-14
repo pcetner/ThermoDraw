@@ -16,6 +16,8 @@
 // node to draw a path to another, click anything to edit it, [ and ] turn
 // what is selected.
 
+import {emptyFree, mergeNodes, normalizeOverlaps, deleteNode, deletePath, detachEndpoint, pruneEndpoints, addJunction, insertResistance, relocateResistance, sharedTerminalLead} from './topology.js';
+import {groupProposal, expandSegment, clearGroupLanes} from './group.js';
 const $ = (id) => document.getElementById(id);
 const BUILD = window.THERMODRAW;
 const GRID = 10;
@@ -145,9 +147,6 @@ function alignedSnap(x, y, excludeId) {
   // Both lines taken from one node puts the drop exactly on top of it, and
   // two places at one point is not a drawing. Whichever line the hand was
   // nearer to is the one it meant; the other axis lands where it fell.
-  if (ax && ay && ax.own && ay.own && ax.from === ay.from) {
-    if (Math.abs(x - ax.value) <= Math.abs(y - ay.value)) ay = null; else ax = null;
-  }
   lastAlign = {x: ax, y: ay};
   return [ax ? ax.value : snap(x), ay ? ay.value : snap(y)];
 }
@@ -158,6 +157,37 @@ function newNodeId() {
 }
 
 function snapshot() { return JSON.stringify(S.data); }
+function replaceDocument(target,source) {
+  if(target===source)return;
+  for(const key of Object.keys(target))if(!(key in source))delete target[key];
+  Object.assign(target,source);
+}
+
+let topologyPending=0;
+function clearBusy(){if(!topologyPending)delete document.body.dataset.busy;}
+
+async function commitTopology(proposal,selection=proposal.selection,undoSnapshot=null) {
+  if(proposal.conflicts?.length){toast(proposal.conflicts.join(' '));return false;}
+  const original=snapshot(),generation=S.generation,revision=S.revision;
+  topologyPending++;document.body.dataset.busy='1';
+  try {
+    const scene=await rpc.call('scene',proposal.document,S.notation,S.physics,null,S.file?.display||{mode:'automatic'});
+    if(generation!==S.generation || revision!==S.revision || snapshot()!==original)return false;
+    if(scene.error){toast(scene.error);return false;}
+    proposal.validatedInk=scene.ink;
+    if(JSON.stringify(proposal.document)===original)return true;
+    edit(d=>replaceDocument(d,proposal.document));
+    if(undoSnapshot!=null)S.undo[S.undo.length-1]=undoSnapshot;
+    if(selection!==undefined)select(selection,false);
+    return true;
+  }catch(error){toast(error.message);return false;}
+  finally {topologyPending--;if(!S.inflight)clearBusy();}
+}
+
+function mutationProposal(fn) {
+  const original=S.data;S.data=structuredClone(original);
+  try{fn();return {document:S.data,conflicts:[]};}finally{S.data=original;}
+}
 
 // Every edit goes through here: snapshot for undo, apply, save, redraw.
 function edit(fn) {
@@ -173,6 +203,7 @@ function edit(fn) {
 }
 
 function afterEdit() {
+  syncCanonicalTemperatures();
   physicsReview = null; physicsApplied=[];
   if(solveSession) solveSession.stale=true;
   reconcileAnalysis();
@@ -188,6 +219,7 @@ function afterEdit() {
 }
 
 function undo() {
+  if(groupDraft) {gateGroup(undo);return;}
   cancelGesture();
   if (!S.undo.length) return;
   S.redo.push(snapshot());
@@ -196,6 +228,7 @@ function undo() {
   afterEdit();
 }
 function redo() {
+  if(groupDraft) {gateGroup(redo);return;}
   cancelGesture();
   if (!S.redo.length) return;
   S.undo.push(snapshot());
@@ -230,14 +263,12 @@ function removeElement(sel) {
   }
   if (sel.role === "node") {
     const id = d.nodes[sel.index].id;
-    d.nodes.splice(sel.index, 1);
-    d.branches = d.branches.filter((b) => b.from !== id && b.to !== id);
-    d.sources = d.sources.filter((s) => s.from !== id && s.to !== id);
-    if (d.rail && d.rail.reference === id) delete d.rail;
+    replaceDocument(d, deleteNode(d, id).document);
   } else {
-    list(sel.role).splice(sel.index, 1);
+    if (sel.role === 'branch' || sel.role === 'source') replaceDocument(d,deletePath(d,sel.role,sel.index).document);
+    else list(sel.role).splice(sel.index, 1);
   }
-  const surviving=new Set(["node","branch","source"].flatMap(role=>list(role).filter(e=>e.id).map(e=>`${role}:${e.id}`)));
+  const surviving=new Set(["node","branch","source"].flatMap(role=>list(role).flatMap((e,i)=>[`${role}:@${i}`,...(e.id?[`${role}:${e.id}`]:[])])));
   for(const role of ["region","volume","surface","transfer","annotation"]) for(const obj of list(role)) {
     if(obj.links) obj.links=obj.links.filter(l=>surviving.has(l));
   }
@@ -275,8 +306,7 @@ function islands() {
 // temperature and no kind. Saying any of those makes it the reader's, and
 // its end stops being loose whether or not it was ever joined.
 function unsaid(node) {
-  return node && node.label == null && node.value == null && node.sub == null
-         && (!node.kind || node.kind === "free");
+  return emptyFree(node);
 }
 
 // The ends that are hanging: one per end of a path, and one per source,
@@ -299,10 +329,10 @@ function looseEnds() {
       if (degree.has(end)) degree.set(end, degree.get(end) + 1);
     }
   }
+  for(const source of d.sources||[])for(const end of [source.from,source.to])if(degree.has(end))degree.set(end,degree.get(end)+1);
   const free = (id) => {
     const node = nodeById(id);
-    return node && node.at && unsaid(node) && degree.get(id) <= 1
-           && d.nodes.some((n) => where.get(n.id) !== where.get(id));
+    return node && node.at && unsaid(node) && degree.get(id) <= 1;
   };
   const out = [];
   d.branches.forEach((b, index) => {
@@ -320,7 +350,7 @@ function looseEnds() {
   });
   d.sources.forEach((x, index) => {
     const id = x.to != null ? x.to : x.from;
-    if (!free(id) || degree.get(id) !== 0) return;
+    if (!free(id) || degree.get(id) !== 1) return;
     const node = nodeById(id);
     // the arrow's own side is taken; the dot goes on the other one
     const rad = (x.angle || 0) * Math.PI / 180;
@@ -367,26 +397,66 @@ function squareRun(branch, pivotId) {
 // the node that has become a duplicate, then the far end of each path that
 // moved squared up, then any source it carried given a side of its new
 // node with nothing already on it.
-function joinNodes(looseId, targetId) {
+async function joinNodes(looseId, targetId) {
   const index = S.data.nodes.findIndex((n) => n.id === looseId);
   if (index < 0 || !nodeById(targetId)) return;
-  edit((d) => {
-    const carried = d.sources.filter(
-      (x) => (x.to != null ? x.to : x.from) === looseId);
-    const moved = d.branches.filter(
-      (b) => b.from === looseId || b.to === looseId);
-    renameNode(looseId, targetId);
-    d.nodes.splice(index, 1);
-    for (const b of moved) squareRun(b, targetId);
-    for (const x of carried) {
-      const angle = freeSide(targetId, x);
-      if (angle) x.angle = angle; else delete x.angle;
-    }
-  });
+  const proposal = mergeNodes(S.data, looseId, targetId);
+  if (proposal.conflicts.length) { reviewNodeMerge(looseId,targetId,proposal.conflicts); return; }
+  if(!await commitTopology(proposal,null))return;
   const target = nodeById(targetId);
   select(null);
   toast(`Joined to \u201c${target.label || targetId}\u201d.`,
         {label: "Undo", act: undo});
+}
+
+function reviewNodeMerge(sourceId,targetId,conflicts) {
+  if(conflicts.some(c=>c.includes('short-circuit'))) {toast(conflicts.join(' '));return;}
+  const source=nodeById(sourceId),target=nodeById(targetId),revision=S.revision,generation=S.generation;
+  if(!source||!target)return;
+  const dialog=document.createElement('dialog');dialog.className='ed-conflict-review';dialog.setAttribute('aria-label','Resolve node properties');
+  dialog.innerHTML='<h3>Resolve node properties</h3><p>Choose which information the merged node will keep. The target node retains its identifier.</p>';
+  const choices=[];
+  for(const key of Object.keys(source)) {
+    if(['id','at'].includes(key) || source[key]==null || target[key]==null || JSON.stringify(source[key])===JSON.stringify(target[key]) || key==='kind'&&source[key]==='free')continue;
+    const row=document.createElement('label'),caption=document.createElement('span'),choice=document.createElement('select');caption.textContent=key;
+    for(const [value,name] of [['target','Target'],['source','Dragged node']]){const option=document.createElement('option');option.value=value;option.textContent=name+': '+JSON.stringify(value==='target'?target[key]:source[key]);choice.appendChild(option);}
+    row.append(caption,choice);dialog.appendChild(row);choices.push([key,choice]);
+  }
+  const apply=document.createElement('button'),cancel=document.createElement('button');apply.textContent='Merge with chosen properties';cancel.textContent='Cancel';dialog.append(apply,cancel);
+  cancel.onclick=()=>dialog.close();dialog.onclose=()=>dialog.remove();apply.onclick=async()=>{
+    if(revision!==S.revision||generation!==S.generation){dialog.close();toast('The diagram changed. Review the merge again.');return;}
+    const data=structuredClone(S.data),a=data.nodes.find(n=>n.id===sourceId),b=data.nodes.find(n=>n.id===targetId);
+    for(const [key,choice]of choices){const chosen=choice.value==='source'?a[key]:b[key];a[key]=structuredClone(chosen);b[key]=structuredClone(chosen);}
+    const proposal=mergeNodes(data,sourceId,targetId);if(proposal.conflicts.length){toast(proposal.conflicts.join(' '));return;}
+    if(await commitTopology(proposal))dialog.close();
+  };
+  document.body.appendChild(dialog);dialog.showModal();
+}
+
+function reviewSelectedMerge(ids,targetId) {
+  const base=structuredClone(S.data),generation=S.generation,revision=S.revision;
+  const nodes=ids.map(id=>base.nodes.find(n=>n.id===id)),target=nodes.find(n=>n.id===targetId);
+  const dialog=document.createElement('dialog');dialog.className='ed-conflict-review';dialog.setAttribute('aria-label','Resolve selected node properties');
+  dialog.innerHTML='<h3>Resolve selected node properties</h3><p>Choose meaningful properties for the merged node. Nothing changes until the whole selection validates.</p>';
+  const choices=[];
+  for(const key of new Set(nodes.flatMap(n=>Object.keys(n)))) {
+    if(['id','at'].includes(key))continue;
+    const values=[...new Set(nodes.map(n=>n[key]).filter(v=>v!=null&&v!==''&&!(key==='kind'&&v==='free')).map(v=>JSON.stringify(v)))];
+    if(values.length<2)continue;
+    const row=document.createElement('label'),name=document.createElement('span'),select=document.createElement('select');name.textContent=key;
+    for(const value of values){const option=document.createElement('option');option.value=value;option.textContent=value;select.appendChild(option);}
+    if(target[key]!=null)select.value=JSON.stringify(target[key]);row.append(name,select);dialog.appendChild(row);choices.push([key,select]);
+  }
+  const message=document.createElement('p');message.setAttribute('role','alert');dialog.appendChild(message);
+  const apply=document.createElement('button'),cancel=document.createElement('button');apply.textContent='Merge with chosen properties';cancel.textContent='Cancel';dialog.append(apply,cancel);
+  apply.onclick=async()=>{
+    if(generation!==S.generation||revision!==S.revision){message.textContent='The diagram changed. Reopen the merge review.';return;}
+    let data=structuredClone(base);
+    for(const [key,select]of choices)for(const node of data.nodes.filter(n=>ids.includes(n.id)))node[key]=JSON.parse(select.value);
+    for(const id of ids.filter(id=>id!==targetId)) {const p=mergeNodes(data,id,targetId);if(p.conflicts.length){message.textContent=p.conflicts.join(' ');return;}data=p.document;}
+    if(await commitTopology({document:data,conflicts:[],selection:{role:'node',index:data.nodes.findIndex(n=>n.id===targetId)}}))dialog.close();
+  };
+  cancel.onclick=()=>dialog.close();dialog.onclose=()=>dialog.remove();document.body.appendChild(dialog);dialog.showModal();
 }
 
 // --------------------------------------------------------------- the view
@@ -422,7 +492,7 @@ function fit(box) {
   const pad = 60;
   const w = ink[2] - ink[0] + 2 * pad, h = ink[3] - ink[1] + 2 * pad;
   // never closer than one unit per pixel: a lone node is small, not huge
-  const scale = Math.max(w / st.w, h / st.h, 1);
+  const scale = Math.max(w / st.w, h / st.h, S.present ? 0 : 1);
   const vw = st.w * scale, vh = st.h * scale;
   setView({x: (ink[0] + ink[2]) / 2 - vw / 2, y: (ink[1] + ink[3]) / 2 - vh / 2, w: vw, h: vh});
 }
@@ -467,10 +537,10 @@ function refresh() {
   S.dirty = false;
   document.body.dataset.busy = "1";   // a test waits for this to clear
   const generation = S.generation, revision = S.revision;
-  rpc.call("scene", S.data, S.notation, S.physics).then((scene) => {
+  rpc.call("scene", S.data, S.notation, S.physics, null, S.file?.display || {mode:'automatic'}).then((scene) => {
     S.inflight = false;
     if (generation !== S.generation || revision !== S.revision || S.preview) {
-      if (!S.preview) refresh(); else delete document.body.dataset.busy;
+      if (!S.preview) refresh(); else clearBusy();
       return;
     }
     if (scene.error) {
@@ -503,10 +573,10 @@ function refresh() {
     }
     $("ed-empty").hidden = Object.values(COLLECTION).some(k => (S.data[k] || []).length) || tourRunning();
     tourCheck();
-    if (S.dirty) refresh(); else delete document.body.dataset.busy;
+    if (S.dirty) refresh(); else clearBusy();
   }).catch((err) => {
     S.inflight = false;
-    delete document.body.dataset.busy;
+    clearBusy();
     if (generation !== S.generation || revision !== S.revision) { refresh(); return; }
     showError(String(err));
   });
@@ -597,10 +667,11 @@ function drawLoose() {
     const dot = svgEl("circle", {cx: x, cy: y, r: LOOSE_R * upp}, "ed-loose");
     dot.dataset.loose = i;
     dot.dataset.node = h.id;
+    dot.dataset.help='connection';dot.setAttribute('role','button');dot.setAttribute('aria-label','Unconnected endpoint — drag to connect');
     dot.setAttribute("tabindex", "0");
     dot.append(svgEl("title", {}));
     dot.querySelector("title").textContent =
-      "This end joins nothing. Click or drag it onto the node it meets.";
+      interactionHelp('connection');
     ui.appendChild(dot);
   });
 }
@@ -630,8 +701,9 @@ function drawSelection() {
   }
   if (S.sel.role === "branch" && el && el.via && el.via.length) {
     el.via.forEach(([x, y], i) => {
-      const v = svgEl("circle", {cx: x, cy: y, r: 7 * upp}, "ed-via");
+      const v = svgEl("rect", {x:x-5*upp,y:y-5*upp,width:10*upp,height:10*upp,rx:1}, "ed-via");
       v.dataset.via = i;
+      v.dataset.help='route';const help=svgEl('title',{});help.textContent=interactionHelp('route');v.appendChild(help);
       ui.appendChild(v);
     });
   }
@@ -656,45 +728,37 @@ function drawPorts() {
 // -------------------------------------------------------------- findings
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many || one + "s"}`;
 
+let currentIssues=[],selectedIssue=null;
+function issueNames(f){return (f.targets||[]).map(t=>{const e=S.data[COLLECTION[t.role]]?.[t.index];return t.role==='node'?nodeName(e?.id):e?.label||kindName(t.role,e?.kind||(t.role==='branch'?'cond':'free'));}).join(', ');}
 function showFindings(findings) {
-  const list = $("ed-findings-list");
-  list.innerHTML = "";
-  // `--physics` reports what it could not check as a finding of its own.
-  // That is right on a command line and wrong here, where it fires on
-  // every sketch with no numbers in it yet and reads as a complaint. It
-  // becomes the one line above the list that says how the check went.
-  const skipped = S.physics
-    ? findings.find((f) => f.code === "physics-not-checked") : null;
-  const shown = findings.filter((f) => f !== skipped);
-  const counts = {error: 0, warning: 0, note: 0};
-  for (const f of shown) counts[f.severity] = (counts[f.severity] || 0) + 1;
-  const parts = [];
-  if (counts.error) parts.push(`<span class="ed-count-error">${plural(counts.error, "error")}</span>`);
-  if (counts.warning) parts.push(`<span class="ed-count-warning">${plural(counts.warning, "warning")}</span>`);
-  if (counts.note) parts.push(plural(counts.note, "note"));
-  const labels = S.scene ? plural(S.scene.labels, "label") + " placed" : "";
-  const first = shown.length ? `<span class="ed-first">${escapeHtml(shown[0].message)}</span>` : "";
-  $("ed-findings-count").innerHTML = parts.length
-    ? `${labels} · ${parts.join(", ")}${first}` : `${labels} · nothing to report`;
-  $("ed-physics-said").textContent = !S.physics ? ""
-    : skipped ? skipped.message
-    : "The numbers agree at every node the diagram states.";
-  $("ed-physics-said").hidden = !S.physics;
-  for (const f of shown) {
-    const li = document.createElement("li");
-    li.className = `ed-sev-${f.severity}`;
-    li.innerHTML = `<span class="ed-code">${f.severity}: ${escapeHtml(f.code)}</span><span>${escapeHtml(f.message)}<span class="ed-remedy">${escapeHtml(f.remedy)}</span></span>`;
-    li.addEventListener("click", () => pointAt(f));
+  const rank={error:0,warning:1,note:2};
+  currentIssues=findings.filter(f=>!['parallel-pair-same-side','physics-not-checked'].includes(f.code)).sort((a,b)=>rank[a.severity]-rank[b.severity]);
+  if(selectedIssue&&!currentIssues.some(f=>f.key===selectedIssue))selectedIssue=null;
+  const counts={error:0,warning:0,note:0};for(const f of currentIssues)counts[f.severity]++;
+  const summary=$('ed-findings-count');summary.replaceChildren();
+  for(const [severity,label,icon] of [['error','Errors','⨯'],['warning','Warnings','⚠'],['note','Suggestions','ⓘ']])if(counts[severity]){
+    const badge=document.createElement('span');badge.className='ed-count-'+severity;badge.textContent=`${icon} ${label}: ${counts[severity]}`;summary.appendChild(badge);
+  }
+  const text=document.createElement('span');text.className='ed-first';text.textContent=currentIssues[0]?.title||'No drawing issues';summary.appendChild(text);
+  $('ed-findings-toggle').disabled=!currentIssues.length;
+  $('ed-all-issues').textContent=`All issues (${currentIssues.length})`;
+  $('ed-physics-said').hidden=false;$('ed-physics-said').textContent=!S.physics?'Physics not checked':findings.some(f=>f.code==='physics-not-checked')?'Physics check incomplete':'Physics check complete';
+  renderIssues();
+}
+function renderIssues(){
+  const list=$('ed-findings-list');const focus=document.activeElement?.dataset.issueKey;
+  list.replaceChildren();
+  for(const f of currentIssues){const li=document.createElement('li');li.className='ed-issue';li.dataset.code=f.code;
+    const button=document.createElement('button');button.dataset.issueKey=f.key;button.textContent=`${{error:'Error',warning:'Warning',note:'Suggestion'}[f.severity]} — ${f.title}`;
+    button.onclick=()=>activateIssue(f);button.setAttribute('aria-expanded',String(selectedIssue===f.key));li.appendChild(button);
+    if(selectedIssue===f.key){const detail=document.createElement('div');detail.className='ed-issue-detail';
+      const names=issueNames(f);detail.innerHTML=`<p>${escapeHtml(f.explanation||f.title)}</p>${names?`<p>Affected: ${escapeHtml(names)}</p>`:''}<details><summary>Technical details</summary><p>${escapeHtml(f.code)}: ${escapeHtml(f.message)}</p><p>${escapeHtml(f.remedy||'')}</p></details>`;
+      const action=document.createElement('button');action.textContent=f.action==='units'?'Open Units':f.targets?.length?'Show affected objects':'About this issue';action.onclick=()=>pointAt(f);detail.prepend(action);li.appendChild(detail);}
     list.appendChild(li);
   }
-  // Something is wrong with the drawing: say what, without being asked.
-  // Except that a drawing being built is in pieces by definition, and the
-  // red dots say so in place, on the ends it is about. The finding stays in
-  // the list; it just stops flinging the strip open once per drop.
-  const shouted = shown.filter(
-    (f) => !(f.code === "network-in-pieces" && S.loose.length));
-  if (shouted.some((f) => f.severity !== "note")) openFindings(true);
+  if(focus)list.querySelector(`[data-issue-key="${CSS.escape(focus)}"]`)?.focus({preventScroll:true});
 }
+function activateIssue(f){if(groupDraft){gateGroup(()=>activateIssue(f));return;}selectedIssue=f.key;delete $('ed-findings-toggle').dataset.closed;openFindings(true);pointAt(f);renderIssues();}
 
 function openFindings(on) {
   const l = $("ed-findings-list"), t = $("ed-findings-toggle");
@@ -705,15 +769,34 @@ function openFindings(on) {
 }
 
 function pointAt(f) {
-  if (f.at) {
+  if(groupDraft){gateGroup(()=>pointAt(f));return;}
+  if(f.targets?.length){
+    const drawerOpen=!$('ed-findings-list').hidden;
+    if(!sameSel(S.sel,f.targets[0])||S.selection.length!==f.targets.length)inspectorTab='Properties';
+    S.selection=f.targets;S.sel=f.targets[0];drawSelection();updateChrome();
+    if(pop.classList.contains('ed-docked')){
+      const view=panelView,collapsed=document.body.classList.contains('ed-components-collapsed'),opened=document.body.classList.contains('ed-components-open');
+      openPopover(S.sel);setPanelView(view,true);
+      document.body.classList.toggle('ed-components-collapsed',collapsed);document.body.classList.toggle('ed-components-open',opened);
+    }
+    openFindings(drawerOpen);
+  }
+  else if(f.action==='units'){$('ed-settings').click();return;}
+  else if(f.action==='explain'&&!f.at){toast(f.message+' '+f.remedy);return;}
+  const bounds=(f.targets||[]).map(boundsOf).filter(Boolean);
+  if(bounds.length){
+    const left=Math.min(...bounds.map(b=>b[0]))-24,top=Math.min(...bounds.map(b=>b[1]))-24;
+    const right=Math.max(...bounds.map(b=>b[2]))+24,bottom=Math.max(...bounds.map(b=>b[3]))+24;
+    const factor=Math.max(1,(right-left)/S.view.w,(bottom-top)/S.view.h),w=S.view.w*factor,h=S.view.h*factor;
+    setView({x:(left+right-w)/2,y:(top+bottom-h)/2,w,h});
+  } else if (f.at) {
     const v = S.view;
     setView({x: f.at[0] - v.w / 2, y: f.at[1] - v.h / 2, w: v.w, h: v.h});
   }
-  for (const r of hitsG.children) {
-    if (r.dataset.ref === f.where) {
-      r.classList.remove("ed-flash"); void r.getBoundingClientRect(); r.classList.add("ed-flash");
-    }
-  }
+  drawHover(null);
+  for(const target of f.targets||[])drawHover(target,true);
+  if(!f.targets?.length)for(const r of hitsG.children)if(r.dataset.ref===f.where){select({role:r.dataset.role,index:+r.dataset.index},false);drawHover({role:r.dataset.role,index:+r.dataset.index},true);}
+  const highlights=[...ui.querySelectorAll('.ed-hover-ink')];setTimeout(()=>highlights.forEach(e=>e.remove()),1600);
 }
 
 function showError(text) {
@@ -742,6 +825,7 @@ let lastPointer = {x: 0, y: 0};   // where a card with nothing to sit beside goe
 // A gesture owns a disposable model. The saved model changes only on release.
 let previewFrame = null, previewGroups = null, lastGestureMove = -Infinity;
 function cancelGesture() {
+  clearDropHint();
   if(drag?.holdTimer) clearTimeout(drag.holdTimer);
   if(cardDrag?.ghost) cardDrag.ghost.remove();
   cardDrag=null;
@@ -767,6 +851,7 @@ function mutatePreview(fn) {
 
 const sameSel = (a,b) => a && b && a.role === b.role && a.index === b.index;
 function toggleSelection(hit) {
+  if(groupDraft){gateGroup(()=>toggleSelection(hit));return;}
   const sel = {role:hit.role,index:hit.index};
   if (!S.selection.length && S.sel) S.selection = [S.sel];
   const found = S.selection.findIndex(s=>sameSel(s,sel));
@@ -1107,6 +1192,7 @@ function hitAt(target) {
 
 canvas.addEventListener("pointerdown", (e) => {
   if (S.present || e.button !== 0) return;
+  if(groupDraft){e.preventDefault();const hit=hitAt(e.target);if(hit&&!sameSel(hit,groupDraft.sel))gateGroup(()=>select(hit));return;}
   lastPointer = {x: e.clientX, y: e.clientY};
   pointers.set(e.pointerId, {x: e.clientX, y: e.clientY});
   if (pointers.size === 2) {
@@ -1121,7 +1207,7 @@ canvas.addEventListener("pointerdown", (e) => {
   freeDrag = e.altKey;
   lastAlign = {x:null,y:null};
   if (startPhysicalGesture(e, p)) return;
-  if(e.target.dataset?.port) { startConnect(e.target.dataset.port,"cond"); return; }
+  if(e.target.dataset?.port) { startConnect(e.target.dataset.port,"link"); return; }
   if(e.target.dataset?.endpoint && S.sel) {
     drag={kind:"endpoint",sel:S.sel,end:e.target.dataset.endpoint,start:p,moved:false};
     markEndpointTargets(drag);return;
@@ -1173,6 +1259,12 @@ canvas.addEventListener("pointerdown", (e) => {
     return;
   }
   if (e.shiftKey) { drag = {kind:"marquee",start:p,moved:false}; return; }
+  const lead=resistanceLead(p);
+  if(lead && lead.distance<=6*unitsPerPixel()) {
+    const sel={role:'branch',index:lead.index};
+    drag={kind:'route',sel,start:p,lead,moved:false,snapshot:snapshot(),centre:symbolHit(sel)?.at};
+    return;
+  }
   drag = {kind: "pan", start: {x: e.clientX, y: e.clientY}, view: {...S.view}, moved: false};
   canvas.classList.add("ed-pan");
   if(e.pointerType==="touch") {
@@ -1268,12 +1360,40 @@ function dropBracket(el) {
 // route around, so the caller can say why the symbol stayed on the wire.
 function placeBranchSymbol(sel, p) {
   const el = element(sel);
+  // Move the lane carrying the symbol, retaining its perpendicular risers.
+  // In particular, do not replace a parallel lane with a short bracket near
+  // the body: joining that bracket to distant junctions creates diagonals.
+  const original = routeOf(el), hit = symbolHit(sel);
+  if(original){
+    const lane=nearestSegment(original,hit?.at||el.at||p);
+    const axis=Math.abs(lane.u[0])>0.999999?0:Math.abs(lane.u[1])>0.999999?1:null;
+    if(axis!==null){
+      const normal=1-axis,a=original[lane.i],b=original[lane.i+1];
+      const clearance=(hit?.terminal_half??hit?.half_len??62)+DETOUR_PAD;
+      const threshold=(drag?.detouring?28:OFF_RUN_PX)*unitsPerPixel();
+      const off=Math.abs(p[normal]-a[normal]);
+      if(drag)drag.detouring=off>threshold;
+      const low=Math.min(a[axis],b[axis]),high=Math.max(a[axis],b[axis]);
+      const along=high-low>=2*clearance?clamp(snap(p[axis]),low+clearance,high-clearance):(low+high)/2;
+      const c=[0,0];c[axis]=along;c[normal]=off>threshold?snap(p[normal]):a[normal];
+      if(off>threshold && high-low>=2*clearance){
+        const first=[...a],last=[...b];first[normal]=last[normal]=c[normal];
+        const before=original.slice(0,lane.i+1),after=original.slice(lane.i+1);
+        if(lane.i>0 && Math.abs(original[lane.i-1][axis]-a[axis])<0.001)before[before.length-1]=first;
+        else before.push(first);
+        if(lane.i+2<original.length && Math.abs(original[lane.i+2][axis]-b[axis])<0.001)after[0]=last;
+        else after.unshift(last);
+        el.via=before.concat(after).slice(1,-1);
+      }else c[normal]=a[normal];
+      el.at=c;
+      return off<=threshold || high-low>=2*clearance;
+    }
+  }
   dropBracket(el);
   const route = routeOf(el);
   if (!route) { el.at = [snap(p[0]), snap(p[1])]; return true; }
   const seg = nearestSegment(route, p);
-  const hit = symbolHit(sel);
-  const d = (hit && hit.half_len != null ? hit.half_len : 42) + DETOUR_PAD;
+  const d = (hit?.terminal_half ?? hit?.half_len ?? 62) + DETOUR_PAD;
   const offRun = (drag && drag.detouring ? 28 : OFF_RUN_PX) * unitsPerPixel();
   if (drag) drag.detouring = Math.abs(seg.off) > offRun;
   if (Math.abs(seg.off) <= offRun || 2 * d > seg.len) {
@@ -1372,17 +1492,18 @@ function routedByHand(el) {
   return !!(copy.via && copy.via.length);
 }
 
-function turnBranch(sel, el, dir) {
+function turnBranch(sel, el, dir, targetAngle=null) {
   const ends = [el.from, el.to];
   const nodes = ends.map(nodeById);
   const alone = (id) => S.data.branches.filter(
     (b) => b.from === id || b.to === id).length === 1;
-  const swing = ends.map((id, i) => !!(nodes[i] && nodes[i].at && alone(id)));
+  const swing = ends.map((id, i) => !!(nodes[i]?.at && unsaid(nodes[i]) && alone(id)
+    && !S.data.sources.some(s=>s.from===id||s.to===id) && S.data.rail?.reference!==id));
 
   if ((swing[0] || swing[1]) && !routedByHand(el)) {
     const [a, c] = [nodes[0].at, nodes[1].at];
     const len = snap(Math.hypot(c[0] - a[0], c[1] - a[1])) || PITCH;
-    const rad = quarter(bearing(a, c), dir) * Math.PI / 180;
+    const rad = (targetAngle ?? quarter(bearing(a, c), dir)) * Math.PI / 180;
     const u = [Math.cos(rad), Math.sin(rad)];
     edit(() => {
       if (swing[0] && swing[1]) {
@@ -1403,46 +1524,19 @@ function turnBranch(sel, el, dir) {
     return;
   }
 
-  // Both ends are pinned, so only the symbol can turn. Two kinds refuse:
-  // validation forbids `angle` on a directed path and `via` on a fan, and
-  // saying so is better than a key that does nothing.
-  if (el.kind === "flow") {
-    toast("A heat flow's direction is its two ends, so the symbol cannot "
-          + "turn against them. Swap ends instead.");
-    return;
+  if (['flow','stream'].includes(el.kind)) {toast('Use Reverse direction for this directional component.');return;}
+  const hit=symbolHit(sel),next=targetAngle ?? quarter(el.angle ?? hit?.angle ?? 0,dir);
+  let proposal=mutationProposal(()=>{const b=element(sel);b.angle=((next%360)+360)%360;if(!b.at && hit)b.at=[...hit.at];});
+  const route=routeOf(el);
+  if(route && hit) {
+    const segment=nearestSegment(route,hit.at).i,a=route[segment],b=route[segment+1];
+    const relative=(next-bearing(a,b))*Math.PI/180;
+    const count=Math.min(el.count||1,3),reach=(hit.terminal_half||62)*(el.arrangement==='series'?count:1);
+    const half=Math.abs(Math.sin(relative))*reach+Math.abs(Math.cos(relative))*16+30;
+    const expanded=clearGroupLanes(proposal.document,sel.index,segment,half);
+    if(!expanded.error)proposal.document=expanded.document;
   }
-  if (el.count > 1) {
-    toast("A repeated path is drawn as a fan between its own nodes, so there "
-          + "is no wire to route around a turn.");
-    return;
-  }
-  const hit = symbolHit(sel);
-  const now = el.angle != null ? el.angle : (hit ? hit.angle : 0);
-  const next = quarter(((now % 360) + 360) % 360, dir);
-  const reach = (hit && hit.half_len != null ? hit.half_len : 42) + DETOUR_PAD;
-  edit(() => {
-    dropBracket(el);
-    const centre = el.at ? [...el.at] : (hit ? [...hit.at] : null);
-    const route = routeOf(el);
-    if (!centre || !route) { el.angle = next; return; }
-    const seg = nearestSegment(route, centre);
-    // turned back onto the line its wire already takes, the box wants no
-    // detour and no angle: absent is what "turns with its wire" is written as
-    const run = bearing([0, 0], seg.u);
-    if (Math.min(Math.abs(run - next), 360 - Math.abs(run - next)) < 1) {
-      delete el.angle;
-      return;
-    }
-    el.angle = next;
-    const rad = next * Math.PI / 180;
-    const u = [Math.cos(rad), Math.sin(rad)];
-    el.via = el.via || [];
-    el.via.splice(seg.i, 0,
-      [tidy(centre[0] - u[0] * reach), tidy(centre[1] - u[1] * reach)],
-      [tidy(centre[0] + u[0] * reach), tidy(centre[1] + u[1] * reach)]);
-    el.at = [tidy(centre[0]), tidy(centre[1])];
-  });
-  select(sel, false);
+  commitTopology(proposal,sel).then(ok=>{if(ok&&!pop.hidden)openPopover(sel);});
 }
 
 // What a drag has landed on, shown while it is still held. Both of these
@@ -1458,6 +1552,13 @@ function drawGuides(at) {
     {x1: at[0], y1: at[1] - span, x2: at[0], y2: at[1] + span}, "ed-guide"));
   if (lastAlign.y) ui.appendChild(svgEl("line",
     {x1: at[0] - span, y1: at[1], x2: at[0] + span, y2: at[1]}, "ed-guide"));
+  const moving=drag?.sel?.role==='node'?element(drag.sel)?.id:null;
+  const target=S.data.nodes.find(n=>n.id!==moving&&n.at?.every((v,i)=>v===at[i]));
+  if(target) {
+    ui.appendChild(svgEl('circle',{cx:at[0],cy:at[1],r:14*unitsPerPixel(),fill:'none'},'ed-guide'));
+    const label=svgEl('text',{x:at[0]+18*unitsPerPixel(),y:at[1]-18*unitsPerPixel(),'font-size':13*unitsPerPixel(),fill:'var(--accent)'},'ed-guide');
+    label.textContent='Merge into '+nodeName(target.id);ui.appendChild(label);
+  }
 }
 function clearGuides() { ui.querySelectorAll(".ed-guide").forEach((e) => e.remove()); }
 
@@ -1502,6 +1603,7 @@ canvas.addEventListener("pointermove", (e) => {
   const dx = p.x - drag.start.x, dy = p.y - drag.start.y;
   if (!drag.moved && Math.hypot(dx, dy) / unitsPerPixel() < 4) return;
   drag.moved = true;
+  drawHover(null);
   S.touched = true;
   lastGestureMove = performance.now();
   if (movePhysicalGesture(p, dx, dy)) return;
@@ -1526,7 +1628,18 @@ canvas.addEventListener("pointermove", (e) => {
         drawGuides(q);
       }
     });
+    if(!drag.label && drag.sel.role==='branch' && drag.group.length===1) {
+      const proposal=movedResistanceProposal(drag.sel,p);
+      if(proposal && !proposal.conflicts.length) {previewResistanceDrop(null,p,drag,proposal);return;}
+      clearDropHint();dropPreviewSequence++;
+    }
     schedulePreview();
+  } else if (drag.kind === 'route') {
+    mutatePreview(()=>{
+      const b=element(drag.sel);b.via||=[];
+      b.via.splice(drag.lead.i,0,[snap(drag.lead.at[0]+dx),snap(drag.lead.at[1]+dy)]);
+      if(!b.at && drag.centre && b.kind!=='link')b.at=[...drag.centre];
+    });schedulePreview();
   } else if (drag.kind === "via") {
     mutatePreview(() => { element(drag.sel).via[drag.i] = [snap(drag.orig[0] + dx), snap(drag.orig[1] + dy)]; });
     schedulePreview();
@@ -1536,12 +1649,13 @@ canvas.addEventListener("pointermove", (e) => {
   }
 });
 
-canvas.addEventListener("pointerup", (e) => {
+canvas.addEventListener("pointerup", async (e) => {
   if(drag?.holdTimer) clearTimeout(drag.holdTimer);
   pointers.delete(e.pointerId);
   if (pinch) { if (pointers.size < 2) pinch = null; return; }
   if (!drag) return;
   const d = drag; drag = null;
+  clearDropHint();dropPreviewSequence++;
   canvas.classList.remove("ed-pan");
   clearGuides(); clearGhost();
   const p = toPage(e.clientX, e.clientY);
@@ -1553,7 +1667,8 @@ canvas.addEventListener("pointerup", (e) => {
   if(d.kind==="endpoint") {
     ui.querySelectorAll(".ed-rubber").forEach(n=>n.remove());clearTargets();
     if(!d.moved) setMode("endpoint",{sel:d.sel,end:d.end});
-    else {const target=nodeTarget(p);if(target) attachEndpoint(d.sel,d.end,target);}
+    else {const target=nodeTarget(p);if(target) attachEndpoint(d.sel,d.end,target);
+      else await commitTopology(detachEndpoint(S.data,d.sel.role,d.sel.index,d.end,[snap(p.x),snap(p.y)]),d.sel);}
     return;
   }
   if (d.kind === "loose") {
@@ -1575,11 +1690,44 @@ canvas.addEventListener("pointerup", (e) => {
   }
   if (d.kind === "element") {
     if (d.moved && d.movable) {
+      let inserted=!d.label && d.sel.role==='branch'?movedResistanceProposal(d.sel,p):null;
+      if(inserted?.lead?.alternatives.length>1) {
+        const lead=await chooseLead(inserted.lead);
+        if(!lead){S.preview=null;drawing.innerHTML=S.scene.parts;return;}
+        inserted=relocateResistance(S.data,d.sel.index,lead.index,{segment:lead.i,at:lead.at});
+      }
+      if(inserted && !inserted.conflicts.length) {
+        S.preview=null;if(await commitTopology(inserted,inserted.selection,d.snapshot))fit(inserted.validatedInk);return;
+      }
+      const committed=S.data;
       if (S.preview) S.data = S.preview;
       S.preview = null;
-      S.undo.push(d.snapshot); S.redo.length = 0;
-      afterEdit();
-      select(d.sel, false);
+      let selected = d.sel;
+      let mergeReview=null;
+      if (d.sel.role === 'node' && !d.label) {
+        const node = element(d.sel);
+        const target = node?.at && S.data.nodes.find(n => n.id !== node.id && n.at && n.at.every((v,i) => v === node.at[i]));
+        if (target) {
+          const proposal = mergeNodes(S.data,node.id,target.id);
+          if (!proposal.conflicts.length) { S.data = proposal.document; selected = proposal.selection; }
+          else mergeReview=[node.id,target.id,proposal.conflicts];
+        } else if(node?.at) {
+          let lead=junctionLead(node.at,null,null,node.id);
+          if(lead?.alternatives.length>1) {
+            const preview=S.data;S.data=committed;
+            lead=await chooseLead(lead);
+            if(!lead){if(S.scene)drawing.innerHTML=S.scene.parts;return;}
+            S.data=preview;
+          }
+          if(lead) {
+            const proposal=addJunction(S.data,lead.index,lead.i,lead.at,node.id);
+            if(!proposal.conflicts.length) {S.data=proposal.document;selected=proposal.selection;}
+          }
+        }
+      }
+      const proposed=S.data;S.data=committed;
+      if(mergeReview){if(S.scene)drawing.innerHTML=S.scene.parts;reviewNodeMerge(...mergeReview);return;}
+      await commitTopology({document:proposed,conflicts:[]},selected,d.snapshot);
       if (d.routed === false) toast("These nodes are too close to route "
                                     + "around, so the box stayed on the wire.");
     } else {
@@ -1589,14 +1737,14 @@ canvas.addEventListener("pointerup", (e) => {
       if (e.pointerType !== "mouse" && lastTap && lastTap.role === d.sel.role && lastTap.index === d.sel.index
           && now - lastTap.t < 400 && Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) < 20) {
         lastTap = null;
-        if (d.sel.role === "node") { startConnect(element(d.sel).id, "cond"); return; }
+        if (d.sel.role === "node") { startConnect(element(d.sel).id, "link"); return; }
       }
       lastTap = {role: d.sel.role, index: d.sel.index, t: now, x: e.clientX, y: e.clientY};
       select(d.sel, true);
     }
     return;
   }
-  if (d.kind === "via") {
+  if (d.kind === "via" || d.kind==='route') {
     if (d.moved) { if (S.preview) S.data = S.preview; S.preview = null; S.undo.push(d.snapshot); S.redo.length = 0; afterEdit(); }
   }
 });
@@ -1617,7 +1765,7 @@ canvas.addEventListener("dblclick", (e) => {
   drag = null;
   if (hit && hit.role === "node") {
     e.preventDefault();
-    startConnect(element(hit).id, "cond");
+    startConnect(element(hit).id, "link");
   }
 });
 
@@ -1632,12 +1780,18 @@ function hover(target) {
   const hit = hitAt(target);
   const rects = hit ? hitsOf(hit) : [];
   if (hovered) hovered.forEach((r) => r.classList.remove("ed-hover"));
-  rects.forEach((r) => r.classList.add("ed-hover"));
+  drawHover(hit);
   hovered = rects;
 }
 
+let wheelQuietUntil = 0;
+function fitFromCommand() {
+  cancelGesture(); pinch=null; pointers.clear();
+  wheelQuietUntil=performance.now()+150; S.touched=false; fit();
+}
 canvas.addEventListener("wheel", (e) => {
   e.preventDefault();
+  if (performance.now()<wheelQuietUntil) {wheelQuietUntil=performance.now()+150;return;}
   if (e.ctrlKey || e.metaKey || Math.abs(e.deltaY) > 0 && !e.shiftKey) {
     zoomAt(e.clientX, e.clientY, Math.exp(e.deltaY * 0.0015));
   } else {
@@ -1653,7 +1807,8 @@ canvas.addEventListener("wheel", (e) => {
 // Delete on everything the reader selects.
 // Removing a node takes every path and source hanging on it, which is
 // what the file requires and not what the reader can see, so it says so.
-function removeSelected() {
+async function removeSelected() {
+  if(groupDraft){gateGroup(removeSelected);return;}
   if (!S.sel) return;
   const sel = S.sel, el = element(sel);
   let went = 0;
@@ -1663,19 +1818,26 @@ function removeSelected() {
          + S.data.sources.filter((x) => (x.to || x.from) === id).length;
   }
   const group=S.selection.length>1?[...S.selection]:[sel];
-  const identities=group.map(s=>({role:s.role,obj:element(s)}));
-  edit(()=>{ for(const item of identities) { const index=list(item.role).indexOf(item.obj);if(index>=0) removeElement({role:item.role,index}); } });
+  const ordered=group.map(s=>({...s,id:element(s)?.id})).sort((a,b)=>a.role===b.role ? b.index-a.index : a.role==='node'?1:b.role==='node'?-1:a.role.localeCompare(b.role));
+  const proposal=mutationProposal(()=>{ for(const item of ordered) {
+    const index=item.role==='node'?S.data.nodes.findIndex(n=>n.id===item.id):item.index;
+    if(index>=0) removeElement({...item,index});
+  } });
+  if(!await commitTopology(proposal,null))return;
   select(null);
-  if (went) toast(`Deleted, with ${plural(went, "path or source", "paths and sources")} that joined it.`,
+  if (went) toast(`Deleted selection; preserved ${plural(went, "attached component", "attached components")}.`,
                   {label: "Undo", act: undo});
 }
 
 function select(sel, popover = true, fresh = false) {
+    if(groupDraft && !sameSel(sel,groupDraft.sel)) {gateGroup(()=>select(sel,popover,fresh));return;}
+    if(!sameSel(sel,S.sel))inspectorTab='Properties';
     S.sel = sel;
     if (!S.selection.some(s=>sameSel(s,sel)) || popover || !sel) S.selection=sel?[sel]:[];
   drawSelection();
   $("ed-delete").disabled = !sel;
   if (sel && popover) openPopover(sel, fresh); else closePopover();
+  updateChrome();
   if (!fresh) canvas.focus({preventScroll: true});
 }
 
@@ -1724,8 +1886,7 @@ function setMode(mode, pending = null) {
 // one node twice, which validation refuses.
 function eligible(handle, id) {
   if (!handle || id === handle.id) return false;
-  const where = islands();
-  return where.has(id) && where.get(id) !== where.get(handle.id);
+  return !!nodeById(id) && !mergeNodes(S.data, handle.id, id).conflicts.length;
 }
 
 function markTargets(handle) {
@@ -1771,9 +1932,28 @@ function startConnect(fromId, kind) {
 }
 
 // ------------------------------------------------------------ adding
-function placeNode(kind, p) {
+async function placeNode(kind, p) {
   const id = newNodeId();
   const at = alignedSnap(p.x, p.y, null);
+  const target=S.data.nodes.find(n=>n.at?.every((v,i)=>v===at[i]));
+  if(kind==='free' && target) {
+    // Reuse the existing junction when repairing a lead drawn through it.
+    let lead=junctionLead(at,S.pending?.branchIndex,null,target.id);
+    if(lead){lead=await chooseLead(lead);if(!lead)return;}
+    if(lead) {
+      const proposal=addJunction(S.data,lead.index,lead.i,lead.at,target.id);
+      if(proposal.conflicts.length) {toast(proposal.conflicts.join(' '));return;}
+      if(!await commitTopology(proposal))return;
+    }
+    setMode('idle');select({role:'node',index:S.data.nodes.findIndex(n=>n.id===target.id)},true,true);return;
+  }
+  let lead=kind==='free' ? junctionLead(at,S.pending?.branchIndex) : null;
+  if(lead){lead=await chooseLead(lead);if(!lead)return;}
+  if(lead) {
+    const proposal=addJunction(S.data,lead.index,lead.i,lead.at);
+    if(proposal.conflicts.length) {toast(proposal.conflicts.join(' '));return;}
+    if(!await commitTopology(proposal))return;setMode('idle');select(proposal.selection,true,true);return;
+  }
   edit((d) => {
     const n = {id, at};
     if (kind !== "free") n.kind = kind;
@@ -1781,6 +1961,40 @@ function placeNode(kind, p) {
   });
   setMode("idle");
   select({role: "node", index: S.data.nodes.length - 1}, true, true);
+}
+
+function junctionLead(at, onlyIndex, excludeIndex, nodeId) {
+  const candidates=[];
+  S.data.branches.forEach((b,index)=>{
+    if(index===excludeIndex || onlyIndex!=null && index!==onlyIndex || (b.count||1)>1) return;
+    if(nodeId && (b.from===nodeId || b.to===nodeId)) return;
+    const route=routeOf(b);if(!route) return;
+    const segment=nearestSegment(route,at),distance=Math.abs(segment.off);
+    if(segment.along<0 || segment.along>segment.len || distance>12*unitsPerPixel()) return;
+    const point=segment.a.map((v,i)=>tidy(v+segment.u[i]*segment.along));
+    if(addJunction(S.data,index,segment.i,point,nodeId).conflicts.length) return;
+    candidates.push({index,i:segment.i,at:point,distance});
+  });
+  candidates.sort((a,b)=>a.distance-b.distance||a.index-b.index);
+  const best=candidates[0];
+  return best?{...best,alternatives:candidates.filter(c=>c.distance<=best.distance+3*unitsPerPixel())}:null;
+}
+
+function chooseLead(lead) {
+  if(!lead || lead.alternatives.length<2)return Promise.resolve(lead);
+  return new Promise(resolve=>{
+    const dialog=document.createElement('dialog');dialog.className='ed-conflict-review';dialog.setAttribute('aria-label','Choose connection');
+    dialog.innerHTML='<h3>Choose connection</h3><p>These lines cross without joining. Choose the connection to change.</p>';
+    let result=null;
+    for(const candidate of lead.alternatives) {
+      const b=S.data.branches[candidate.index],button=document.createElement('button');
+      button.textContent=(b.label||kindName('branch',b.kind||'cond'))+' — '+nodeName(b.from)+' → '+nodeName(b.to);
+      button.onfocus=button.onpointerenter=()=>{clearGuides();const route=routeOf(b);ui.appendChild(svgEl('polyline',{points:route.map(p=>p.join(',')).join(' '),fill:'none'},'ed-guide'));};
+      button.onclick=()=>{result=candidate;dialog.close();};dialog.appendChild(button);
+    }
+    const cancel=document.createElement('button');cancel.textContent='Cancel';cancel.onclick=()=>dialog.close();dialog.appendChild(cancel);
+    dialog.onclose=()=>{clearGuides();dialog.remove();resolve(result);};document.body.appendChild(dialog);dialog.showModal();
+  });
 }
 
 // What a drop makes, for all three groups alike: the component, whole,
@@ -1816,7 +2030,16 @@ function ensureStreamUnits(d) {
   return d;
 }
 
-function dropPath(kind, p) {
+async function dropPath(kind, p) {
+  let proposal=resistanceDropProposal(kind,p);
+  if(proposal?.lead?.alternatives.length>1) {
+    const lead=await chooseLead(proposal.lead);if(!lead)return;
+    proposal=insertResistance(S.data,lead.index,kind,{segment:lead.i,at:lead.at});
+  }
+  if(proposal) {
+    if(proposal.conflicts.length){toast(proposal.conflicts.join(' '));return;}
+    if(!await commitTopology(proposal))return;setMode('idle');select(proposal.selection,true,true);fit(proposal.validatedInk);return;
+  }
   const [cx, cy] = alignedSnap(p.x, p.y, null);
   const half = PITCH / 2;
   const left=nodeTarget({x:cx-half,y:cy}),right=nodeTarget({x:cx+half,y:cy});
@@ -1916,16 +2139,19 @@ document.querySelectorAll(".ed-card").forEach((card) => {
     // the node under the ghost lights up when a path or a source can land on it
     const over = document.elementFromPoint(e.clientX, e.clientY);
     const p=toPage(e.clientX,e.clientY);
+    if(entry.role==='branch' && resistanceKinds.has(entry.kind)) previewResistanceDrop(entry.kind,p,cardDrag);
     const [cx,cy]=entry.role==="branch"?alignedSnap(p.x,p.y,null):[p.x,p.y];
     const targets=entry.role==="source"?[nodeTarget(p)]:entry.role==="branch"?[nodeTarget({x:cx-PITCH/2,y:cy}),nodeTarget({x:cx+PITCH/2,y:cy})]:[];
     clearTargets();
     targets.filter(Boolean).forEach(id=>hitsOf({role:"node",index:S.data.nodes.findIndex(n=>n.id===id)}).filter(r=>r.dataset.element==="node").forEach(r=>r.classList.add("ed-target")));
   });
   const finish = (e) => {
+    clearDropHint();
     pointers.delete(e.pointerId);
     freeDrag=e.altKey;
     if (!cardDrag) return;
     const d = cardDrag; cardDrag = null;
+    S.preview=null;dropPreviewSequence++;if(S.scene)drawing.innerHTML=S.scene.parts;
     if (d.ghost) d.ghost.remove();
     hover(null);clearTargets();
     if (!d.moved) {
@@ -1944,6 +2170,18 @@ document.querySelectorAll(".ed-card").forEach((card) => {
 });
 
 // Quick add is intentional; ordinary empty-space clicks only deselect.
+let dropPreviewSequence=0;
+async function previewResistanceDrop(kind,p,gesture,provided=null) {
+  const proposal=provided||resistanceDropProposal(kind,p),sequence=++dropPreviewSequence;
+  if(!proposal || proposal.conflicts.length){clearDropHint();S.preview=null;if(S.scene)drawing.innerHTML=S.scene.parts;return;}
+  showDropHint(proposal,p);
+  S.preview=proposal.document;
+  try {
+    const scene=await rpc.call('scene',proposal.document,S.notation,false,null,S.file?.display||{mode:'automatic'});
+    if(cardDrag!==gesture && drag!==gesture || sequence!==dropPreviewSequence)return;
+    if(!scene.error)drawing.innerHTML=scene.parts;
+  }catch {if(cardDrag===gesture || drag===gesture)S.preview=null;}
+}
 const quick = $("ed-quick"), quickInput = $("ed-quick-input"), quickList = $("ed-quick-list");
 let quickAt = null, quickItems = [], quickIndex = 0;
 
@@ -2112,6 +2350,8 @@ const pop = $("ed-popover");
 const menu = $("ed-menu");
 let componentCategory = "Network";
 function showComponents(open=true) {
+  if(groupDraft){gateGroup(()=>showComponents(open));return;}
+  if(open)setPanelView('Components',true);
   document.body.classList.toggle("ed-components-collapsed",!open);
   document.body.classList.toggle("ed-components-open",open);
   $("ed-sketch").setAttribute("aria-expanded",String(open));
@@ -2208,7 +2448,7 @@ const SIDES = ["auto", "up", "down", "left", "right"];
 // The card is rebuilt whenever a field changes its shape -- a kind, a
 // turn -- and a `details` that shuts every time is a field you cannot use.
 let moreOpen = false;
-const more = () => `<details${moreOpen ? " open" : ""}><summary>Connections &amp; presentation</summary>`;
+const more = () => `<details open class="ed-common-controls"><summary>Connections and Appearance</summary>`;
 pop.addEventListener("toggle", (e) => {
   if (e.target.tagName === "DETAILS") moreOpen = e.target.open;
 }, true);
@@ -2219,10 +2459,10 @@ pop.addEventListener("toggle", (e) => {
 // is what an absent angle means and no number can say.
 function rotateField(label, value, reset) {
   return `<label class="ed-rot"><span>${label}</span><span class="ed-rot-c">`
-    + `<button type="button" data-rot="-45" title="Turn 45 degrees anticlockwise">&#8634;</button>`
+    + `<button type="button" data-rot="-45" aria-label="Rotate counterclockwise" title="Turn 45 degrees anticlockwise">&#8634;</button>`
     + `<input type="number" data-field="angle" value="${value}" step="45" aria-label="${escapeHtml(label)}">`
-    + `<button type="button" data-rot="45" title="Turn 45 degrees clockwise">&#8635;</button>`
-    + `<button type="button" data-rot="reset" class="ed-rot-reset" title="${escapeHtml(reset)}">reset</button>`
+    + `<button type="button" data-rot="45" aria-label="Rotate clockwise" title="Turn 45 degrees clockwise">&#8635;</button>`
+    + `<button type="button" data-rot="reset" aria-label="Reset rotation" class="ed-rot-reset" title="${escapeHtml(reset)}">reset</button>`
     + `</span></label>`;
 }
 
@@ -2237,6 +2477,11 @@ function shownAngle(sel, el) {
 }
 
 function openPopover(sel, fresh = false) {
+  openFindings(false);
+  if(S.selection.length>1){
+    pop.innerHTML=`<h4>${S.selection.length} selected objects</h4><p data-selection-summary>${escapeHtml(issueNames({targets:S.selection}))}</p><button type="button" data-act="delete-selection" class="ed-danger">Delete ${S.selection.length} selected objects</button>`;
+    dockInspector(sel);return;
+  }
   const el = element(sel);
   if (!el) return;
   if (["region","volume","surface","transfer","annotation"].includes(sel.role)) { openPhysicalPopover(sel); return; }
@@ -2244,7 +2489,7 @@ function openPopover(sel, fresh = false) {
   let h = "";
   if (sel.role === "node") {
     const kind = el.kind || "free";
-    h += `<h4>${escapeHtml(kindName("node", kind))} <code>${escapeHtml(el.id)}</code></h4>`;
+    h += `<h4>${escapeHtml(nodeName(el.id))}</h4>`;
     h += field("Label", text("label", el.label, "e.g. Junction"));
     h += field("Subscript", text("sub", el.sub, "names the place: j"));
     h += field(`T, ${escapeHtml(u.T && u.T.unit || u.T || "no unit")}`, text("value", el.value, "temperature"));
@@ -2258,10 +2503,10 @@ function openPopover(sel, fresh = false) {
     h += `<div class="ed-row"><button type="button" data-act="connect" title="Then click the node it joins">Connect to…</button><button type="button" data-act="delete" class="ed-danger">Delete</button></div>`;
   } else if (sel.role === "branch") {
     const kind = el.kind || "cond";
-    h += `<h4>${escapeHtml(kindName("branch", kind))} <code>${escapeHtml(el.from)} → ${escapeHtml(el.to)}</code></h4>`;
+    h += `<h4>${escapeHtml(el.label||kindName("branch",kind))} <small>${escapeHtml(nodeName(el.from))} → ${escapeHtml(nodeName(el.to))}</small></h4>`;
     h += field("Kind", selectBox("kind", kind, KINDS.branch, Object.fromEntries(KINDS.branch.map((k) => [k, kindName("branch", k)]))));
-    h += field("From",selectBox("from",el.from,list("node").map(n=>n.id),Object.fromEntries(list("node").map(n=>[n.id,n.label?`${n.label} (${n.id})`:n.id]))));
-    h += field("To",selectBox("to",el.to,list("node").map(n=>n.id),Object.fromEntries(list("node").map(n=>[n.id,n.label?`${n.label} (${n.id})`:n.id]))));
+    h += field("From",selectBox("from",el.from,list("node").map(n=>n.id),Object.fromEntries(list("node").map(n=>[n.id,nodeName(n.id)]))));
+    h += field("To",selectBox("to",el.to,list("node").map(n=>n.id),Object.fromEntries(list("node").map(n=>[n.id,nodeName(n.id)]))));
     h += field("Label", text("label", el.label, "e.g. Die attach"));
     // A stream states neither: what it carries is worked out from `mdot`,
     // `cp` and its two ends, so offering `value` would be offering to
@@ -2272,7 +2517,7 @@ function openPopover(sel, fresh = false) {
       h += field(`<i>c</i><sub>p</sub>, ${escapeHtml(u.cp || "no unit")}`, text("cp", el.cp, "specific heat"));
     } else if (!unvalued) {
       const q = kind === "cap" ? "C" : kind === "flow" ? "q" : "R";
-      h += field(`${q}, ${escapeHtml(u[q] || "no unit")}`, text("value", el.value, "value"));
+      h += field(`${el.count>1?'Value per component — ':''}${q}, ${escapeHtml(u[q] || "no unit")}`, text("value", el.value, "value"));
     }
     if (kind === "cap" || kind === "stream") h += field("Subscript", text("sub", el.sub, kind === "stream" ? "names the medium" : "names the place"));
     if (!unvalued && kind !== "flow") h += field(`Rate q, ${escapeHtml(u.q || "no unit")}`, text("rate", el.rate, "optional"));
@@ -2280,25 +2525,29 @@ function openPopover(sel, fresh = false) {
     // A stream refuses both: its number is derived, so a group would draw
     // with no value under it. Offering the field would be offering a refusal.
     if (kind !== "stream") {
-      h += field("Count", num("count", el.count, 1));
-      h += field("Arranged", selectBox("arrangement", el.arrangement || "", ["", "parallel", "series"], {"": "(one path)"}));
+      h += field("Count", num("count", el.count || 1, 1));
+      h += `<div data-group-arrangement ${!(el.count>1)?'hidden':''}>`+field("Arrangement", selectBox("arrangement", el.arrangement || "", ["", "series", "parallel"], {"": "Choose arrangement"}))+`</div>`;
+      const combined=el.count>1?groupProposal(S.data,sel.index,String(el.count),el.arrangement).combined:null;
+      h += `<div data-group-preview aria-live="polite">${el.count>1?'Combined value: '+(combined??'unspecified'):''}</div><div class="ed-row" data-group-actions hidden><button type="button" data-group-apply>Apply</button><button type="button" data-group-cancel>Cancel</button></div>`;
     }
     if (kind !== "flow" && kind !== "stream") h += rotateField("Symbol angle", shownAngle(sel, el), "back to turning with the wire");
     h += field("Label side", selectBox("side", el.side || "auto", SIDES));
     h += field("Reference ID", text("id", el.id, "optional, for physical links"));
-    h += `<div class="ed-row"><button type="button" data-act="swap">Swap ends</button><button type="button" data-act="unpin">Let the symbol float</button></div>`;
+    h += field('Symbol position',selectBox('symbol-position',el.at?'manual':'automatic',['automatic','manual'],{automatic:'Automatic',manual:'Manual'}));
+    h += `<div class="ed-row"><button type="button" data-act="swap">Reverse direction</button><button type="button" data-act="unpin">Reset position</button></div>`;
+    h += `<div class="ed-row"><button type="button" data-act="disconnect-from">Disconnect start</button><button type="button" data-act="disconnect-to">Disconnect end</button><button type="button" data-act="disconnect-both">Disconnect both</button></div>`;
     h += `<p style="margin:8px 0 4px;font-size:12.5px;color:var(--ink-3)">Bends</p><ul class="ed-vias">`;
-    (el.via || []).forEach((v, i) => { h += `<li>${v[0]}, ${v[1]} <button type="button" data-act="via-del" data-i="${i}">remove</button></li>`; });
-    h += `</ul><div class="ed-row"><button type="button" data-act="via-add">Add a bend</button></div>`;
+    (el.via || []).forEach((v, i) => { h += `<li><input type="number" step="any" data-route-point="${i}" data-axis="0" aria-label="Waypoint ${i+1} x" value="${v[0]}"><input type="number" step="any" data-route-point="${i}" data-axis="1" aria-label="Waypoint ${i+1} y" value="${v[1]}"> <button type="button" data-act="via-del" data-i="${i}">remove</button></li>`; });
+    h += `</ul><div class="ed-row"><button type="button" data-act="via-add">Add junction</button></div>`;
     h += `</details>`;
     h += `<div class="ed-row"><button type="button" data-act="delete" class="ed-danger">Delete</button></div>`;
   } else {
     const kind = el.kind || "diss";
     const outward = el.from != null;
-    h += `<h4>${escapeHtml(kindName("source", kind))} <code>${outward ? escapeHtml(el.from) + " →" : "→ " + escapeHtml(el.to)}</code></h4>`;
+    h += `<h4>${escapeHtml(kindName("source", kind))} <code>${outward ? escapeHtml(nodeName(el.from)) + " →" : "→ " + escapeHtml(nodeName(el.to))}</code></h4>`;
     h += field("Kind", selectBox("kind", kind, KINDS.source, Object.fromEntries(KINDS.source.map((k) => [k, kindName("source", k)]))));
     h += field("Label", text("label", el.label, "e.g. Switching loss"));
-    h += field("Attached node",selectBox(outward?"from":"to",outward?el.from:el.to,list("node").map(n=>n.id),Object.fromEntries(list("node").map(n=>[n.id,n.label?`${n.label} (${n.id})`:n.id]))));
+    h += field("Attached node",selectBox(outward?"from":"to",outward?el.from:el.to,list("node").map(n=>n.id),Object.fromEntries(list("node").map(n=>[n.id,nodeName(n.id)]))));
     h += field("Subscript", text("sub", el.sub, "names the place"));
     const q = kind === "diss" ? "P" : kind === "flux" ? "q″" : "q";
     h += field(`${q}, ${escapeHtml(u[q] || "no unit")}`, text("value", el.value, "value"));
@@ -2308,12 +2557,16 @@ function openPopover(sel, fresh = false) {
     h += field("Count", num("count", el.count, 1));
     h += rotateField("Angle", shownAngle(sel, el), "back to 0");
     h += field("Label side", selectBox("side", el.side || "auto", SIDES));
-    h += `<div class="ed-row"><button type="button" data-act="unpin">Let it float</button></div>`;
+    h += field('Symbol position',selectBox('symbol-position',el.at?'manual':'automatic',['automatic','manual'],{automatic:'Automatic',manual:'Manual'}));
+    h += `<div class="ed-row"><button type="button" data-act="unpin">Reset position</button></div>`;
     h += `</details>`;
     h += `<div class="ed-row"><button type="button" data-act="delete" class="ed-danger">Delete</button></div>`;
   }
   h += `<p class="ed-hint">Label position: ${el.label_offset?'Manual':'Automatic'}</p><div class="ed-row"><button type="button" data-act="auto-label">Auto position label</button></div>`;
   pop.innerHTML = h;
+  const advanced=document.createElement('details');advanced.innerHTML='<summary>Advanced metadata</summary>';
+  for(const input of pop.querySelectorAll('input[data-field="id"]'))advanced.appendChild(input.closest('label'));
+  if(advanced.children.length>1)pop.appendChild(advanced);
   pop.hidden = false;
   placePopover(sel);
   const first = pop.querySelector('input[data-field="label"]');
@@ -2321,6 +2574,10 @@ function openPopover(sel, fresh = false) {
 }
 
 function placePopover(sel) {
+  dockInspector(sel);return;
+}
+function placeLegacyPopover(sel) {
+  pop.style.position='absolute';
   const st = $("ed-stage").getBoundingClientRect();
   const pw = pop.offsetWidth || 320, ph = pop.offsetHeight || 260;
   const b = boundsOf(sel);
@@ -2352,32 +2609,147 @@ function placePopover(sel) {
   pop.style.top = y + "px";
 }
 
-function closePopover() { pop.hidden = true; pop.innerHTML = ""; delete pop.dataset.rename; }
+function closePopover() { if(groupDraft) return; if(pop.classList.contains('ed-docked')) {pop.classList.remove('ed-docked');$('ed-stage').appendChild(pop);setPanelView(solveOpen?'Solve':'Components',true);} pop.hidden = true; pop.innerHTML = ""; delete pop.dataset.rename; }
+
+let groupDraft=null, groupPreviewSequence=0;
+function gateGroup(action) {
+  pop.querySelector('[data-group-leave]')?.remove();
+  const box=document.createElement('div');box.dataset.groupLeave='';
+  box.innerHTML='<p>Finish the group change before leaving.</p><button data-leave-apply>Apply</button> <button data-leave-discard>Discard</button> <button data-leave-keep>Keep editing</button>';
+  box.querySelector('[data-leave-apply]').onclick=async()=>{if(await applyGroupDraft()) action();};
+  box.querySelector('[data-leave-discard]').onclick=()=>{cancelGroupDraft();action();};
+  box.querySelector('[data-leave-keep]').onclick=()=>box.remove();pop.appendChild(box);
+}
+
+function nodeName(id,data=S.data) {const node=data.nodes.find(n=>n.id===id);return node?.label || (node?'Junction '+id.replace(/^n(?=\d+$)/,''):id==='rail'?'Reference rail':id);}
+
+const resistanceKinds=new Set(['cond','conv','rad','contact','spread','pipe','mixed']);
+function insertionObstacles(excludeIndex) {
+  return (S.scene?.hits||[]).filter(h=>['label','symbol','node','ground','phase','region','volume','annotation'].includes(h.element)
+    && !(h.role==='branch'&&h.index===excludeIndex)).map(h=>({bounds:h.bounds,nodeId:h.role==='node'?S.data.nodes[h.index]?.id:null}));
+}
+function resistanceLead(p,excludeIndex) {
+  const lead=junctionLead([p.x,p.y],null,excludeIndex);
+  if(!lead)return null;
+  const sharedLead=sharedTerminalLead(S.data,lead.alternatives);
+  return sharedLead?{...lead,sharedLead,alternatives:[lead]}:lead;
+}
+function resistanceDropProposal(kind,p) {
+  if(!resistanceKinds.has(kind))return null;
+  const hit=(S.scene?.hits||[]).find(h=>h.role==='branch' && h.element==='symbol' && resistanceKinds.has(S.data.branches[h.index]?.kind||'cond') && p.x>=h.bounds[0] && p.x<=h.bounds[2] && p.y>=h.bounds[1] && p.y<=h.bounds[3]);
+  if(hit)return {...insertResistance(S.data,hit.index,kind,{parallel:true,obstacles:insertionObstacles()}),hint:'Add in parallel',target:hit.index};
+  const lead=resistanceLead(p);
+  return lead?{...insertResistance(S.data,lead.index,kind,{segment:lead.i,at:lead.at,sharedLead:lead.sharedLead}),lead,hint:'Insert in series',target:lead.index}:null;
+}
+function clearDropHint() {document.querySelector('.ed-drop-hint')?.remove();}
+function showDropHint(proposal,p) {
+  let hint=document.querySelector('.ed-drop-hint');
+  if(!hint){hint=document.createElement('div');hint.className='ed-drop-hint card';hint.setAttribute('role','status');document.body.appendChild(hint);}
+  const b=S.data.branches[proposal.target],screen=toScreen(p.x,p.y),rect=$('ed-stage').getBoundingClientRect();
+  hint.textContent=proposal.hint+' — '+(proposal.lead?.sharedLead?'shared lead ('+proposal.lead.sharedLead.candidates.length+' paths)':b?.label||kindName('branch',b?.kind||'cond'))+(proposal.lead?.alternatives.length>1?' (choose crossing line on release)':'');
+  hint.style.left=clamp(rect.left+screen.x+16,8,innerWidth-300)+'px';hint.style.top=clamp(rect.top+screen.y+20,8,innerHeight-70)+'px';
+}
+function movedResistanceProposal(sel,p) {
+  const b=S.data.branches[sel.index];if(!resistanceKinds.has(b?.kind||'cond'))return null;
+  const hit=(S.scene?.hits||[]).find(h=>h.role==='branch'&&h.index!==sel.index&&h.element==='symbol'&&resistanceKinds.has(S.data.branches[h.index]?.kind||'cond')&&p.x>=h.bounds[0]&&p.x<=h.bounds[2]&&p.y>=h.bounds[1]&&p.y<=h.bounds[3]);
+  if(hit)return {...relocateResistance(S.data,sel.index,hit.index,{parallel:true,obstacles:insertionObstacles(sel.index)}),hint:'Add in parallel',target:hit.index};
+  const lead=resistanceLead(p,sel.index);
+  return lead?{...relocateResistance(S.data,sel.index,lead.index,{segment:lead.i,at:lead.at,sharedLead:lead.sharedLead}),lead,hint:'Insert in series',target:lead.index}:null;
+}
+async function updateGroupDraft(field,raw) {
+  // A text field emits both input and change. Blurring it must not invalidate
+  // the already validated proposal between an Apply pointerdown and click.
+  if(groupDraft && groupDraft[field]===raw) return;
+  if(!groupDraft) {
+    const committed=element(S.sel);
+    if(raw===(field==='count'?String(committed.count||1):committed.arrangement||'')) return;
+  }
+  if(!groupDraft) groupDraft={base:structuredClone(S.data),sel:{...S.sel},count:String(element(S.sel).count||1),arrangement:element(S.sel).arrangement||'',revision:S.revision,generation:S.generation};
+  const draft=groupDraft;draft[field]=raw;
+  for(const input of pop.querySelectorAll('input[data-field],select[data-field]'))if(!['count','arrangement'].includes(input.dataset.field))input.disabled=true;
+  for(const button of pop.querySelectorAll('button[data-act],button[data-rot]'))button.disabled=true;
+  const sequence=++groupPreviewSequence;
+  const controls=pop.querySelector('[data-group-actions]'),slot=pop.querySelector('[data-group-preview]');
+  controls.hidden=false;controls.querySelector('[data-group-apply]').disabled=true;
+  pop.querySelector('[data-group-arrangement]').hidden=!(Number(draft.count)>1);
+  let proposal=groupProposal(draft.base,draft.sel.index,draft.count,draft.arrangement);
+  draft.proposal=null;
+  if(proposal.error) {slot.textContent=proposal.error;drawing.innerHTML=S.scene.parts;return;}
+  const b=proposal.document.branches[draft.sel.index],old=draft.base.branches[draft.sel.index];
+  if(Number(draft.count)>(old.count||1) || draft.arrangement!==old.arrangement && Number(draft.count)>1) {
+    const route=routeOf(old),hit=symbolHit(draft.sel);
+    if(route) {
+      const segment=nearestSegment(route,b.at||hit?.at||route[0]).i;
+      const count=Math.min(Number(draft.count),3),required=draft.arrangement==='series'?count*142+40:180;
+      const expanded=expandSegment(proposal.document,draft.sel.index,segment,required);
+      if(expanded.error) {slot.textContent=expanded.error;return;}
+      proposal.document=expanded.document;
+      if(draft.arrangement==='parallel') {
+        const cleared=clearGroupLanes(proposal.document,draft.sel.index,segment,((count-1)*46)/2+36);
+        if(cleared.error){slot.textContent=cleared.error;return;}
+        proposal.document=cleared.document;
+      }
+    }
+  }
+  slot.textContent='Validating geometry…';
+  try {
+    const scene=await rpc.call('scene',proposal.document,S.notation,S.physics,null,S.file?.display||{mode:'automatic'});
+    if(groupDraft!==draft || sequence!==groupPreviewSequence) return;
+    if(scene.error) {slot.textContent=scene.error;return;}
+    draft.proposal=proposal;drawing.innerHTML=scene.parts;
+    slot.textContent=Number(draft.count)>1 ? `Value per component: ${b.value??'unspecified'}. Combined value: ${proposal.combined??'unspecified'}. Preview — Apply to save.` : 'Preview — Apply to save.';
+    controls.querySelector('[data-group-apply]').disabled=false;
+  } catch(error) {if(groupDraft===draft) slot.textContent=error.message;}
+}
+function cancelGroupDraft() {
+  const selected=groupDraft?.sel;groupDraft=null;groupPreviewSequence++;
+  if(S.scene) drawing.innerHTML=S.scene.parts;
+  if(selected) openPopover(selected);
+}
+async function applyGroupDraft() {
+  const draft=groupDraft;if(!draft?.proposal) return false;
+  if(draft.revision!==S.revision || draft.generation!==S.generation) {toast('The diagram changed. Cancel this draft and try again.');return false;}
+  groupDraft=null;groupPreviewSequence++;
+  if(JSON.stringify(draft.proposal.document)!==JSON.stringify(S.data)) edit(d=>replaceDocument(d,draft.proposal.document));
+  else drawing.innerHTML=S.scene.parts;
+  openPopover(draft.sel);return true;
+}
+pop.addEventListener('click',e=>{if(e.target.hasAttribute('data-group-apply')) applyGroupDraft();if(e.target.hasAttribute('data-group-cancel')) cancelGroupDraft();});
 
 // A card that belongs to a button in the chrome rather than to something
 // on the drawing: under the button, kept inside the stage.
 function underButton(card, btn) {
-  const st = $("ed-stage").getBoundingClientRect(), b = btn.getBoundingClientRect();
+  const b = btn.getBoundingClientRect();
   const w = card.offsetWidth || 300, h = card.offsetHeight || 220;
-  card.style.left = clamp(b.left - st.left, 8, Math.max(8, st.width - w - 8)) + "px";
-  card.style.top = clamp(b.bottom - st.top + 6, 8, Math.max(8, st.height - h - 8)) + "px";
+  card.style.position='fixed';
+  card.style.left = clamp(b.left, 8, Math.max(8, innerWidth - w - 8)) + "px";
+  card.style.top = clamp(b.bottom + 6, 8, Math.max(8, innerHeight - h - 8)) + "px";
 }
 // leaving a field must hand the keyboard back, or Delete goes on being
 // swallowed by an input nobody is looking at any more
 function toCanvas() { if (!S.present) canvas.focus({preventScroll: true}); }
 
-pop.addEventListener("change", (e) => {
+pop.addEventListener("change", async (e) => {
+  if(e.target.hasAttribute('data-route-point')){
+    const raw=e.target.value,value=Number(raw),sel={...S.sel},index=Number(e.target.dataset.routePoint),axis=Number(e.target.dataset.axis);
+    if(!raw.trim()||!Number.isFinite(value)){e.target.setCustomValidity('Enter a finite coordinate.');e.target.reportValidity();return;}
+    e.target.setCustomValidity('');
+    await commitTopology(mutationProposal(()=>{element(sel).via[index][axis]=value;}),sel);return;
+  }
   const f = e.target.dataset.field;
   if (!f || !S.sel) return;
+  if(S.sel.role==='branch' && ['count','arrangement'].includes(f)) {updateGroupDraft(f,e.target.value);return;}
   applyField(S.sel, f, e.target.value);
 });
 pop.addEventListener("input", (e) => {
   const f = e.target.dataset.field;
+  if(f==='count' && S.sel?.role==='branch') {updateGroupDraft(f,e.target.value);return;}
   if (!f || !S.sel || e.target.tagName !== "INPUT" || e.target.type !== "text") return;
   if (f === "id") return;  // ids rename on change, not per keystroke
   applyField(S.sel, f, e.target.value, true);
 });
 pop.addEventListener("keydown", (e) => {
+  if(groupDraft && ['Enter','Escape'].includes(e.key)) {e.preventDefault();e.stopPropagation();if(e.key==='Escape') cancelGroupDraft();else applyGroupDraft();return;}
   // The card is a card over the drawing, and the moment a component most
   // wants turning is the moment its card is open -- right after the drop
   // that made it, with the caret parked in the label box. The turn keys
@@ -2395,11 +2767,13 @@ pop.addEventListener("keydown", (e) => {
   // chain would otherwise find the card already shut and go on to close
   // whatever is behind it
   if (e.key === "Enter" && e.target.tagName === "INPUT") {
+    if (pop.dataset.rename) return;
     e.preventDefault(); e.stopPropagation(); e.target.blur(); closePopover(); toCanvas();
   }
   if (e.key === "Escape") { e.stopPropagation(); closePopover(); toCanvas(); }
 });
 pop.addEventListener("click", (e) => {
+  if(e.target.dataset.act==="delete-selection"){removeSelected();return;}
   if(e.target.dataset.act==="auto-label") { edit(()=>{const el=element(S.sel);delete el.label_offset;if('side' in el) el.side='auto';}); return; }
   const rot = e.target.dataset.rot;
   if (rot && S.sel) {
@@ -2415,15 +2789,19 @@ pop.addEventListener("click", (e) => {
   const act = e.target.dataset.act;
   if (!act || !S.sel) return;
   const sel = S.sel, el = element(sel);
-  if (act === "delete") { edit(() => removeElement(sel)); select(null); return; }
-  if (act === "connect") { startConnect(el.id, "cond"); return; }
-  if (act === "swap") { edit(() => { [el.from, el.to] = [el.to, el.from]; }); openPopover(sel); return; }
-  if (act === "unpin") { edit(() => { dropBracket(el); delete el.at; }); return; }
+  if (act.startsWith('disconnect-')) {
+    const proposal=mutationProposal(()=>{const data=S.data;
+      for (const end of act === 'disconnect-both' ? ['from','to'] : [act.slice(11)])
+        replaceDocument(data,detachEndpoint(data,sel.role,sel.index,end).document);
+    });commitTopology(proposal,sel).then(ok=>{if(ok)openPopover(sel);});return;
+  }
+  if (act === "delete") { commitTopology(mutationProposal(()=>removeElement(sel)),null); return; }
+  if (act === "connect") { startConnect(el.id, "link"); return; }
+  if (act === "swap") { edit(() => { [el.from, el.to] = [el.to, el.from]; if(el.via) el.via.reverse(); if(el.angle != null) el.angle=(el.angle+180)%360; }); openPopover(sel); return; }
+  if (act === "unpin") { edit(() => { delete el.at; });openPopover(sel);return; }
   if (act === "via-add") {
-    const b = boundsOf(sel);
-    const at = b ? [snap((b[0] + b[2]) / 2), snap((b[1] + b[3]) / 2)] : [0, 0];
-    edit(() => { el.via = el.via || []; el.via.push(at); });
-    openPopover(sel);
+    closePopover();setMode('place',{role:'node',kind:'free',branchIndex:sel.index,name:'Junction'});
+    toast('Click a connection lead to add a connected junction. Escape cancels.');
     return;
   }
   if (act === "via-del") { edit(() => { el.via.splice(+e.target.dataset.i, 1); if (!el.via.length) delete el.via; }); openPopover(sel); return; }
@@ -2432,6 +2810,15 @@ pop.addEventListener("click", (e) => {
 // A field edit while typing coalesces into one undo step per field.
 let typing = null;
 function applyField(sel, f, raw, live = false) {
+  if(f==='symbol-position') {
+    const hit=symbolHit(sel);
+    edit(()=>{const el=element(sel);if(raw==='automatic')delete el.at;else if(hit)el.at=[...hit.at];});
+    openPopover(sel);return;
+  }
+  if(sel.role==='branch' && f==='angle' && raw!=='') {
+    if(!Number.isFinite(Number(raw))) {toast('Enter a finite angle.');return;}
+    turnBranch(sel,element(sel),0,((Number(raw)%360)+360)%360);return;
+  }
   if(sel.role==='branch' && ['from','to'].includes(f) && raw===element(sel)[f==='from'?'to':'from']) {toast('Choose two different endpoint nodes.');openPopover(sel);return;}
   const value = raw === "" ? null : raw;
   const apply = (d) => {
@@ -2488,37 +2875,96 @@ function applyField(sel, f, raw, live = false) {
   }
 }
 
+// JSON remains unit-declared. Numeric temperature state is independently held
+// in Kelvin; changing display units never reparses a rounded drawing label.
+const canonicalTemperatures=new Map();
+function temperatureUnit(data=S.data) {const t=data.units?.T;return typeof t==='object'?t.unit:t;}
+function temperatureScale(data=S.data) {return typeof data.units?.T==='object'?data.units.T.scale:null;}
+function toKelvin(value,unit,scale) {
+  const factor=['°F','F'].includes(unit)?5/9:1;
+  if(scale==='rise')return value*factor;
+  return unit==='K'?value:['°C','C'].includes(unit)?value+273.15:(value-32)*factor+273.15;
+}
+function fromKelvin(value,unit,scale) {
+  if(scale==='rise')return value*(['°F','F'].includes(unit)?9/5:1);
+  return unit==='K'?value:['°C','C'].includes(unit)?value-273.15:(value-273.15)*9/5+32;
+}
+function syncCanonicalTemperatures() {
+  if(!S.data)return;
+  const unit=temperatureUnit(),scale=temperatureScale(),ids=new Set();
+  for(const n of S.data.nodes) {
+    ids.add(n.id);const signature=JSON.stringify([n.value,unit,scale]);
+    if(n.value==null || String(n.value).trim()==='' || !Number.isFinite(Number(n.value)) || !['K','°C','C','°F','F'].includes(unit)) {canonicalTemperatures.delete(n.id);continue;}
+    if(canonicalTemperatures.get(n.id)?.signature!==signature)canonicalTemperatures.set(n.id,{kelvin:toKelvin(Number(n.value),unit,scale),signature});
+  }
+  for(const id of canonicalTemperatures.keys())if(!ids.has(id))canonicalTemperatures.delete(id);
+}
+let unitChangeSequence=0;
+async function changeQuantityUnit(quantity,target) {
+  const original=S.data,revision=S.revision,generation=S.generation,request=++unitChangeSequence;
+  const data=structuredClone(original),said=data.units?.[quantity],source=typeof said==='object'?said.unit:said;
+  if(source===target)return;
+  const fields=[];
+  if(quantity==='T')for(const n of data.nodes)fields.push([n,'value']);
+  for(const b of data.branches) {
+    const kind=b.kind||'cond',q=kind==='cap'?'C':kind==='flow'?'q':['link','break','stream'].includes(kind)?null:'R';
+    if(q===quantity)fields.push([b,'value']);
+    if(quantity==='q')fields.push([b,'rate']);
+    if(['mdot','cp'].includes(quantity))fields.push([b,quantity]);
+  }
+  for(const s of data.sources) {const q=!s.kind||s.kind==='diss'?'P':s.kind==='flux'?'q″':'q';if(q===quantity)fields.push([s,'value']);}
+  try {
+    await rpc.call('physics_convert',1,source||target,target,quantity,temperatureScale(data));
+    for(const [object,field] of fields) {
+      if(object[field]==null || object[field]==='')continue;
+      if(!Number.isFinite(Number(object[field])))throw Error('Convert or remove symbolic values before changing this unit. The diagram is unchanged.');
+      if(quantity==='T') {
+        const canonical=canonicalTemperatures.get(object.id);
+        if(!canonical)throw Error('The source temperature unit must be specified before conversion.');
+        object[field]=fromKelvin(canonical.kelvin,target,temperatureScale(data));
+      } else object[field]=await rpc.call('physics_convert',object[field],source,target,quantity,temperatureScale(data));
+      if(!Number.isFinite(object[field]))throw Error('Conversion exceeded the numeric range.');
+    }
+    if(request!==unitChangeSequence || revision!==S.revision || generation!==S.generation)return;
+    data.units||={};data.units[quantity]=typeof said==='object'?{...said,unit:target}:target;
+    if(quantity==='T')for(const n of data.nodes) {
+      const entry=canonicalTemperatures.get(n.id);if(entry)entry.signature=JSON.stringify([n.value,target,temperatureScale(data)]);
+    }
+    edit(d=>replaceDocument(d,data));
+    pop.querySelector('[data-unit-error]')?.replaceChildren();
+  }catch(error){const slot=pop.querySelector('[data-unit-error]');if(slot)slot.textContent=error.message;else toast(error.message);}
+}
+
 // ------------------------------------------------------------- diagram
 $("ed-settings").addEventListener("click", () => {
+  if(groupDraft){gateGroup(()=>$('ed-settings').click());return;}
   select(null);
   const d = S.data, u = d.units || {};
   const T = typeof u.T === "object" && u.T ? u.T : {unit: u.T || "", scale: ""};
   // The diagram's name is not here. It is the one in the top bar, which
   // names the file and, when the reader says so, is drawn on the page:
   // two boxes for one name was the confusion this card used to carry.
-  let h = `<h4>Units &amp; rail</h4>`;
+  let h = `<h4>Units</h4>`+field('Number display',selectBox('display-mode',S.file.display?.mode||'automatic',['automatic','scientific'],{automatic:'Automatic prefixes',scientific:'SI units + scientific notation'}));
   for (const q of ["R", "C", "P", "q", "q″"]) h += field(`Unit of ${q}`, text(`unit:${q}`, u[q], q === "R" ? "K/W" : ""));
   // A stream states these two, and without them here the branch card asked
   // for a mass flow that validation then refused for having no unit, with
   // nowhere in the editor to give it one.
   h += field(`Unit of ṁ`, text("unit:mdot", u.mdot, "kg/s"));
   h += field(`Unit of <i>c</i><sub>p</sub>`, text("unit:cp", u.cp, "kJ/kg·K"));
-  h += field("Unit of T", text("unit:T", T.unit, "°C or K"));
-  h += field("T scale", selectBox("scale", T.scale || "", ["", "absolute", "rise"], {"": "(unstated)"}));
-  h += `<details ${d.rail ? "open" : ""}><summary>Reference rail</summary>`;
-  h += field("Reference", selectBox("rail:reference", d.rail ? d.rail.reference : "", ["", ...d.nodes.map((n) => n.id)], {"": "(no rail)"}));
-  h += field("Rail y", num("rail:y", d.rail && d.rail.y, 10));
-  h += `</details>`;
-  h += `<div class="ed-row"><button type="button" data-act="solve" title="Give every node without a place one, along a chain">Place unplaced nodes</button></div>`;
+  h += field("Temperature",selectBox('unit:T',T.unit,['°C','°F','K']));
+  h += `<details><summary>Advanced temperature settings</summary>`+field("Temperature meaning", selectBox("scale", T.scale || "", ["", "absolute", "rise"], {"": "Unspecified (legacy)",absolute:'Actual temperature',rise:'Temperature difference'}))+`<p>Actual temperature: 32 °F = 273.15 K. A difference of 18 °F = 10 K. Unspecified retains the file’s original meaning.</p></details>`;
+  h += `<p data-unit-error role="alert"></p>`;
   pop.innerHTML = h;
   pop.hidden = false;
   underButton(pop, $("ed-settings"));
   S.sel = null;
 });
-pop.addEventListener("change", (e) => {
+pop.addEventListener("change", async (e) => {
   const f = e.target.dataset.field;
   if (!f || S.sel) return;
   const value = e.target.value === "" ? null : e.target.value;
+  if(f==='display-mode') {S.file.display={mode:value};save();refresh();return;}
+  if(f.startsWith('unit:') && value) {await changeQuantityUnit(f.slice(5),value);return;}
   edit((d) => {
     d.units = d.units || {};
     if (f.startsWith("unit:")) {
@@ -2563,7 +3009,7 @@ function save() {
     localStorage.setItem(STORE.file(S.file.id), snapshot());
     const ix = readIndex();
     const e = ix.find((f) => f.id === S.file.id);
-    if (e) { e.updated = Date.now(); e.name = S.file.name; } else ix.unshift({id: S.file.id, name: S.file.name, updated: Date.now()});
+    if (e) { e.updated = Date.now(); e.name = S.file.name; e.topologyVersion=S.file.topologyVersion;e.display=S.file.display; } else ix.unshift({...S.file, updated: Date.now()});
     writeIndex(ix);
     localStorage.setItem(STORE.last, S.file.id);
   } catch (err) {
@@ -2572,11 +3018,19 @@ function save() {
 }
 
 function showFile() {
+  openFindings(false);
   if(solveSession && sessionDirty()) toast("Temporary solve changes discarded when switching files.");
   closeAnalysis(true);
   physicsReview = null;
   cancelGesture(); S.generation++; S.revision=0;
   S.undo.length = 0; S.redo.length = 0;
+  const original = snapshot(), normalized = S.file.topologyVersion===1 ? {document:S.data,conflicts:[]} : normalizeOverlaps(S.data);
+  if (JSON.stringify(normalized.document) !== original) {
+    S.undo.push(original); S.data = normalized.document; save();
+  }
+  if (normalized.conflicts.length) toast([...new Set(normalized.conflicts)].join(' '));
+  S.file.topologyVersion=1;save();
+  canonicalTemperatures.clear();syncCanonicalTemperatures();
   S.scene = null;
   select(null);
   setMode("idle");
@@ -2598,6 +3052,7 @@ function completeEditorDefaults(data) {
 }
 
 function newFile(name, data) {
+  if(groupDraft) {gateGroup(()=>newFile(name,data));return;}
   cancelGesture();
   completeEditorDefaults(data);
   const id = Math.random().toString(36).slice(2, 10);
@@ -2608,11 +3063,12 @@ function newFile(name, data) {
 }
 
 function openFile(id) {
+  if(groupDraft) {gateGroup(()=>openFile(id));return false;}
   cancelGesture();
   const raw = localStorage.getItem(STORE.file(id));
   const ix = readIndex().find((f) => f.id === id);
   if (!raw || !ix) return false;
-  S.file = {id, name: ix.name};
+  S.file = {id, name: ix.name, topologyVersion:ix.topologyVersion,display:ix.display};
   S.data = ensureStreamUnits(JSON.parse(raw));
   completeEditorDefaults(S.data);
   localStorage.setItem(STORE.last, id);
@@ -2645,6 +3101,7 @@ function deleteFile(id) {
 // There used to be a second name for this under Title & units, which is
 // why nobody could tell which of the two they were editing.
 function renameFile(id, anchor) {
+  if(groupDraft){gateGroup(()=>renameFile(id,anchor));return;}
   const ix = readIndex();
   const f = ix.find((x) => x.id === id);
   if (!f) { toast("That file is not in this browser any more."); return; }
@@ -2673,7 +3130,7 @@ function commitRename() {
   if (!id) return;
   const name = (pop.querySelector('input[data-rn="name"]').value || "").trim();
   const drawnBox = pop.querySelector('input[data-rn="drawn"]');
-  if (!name) { toast("A diagram needs a name."); return; }
+  if (!name) {let error=pop.querySelector('[data-rename-error]');if(!error){error=document.createElement('p');error.dataset.renameError='';error.setAttribute('role','alert');pop.appendChild(error);}error.textContent='Enter a diagram name.';pop.querySelector('[data-rn="name"]').focus();return;}
   const ix = readIndex();
   const f = ix.find((x) => x.id === id);
   if (f) { f.name = name; writeIndex(ix); }
@@ -2706,6 +3163,7 @@ function renderFiles() {
   ul.innerHTML = ix.map((f) => `<li data-id="${f.id}" class="${S.file && S.file.id === f.id ? "ed-current" : ""}" title="Open “${escapeHtml(f.name)}”">
     <span class="ed-fname">${escapeHtml(f.name)}</span><small>${new Date(f.updated).toLocaleDateString()}</small>
     <button type="button" class="ed-more" data-act="more" title="Rename, copy, delete">⋯</button></li>`).join("");
+  requestAnimationFrame(sizeFiles);
 }
 $("ed-files").addEventListener("click", (e) => {
   const li = e.target.closest("li"); if (!li) return;
@@ -2714,26 +3172,30 @@ $("ed-files").addEventListener("click", (e) => {
     const r = e.target.getBoundingClientRect(), st = $("ed-stage").getBoundingClientRect();
     menu.innerHTML = `<button data-f="rename">Rename</button><button data-f="dup">Make a copy</button><hr><button data-f="del" class="ed-danger">Delete</button>`;
     menu.dataset.file = id;
-    menu.style.left = clamp(r.right - st.left + 4, 8, st.width - 230) + "px";
-    menu.style.top = clamp(r.top - st.top, 8, st.height - 140) + "px";
     menu.hidden = false;
+    underButton(menu,e.target);
     return;
   }
   openFile(id); closeFiles();
 });
 $("ed-new").addEventListener("click", () => { newFile("Untitled", BLANK()); closeFiles(); });
-$("ed-open-example").addEventListener("click", async () => {
-  const ul = $("ed-examples");
-  if (!ul.children.length) {
-    const ex = await (await fetch("examples.json")).json();exampleCatalog=ex;
-    const item=e=>`<li data-path="${escapeHtml(e.path)}"><button type="button">${escapeHtml(e.title)}</button><small>${escapeHtml(e.description)}</small></li>`;
-    ul.innerHTML=ex.map(item).join('');
-  }
-  ul.hidden = !ul.hidden;
-  $("ed-open-example").setAttribute("aria-expanded", String(!ul.hidden));
+async function loadExamples() {
+  const ul=$('ed-examples');
+  if(ul.children.length)return;
+  try {
+    const response=await fetch('examples.json');if(!response.ok)throw new Error('Could not load examples');
+    exampleCatalog=await response.json();
+    ul.innerHTML=exampleCatalog.map(e=>`<li data-path="${escapeHtml(e.path)}"><button type="button">${escapeHtml(e.title)}</button><small>${escapeHtml(e.description)}</small></li>`).join('');
+  } catch(error){toast(error.message);}
+}
+$('ed-open-example').addEventListener('click',async()=>{
+  const ul=$('ed-examples');ul.hidden=!ul.hidden;
+  $('ed-open-example').setAttribute('aria-expanded',String(!ul.hidden));
+  if(!ul.hidden)await loadExamples();
 });
 $("ed-examples").addEventListener("click", async (e) => {
   const li = e.target.closest("li[data-path]"); if (!li) return;
+  if(groupDraft){gateGroup(()=>li.querySelector('button').click());return;}
   cancelGesture();const generation=++S.generation,revision=S.revision;
   const data = await (await fetch(li.dataset.path)).json();
   if(generation!==S.generation || revision!==S.revision) return;
@@ -2743,8 +3205,6 @@ $("ed-examples").addEventListener("click", async (e) => {
     const entry=catalog.find(e=>e.path===li.dataset.path);
     if(entry) {pop.innerHTML=`<h4>${escapeHtml(entry.title)}</h4><p>${escapeHtml(entry.description)}</p><ol>${entry.exercises.map(x=>`<li>${escapeHtml(x)}</li>`).join('')}</ol>`;pop.hidden=false;underButton(pop,$('ed-open-example'));}
   }
-  $("ed-examples").hidden = true;
-  $("ed-open-example").setAttribute("aria-expanded", "false");
   closeFiles();
 });
 $("ed-import").addEventListener("change", async (e) => {
@@ -2760,9 +3220,39 @@ $("ed-import").addEventListener("change", async (e) => {
 });
 // on a narrow screen the files panel is an overlay
 const filesPanel = $("ed-files-panel");
+let fileSizing;
+try {fileSizing=JSON.parse(localStorage.getItem('thermodraw:files-sizing')||'{}');} catch {fileSizing={};}
+function sizeFiles() {
+  const width=window.innerWidth;
+  const right=document.body.classList.contains('ed-components-collapsed')?0:360;
+  const overlay=width-right-480<220;
+  if(document.body.classList.contains('ed-files-overlay')!==overlay) document.body.classList.toggle('ed-files-overlay',overlay);
+  const cap=overlay?Math.min(640,width-32):Math.max(0,Math.min(640,width*.4,width-right-480));
+  const sample=$('ed-files').querySelector('.ed-fname');
+  const measure=document.createElement('canvas').getContext('2d');
+  measure.font=sample?getComputedStyle(sample).font:getComputedStyle(filesPanel).font;
+  const longest=Math.max(180,...readIndex().map(f=>measure.measureText(f.name).width+76));
+  const desired=fileSizing.mode==='manual'?fileSizing.width:longest;
+  document.body.style.setProperty('--files-width',Math.min(cap,Math.max(180,desired))+'px');
+}
+function collapseFiles(on) {
+  document.body.classList.toggle('ed-files-collapsed',on);
+  $('ed-files-reopen').hidden=!on;
+}
+const reopenFiles=document.createElement('button');reopenFiles.id='ed-files-reopen';reopenFiles.textContent='Files';reopenFiles.hidden=true;
+reopenFiles.onclick=()=>{collapseFiles(false);filesPanel.classList.add('ed-open');};document.body.appendChild(reopenFiles);
+const resizeFiles=document.createElement('div');resizeFiles.className='ed-files-resizer';resizeFiles.tabIndex=0;resizeFiles.setAttribute('role','separator');resizeFiles.setAttribute('aria-label','Resize Files panel');
+resizeFiles.setAttribute('aria-orientation','vertical');filesPanel.appendChild(resizeFiles);
+const resetFiles=document.createElement('button');resetFiles.textContent='Reset to automatic';resetFiles.onclick=()=>{fileSizing={mode:'automatic'};localStorage.setItem('thermodraw:files-sizing',JSON.stringify(fileSizing));sizeFiles();};filesPanel.appendChild(resetFiles);
+resizeFiles.onpointerdown=e=>{resizeFiles.setPointerCapture(e.pointerId);};
+resizeFiles.onpointermove=e=>{if(!resizeFiles.hasPointerCapture(e.pointerId))return;fileSizing={mode:'manual',width:Math.max(180,e.clientX-filesPanel.getBoundingClientRect().left)};sizeFiles();};
+resizeFiles.onpointerup=e=>{resizeFiles.releasePointerCapture(e.pointerId);localStorage.setItem('thermodraw:files-sizing',JSON.stringify(fileSizing));};
+resizeFiles.onkeydown=e=>{if(!['ArrowLeft','ArrowRight'].includes(e.key))return;e.preventDefault();fileSizing={mode:'manual',width:filesPanel.getBoundingClientRect().width+(e.key==='ArrowRight'?10:-10)};localStorage.setItem('thermodraw:files-sizing',JSON.stringify(fileSizing));sizeFiles();};
+window.addEventListener('resize',sizeFiles);document.fonts.ready.then(sizeFiles);
+new MutationObserver(sizeFiles).observe(document.body,{attributes:true,attributeFilter:['class']});
 function closeFiles() { filesPanel.classList.remove("ed-open"); }
 $("ed-files-toggle").addEventListener("click", () => filesPanel.classList.toggle("ed-open"));
-$("ed-files-close").addEventListener("click", closeFiles);
+$("ed-files-close").addEventListener("click", ()=>{closeFiles();collapseFiles(true);});
 $("ed-file").addEventListener("click", () => { if (S.file) renameFile(S.file.id, $("ed-file")); });
 
 // ---------------------------------------------------------------- menus
@@ -2839,20 +3329,45 @@ menu.addEventListener("click", async (e) => {
 });
 $("ed-export").addEventListener("click", () => {
   cancelGesture();
-  menu.innerHTML = `
-    <button data-x="document">Preview for document…</button>
-    <button data-x="svg-light">SVG, light, for Word and slides</button>
-    <button data-x="svg">SVG that follows light and dark</button>
-    <button data-x="svg-dark">SVG, dark</button>
-    <button data-x="png-light">PNG, light, 2×</button>
-    <button data-x="png-dark">PNG, dark, 2×</button>
-    <hr><button data-x="page">HTML page with its controls</button>
-    <button data-x="json">JSON, the diagram itself</button>`;
-  // the button itself is hidden on a narrow screen, where the menu that
-  // opened this one is the thing to sit under
-  underButton(menu, $("ed-export").offsetParent ? $("ed-export") : $("ed-more"));
-  menu.hidden = false;
+  showExportDialog();
 });
+
+async function showExportDialog() {
+  document.getElementById('ed-export-dialog')?.remove();
+  const dialog=document.createElement('dialog');dialog.id='ed-export-dialog';dialog.setAttribute('aria-labelledby','ed-export-title');
+  dialog.innerHTML='<h3 id="ed-export-title">Export</h3><label>Output <select data-export-output><option value="image">Image for documents</option><option value="page">HTML page with controls</option><option value="json">JSON, the raw diagram data</option></select></label><div data-export-image><label>Format <select data-export-format><option>SVG</option><option>PNG</option></select></label><label>Theme <select data-export-theme><option value="light">Light</option><option value="dark">Dark</option><option value="auto">Follow light and dark</option></select></label><label>Resolution <select data-export-resolution><option value="1">1×</option><option value="2" selected>2×</option><option value="4">4×</option></select></label><div data-export-preview></div></div><p data-export-error role="alert"></p><div class="ed-row"><button data-export-save disabled>Save SVG</button><button data-export-close>Close</button></div>';
+  document.body.appendChild(dialog);dialog.showModal();
+  const data=structuredClone(S.data),display=structuredClone(S.file?.display||{mode:'automatic'}),notation=S.notation;
+  const base=(S.file?.name||'diagram').replace(/[^\w.-]+/g,'-');
+  let sequence=0,svg=null;
+  const get=name=>dialog.querySelector(`[data-export-${name}]`);
+  async function preview() {
+    const token=++sequence,output=get('output').value;svg=null;get('save').disabled=true;get('error').textContent='';
+    get('image').hidden=output!=='image';get('save').textContent='Save '+(output==='image'?get('format').value:output==='page'?'HTML':'JSON');
+    get('resolution').closest('label').hidden=get('format').value!=='PNG';
+    if(output!=='image'){get('save').disabled=false;return;}
+    try {
+      const theme=get('theme').value,cropped={...data};delete cropped.size;
+      const effectiveTheme=theme==='auto'?(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):theme;
+      get('preview').style.background=effectiveTheme==='dark'?'#0f1115':'#ffffff';
+      get('preview').style.colorScheme=effectiveTheme;
+      const content=await rpc.call('export',cropped,'svg',theme==='auto'?null:theme,notation,display);
+      if(token!==sequence || !dialog.open)return;
+      svg=content;const image=new Image();image.alt='Export preview';image.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svg);get('preview').replaceChildren(image);get('save').disabled=false;
+    }catch(error){if(token===sequence)get('error').textContent=error.message;}
+  }
+  dialog.onchange=preview;get('close').onclick=()=>dialog.close();dialog.onclose=()=>{sequence++;dialog.remove();};
+  get('save').onclick=async()=>{
+    try {
+      const output=get('output').value;
+      if(output==='json')download(base+'.json',await rpc.call('export',data,'json'),'application/json');
+      else if(output==='page')download(base+'.html',await rpc.call('export',data,'page',null,notation,display),'text/html');
+      else if(svg && get('format').value==='SVG')download(base+'.svg',svg,'image/svg+xml');
+      else if(svg)download(base+'.png',await rasterise(svg,Number(get('resolution').value),get('theme').value),'image/png');
+    }catch(error){get('error').textContent=error.message;}
+  };
+  preview();
+}
 
 function download(name, content, type) {
   const blob = content instanceof Blob ? content : new Blob([content], {type});
@@ -2871,7 +3386,8 @@ function rasterise(svg, scale, mode) {
     img.onload = () => {
       const c = document.createElement("canvas"); c.width = w; c.height = h;
       const g = c.getContext("2d");
-      g.fillStyle = mode === "dark" ? "#0f1115" : "#ffffff"; g.fillRect(0, 0, w, h);
+      const dark=mode==='dark' || mode==='auto' && matchMedia('(prefers-color-scheme: dark)').matches;
+      g.fillStyle = dark ? "#0f1115" : "#ffffff"; g.fillRect(0, 0, w, h);
       g.drawImage(img, 0, 0, w, h);
       URL.revokeObjectURL(url);
       c.toBlob((b) => b ? resolve(b) : reject(new Error("no image")), "image/png");
@@ -2931,16 +3447,21 @@ async function openShared() {
 
 // --------------------------------------------------------------- present
 function setPresent(on) {
+  if(groupDraft){gateGroup(()=>setPresent(on));return;}
   cancelGesture();
+  if(on && !S.present)S.presentState={view:{...S.view},touched:S.touched,filesOpen:filesPanel.classList.contains('ed-open')};
   S.present = on;
   document.body.classList.toggle("ed-present", on);
   closePopover(); closeQuick(); closeMenu(); closeFiles(); setHelp(false);
   const lbl = $("ed-present-label");
   lbl.hidden = !on;
   lbl.textContent = on ? ((S.data && S.data.title) || (S.file && S.file.name) || "") : "";
-  if (on && document.fullscreenEnabled && !document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {});
+  if (on && document.fullscreenEnabled && !document.fullscreenElement) document.documentElement.requestFullscreen().then(()=>{if(S.present)fit();else if(document.fullscreenElement)document.exitFullscreen().catch(()=>{});}).catch(() => {if(S.present)fit();});
   if (!on && document.fullscreenElement) document.exitFullscreen().catch(() => {});
-  setTimeout(() => fit(), 80);
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{
+    if(S.present){S.touched=false;fit();}
+    else if(S.presentState){S.touched=S.presentState.touched;setView(S.presentState.view);filesPanel.classList.toggle('ed-open',S.presentState.filesOpen);S.presentState=null;}
+  }));
 }
 $("ed-present").addEventListener("click", () => setPresent(true));
 document.addEventListener("fullscreenchange", () => { if (!document.fullscreenElement && S.present) setPresent(false); });
@@ -2958,10 +3479,12 @@ function stepFile(delta) {
 
 // ------------------------------------------------------------------ help
 function setHelp(on) {
-  $("ed-help-panel").hidden = !on;
+  const dialog=$("ed-help-panel");dialog.hidden=!on;
+  if(on&&!dialog.open)dialog.showModal();else if(!on&&dialog.open)dialog.close();
   $("ed-help").setAttribute("aria-expanded", String(on));
 }
 $("ed-help").addEventListener("click", () => setHelp($("ed-help-panel").hidden));
+$("ed-help-panel").addEventListener('cancel',()=>setHelp(false));
 $("ed-help-close").addEventListener("click", () => setHelp(false));
 
 // ---------------------------------------------------------- optional quick start
@@ -3011,10 +3534,13 @@ addEventListener('resize',()=>{if(tour) drawTour();});
 
 // ----------------------------------------------------------------- chrome
 function updateChrome() {
+  for(const b of document.querySelectorAll('#ed-panel-views button'))if(b.textContent==='Properties')b.disabled=!S.sel;
   $("ed-file").textContent = S.file ? S.file.name : "Untitled";
   $("ed-undo").disabled = !S.undo.length;
   $("ed-redo").disabled = !S.redo.length;
   $("ed-delete").disabled = !S.sel;
+  if($('ed-copy'))$('ed-copy').disabled=!S.sel;
+  if($('ed-merge'))$('ed-merge').disabled=S.selection.filter(s=>s.role==='node').length<2;
   $("ed-notation").textContent = `Notation: ${S.notation}`;
   $("ed-notation").setAttribute("aria-pressed", String(S.notation === "zigzags"));
   $("ed-physics").checked = S.physics;
@@ -3026,7 +3552,7 @@ $("ed-redo").addEventListener("click", redo);
 $("ed-delete").addEventListener("click", removeSelected);
 function autoPositionAllLabels() {edit(d=>{for(const key of Object.values(COLLECTION)) for(const obj of d[key]||[]) {delete obj.label_offset;if('side' in obj) obj.side='auto';}});if(solveOpen) {startSolveSession();analysisPanel();}toast('All labels use automatic placement. Undo restores their positions.');}
 $('ed-auto-labels').addEventListener('click',autoPositionAllLabels);
-$("ed-fit").addEventListener("click", () => { S.touched = false; fit(); });
+$("ed-fit").addEventListener("click", fitFromCommand);
 $("ed-notation").addEventListener("click", () => {
   S.notation = S.notation === "boxes" ? "zigzags" : "boxes";
   updateChrome();
@@ -3036,12 +3562,8 @@ $("ed-physics").addEventListener("change", () => {
   S.physics = $("ed-physics").checked;
   refresh();
 });
-$("ed-findings-toggle").addEventListener("click", () => {
-  const shut = !$("ed-findings-list").hidden;
-  if (shut) $("ed-findings-toggle").dataset.closed = "1";
-  else delete $("ed-findings-toggle").dataset.closed;
-  openFindings(!shut);
-});
+$('ed-findings-toggle').addEventListener('click',()=>{if(currentIssues[0])activateIssue(currentIssues[0]);});
+$('ed-all-issues').addEventListener('click',()=>{delete $('ed-findings-toggle').dataset.closed;openFindings($('ed-findings-list').hidden);$('ed-all-issues').setAttribute('aria-expanded',String(!$('ed-findings-list').hidden));});
 
 function currentTheme() {
   return document.documentElement.dataset.theme
@@ -3082,32 +3604,14 @@ document.addEventListener("keydown", (e) => {
     return;
   }
   if (typingInField) return;
-  if(e.key==="/" && !e.ctrlKey && !e.metaKey && !e.altKey && !S.present) {
-    e.preventDefault();
-    const r=canvas.getBoundingClientRect();
-    const inside=lastPointer.x>=r.left && lastPointer.x<=r.right && lastPointer.y>=r.top && lastPointer.y<=r.bottom;
-    requestQuick(inside?lastPointer.x:r.left+r.width/2,inside?lastPointer.y:r.top+r.height/2);
-    return;
-  }
-  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") { e.preventDefault(); if (e.shiftKey) redo(); else undo(); return; }
-  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "y") { e.preventDefault(); redo(); return; }
-  if (e.key === "Delete" || e.key === "Backspace") {
-    if (S.sel && !S.present) { e.preventDefault(); removeSelected(); }
-    return;
-  }
-  if (S.present) {
-    if (e.key === "ArrowRight") stepFile(1);
-    if (e.key === "ArrowLeft") stepFile(-1);
-  }
-  if (e.key === "[" || e.key === "]") { turnSelected(e.key === "]" ? 1 : -1); return; }
-  if (e.key === "f" || e.key === "F") { S.touched = false; fit(); }
-  if (e.key === "z" || e.key === "Z") $("ed-notation").click();
-  if (e.key === "d" || e.key === "D") $("ed-theme").click();
-  if (e.key === "p" || e.key === "P") { $("ed-physics").checked = !$("ed-physics").checked; $("ed-physics").dispatchEvent(new Event("change")); }
+  if(S.present && ['ArrowLeft','ArrowRight'].includes(e.key)){stepFile(e.key==='ArrowRight'?1:-1);return;}
+  const shortcut=SHORTCUTS.find(x=>x.match(e)&& (x.keys.includes('Mod')||!e.ctrlKey&&!e.metaKey&&!e.altKey));
+  if(shortcut){e.preventDefault();shortcut.run(e);}
+
 });
 
 document.addEventListener("pointerdown", (e) => {
-  if (!pop.hidden && !pop.contains(e.target) && !e.target.closest("#ed-hits") && !e.target.closest("#ed-ui")
+  if (!pop.hidden && !pop.classList.contains('ed-docked') && !pop.contains(e.target) && !e.target.closest('.ed-mini-picker') && !e.target.closest("#ed-hits") && !e.target.closest("#ed-ui")
       && e.target.id !== "ed-settings" && e.target.id !== "ed-file") closePopover();
   if (!menu.hidden && !menu.contains(e.target) && e.target.id !== "ed-export" && e.target.id !== "ed-more" && e.target.dataset.act !== "more") closeMenu();
   if (!$("ed-help-panel").hidden && !$("ed-help-panel").contains(e.target) && e.target.id !== "ed-help") setHelp(false);
@@ -3124,6 +3628,7 @@ window.addEventListener("resize", () => { if (S.sel && !pop.hidden) placePopover
     style.textContent = m.head.faces.join("") + m.head.vars + m.head.css;
     document.head.appendChild(style);
     if (m.head.pitch) PITCH = m.head.pitch;
+    S.catalogue=m.head.units;installMiniPickers();
     S.ready = true;
     $("ed-loading").hidden = true;
     refresh();
@@ -3187,7 +3692,7 @@ function positionSolveFloat(el,row=null) {
 }
 function physicsUnits(r) {
   const q=r.quantity||r.field;
-  const units={T:['K','°C','C'],R:['K/W','K/kW'],P:['W','kW','mW'],q:['W','kW','mW'],rate:['W','kW','mW'],generation:['W','kW','mW'],storage:['W','kW','mW'],area:['m²','cm²','mm²'],flux:['W/m²','kW/m²','W/cm²'],'q″':['W/m²','kW/m²','W/cm²'],C:['J/K','kJ/K'],mdot:['kg/s','g/s'],cp:['J/kg·K','kJ/kg·K']};
+  const units={T:['K','°C','°F','C','F'],R:['K/W','K/kW'],P:['W','kW','mW'],q:['W','kW','mW'],rate:['W','kW','mW'],generation:['W','kW','mW'],storage:['W','kW','mW'],area:['m²','cm²','mm²'],flux:['W/m²','kW/m²','W/cm²'],'q″':['W/m²','kW/m²','W/cm²'],C:['J/K','kJ/K'],mdot:['kg/s','g/s'],cp:['J/kg·K','kJ/kg·K']};
   return [...new Set([r.unit,...(units[q]||[])])];
 }
 function renderValueFloat() {
@@ -3235,7 +3740,7 @@ function openNavigator(filter='all') {
 function renderNavigator() {
   if(valueNavigator.hidden) return;
   const filter=valueNavigator.querySelector('[data-value-filter]').value,query=valueNavigator.querySelector('input').value.toLowerCase();
-  const rows=physicalValues().filter(r=>r.label.toLowerCase().includes(query)&&(filter==='all'||filter==='eligible'&&r.eligible||filter==='known'&&!r.unknown&&numericPhysics(r.value)||filter==='unknown'&&r.unknown||filter==='overrides'&&r.overridden||filter==='problems'&&(r.state==='Missing'||solveSession.assessment?.systems.some(s=>!['solved','balanced'].includes(s.status)&&(s.nodes.includes(r.id)||s.id==='volume:'+r.volume)))));
+  const rows=physicalValues().filter(r=>[r.label,r.id,...(r.members||[])].join(' ').toLowerCase().includes(query)&&(filter==='all'||filter==='eligible'&&r.eligible||filter==='known'&&!r.unknown&&numericPhysics(r.value)||filter==='unknown'&&r.unknown||filter==='overrides'&&r.overridden||filter==='problems'&&(r.state==='Missing'||solveSession.assessment?.systems.some(s=>!['solved','balanced'].includes(s.status)&&(s.nodes.includes(r.id)||s.id==='volume:'+r.volume)))));
   valueNavigator.querySelector('[data-value-rows]').innerHTML='<table><thead><tr><th>Component</th><th>Quantity</th><th>Value</th><th>State</th></tr></thead><tbody>'+rows.map(r=>`<tr><td><button data-physics-value="${r.key}" aria-label="${escapeHtml(r.label)}">${escapeHtml(r.label.split(' · ').slice(0,-1).join(' · '))}</button></td><td>${escapeHtml(r.label.split(' · ').at(-1))}</td><td>${r.unknown&&!r.calculated?'?':escapeHtml(fmtPhysics(r.calculated?.value??r.value))} ${escapeHtml(r.unit)}</td><td data-state="${r.state.toLowerCase()}">${r.state}</td></tr>`).join('')+'</tbody></table>'+(!rows.length?'<p>No matching values.</p>':'');
   positionSolveFloat(valueNavigator);
 }
@@ -3276,6 +3781,13 @@ function startSolveSession() {
   physicsReview=null;solveValue=null;assessSession();
 }
 function restoreSessionValue(r) {
+  if(r.role==='node' && r.members?.length>1) {
+    for(const id of r.members) {
+      const index=solveSession.data.nodes.findIndex(n=>n.id===id);
+      if(index>=0)restoreSessionValue({...r,id,index,members:null,key:`node:${index}:${r.field}`});
+    }
+    solveSession.overrides.delete(r.key);return;
+  }
   const obj=solveSession.data[COLLECTION[r.role]][r.index],original=solveSession.base[COLLECTION[r.role]][r.index];
   if(original[r.field]===undefined) delete obj[r.field];else obj[r.field]=original[r.field];
   solveSession.overrides.delete(r.key);
@@ -3316,7 +3828,16 @@ function physicalValues() {
       state:calculated?'Calculated':unknown?'Unknown':!numeric?'Missing':overridden?'Override':'Known',unknown,calculated,original,overridden});
   };
   const unit=q=>typeof d.units?.[q]==='object'?d.units[q].unit:d.units?.[q]||'';
-  d.nodes.forEach((n,i)=>add('node',i,'value',`${n.label||n.id} · T`,unit('T'),'T',!n.kind||n.kind==='free',n.kind==='fixed'?'Boundary temperature: this fixed node stays a boundary.':(!n.kind||n.kind==='free')?'Known temperatures remain supplied assertions; selecting Known does not make a fixed boundary.':'Phase and break nodes are not supported by steady network solving.'));
+  const groups=idealTemperatureGroups(d);
+  d.nodes.forEach((n,i)=>{
+    const members=groups.get(n.id),stated=members.filter(x=>x.value!=null&&x.value!=='');
+    const conflict=stated.some(x=>String(x.value)!==String(stated[0]?.value));
+    const representative=members.find(x=>x.kind==='fixed')||stated[0]||members.find(x=>x.label)||members[0];
+    if(!conflict && representative.id!==n.id)return;
+    const eligible=members.every(x=>!x.kind||x.kind==='free');
+    add('node',i,'value',`${nodeName(n.id,d)} · T`,unit('T'),'T',eligible,eligible?'Ideal-connected nodes share one temperature.':members.some(x=>x.kind==='fixed')?'Boundary temperature: this fixed node stays a boundary.':'Phase and break nodes are not supported by steady network solving.');
+    rows.at(-1).members=conflict?[n.id]:members.map(x=>x.id);
+  });
   d.branches.forEach((b,i)=>{
     const name=b.label||`${b.id||b.kind||"cond"} · ${b.from} → ${b.to}`;
     if(['break','link'].includes(b.kind)) return;
@@ -3336,12 +3857,24 @@ function physicalValues() {
   });
   return rows;
 }
+
+function idealTemperatureGroups(data) {
+  const parents=new Map(data.nodes.map(n=>[n.id,n.id]));
+  const root=id=>{while(parents.get(id)!==id)id=parents.get(id);return id;};
+  for(const b of data.branches)if(b.kind==='link'&&parents.has(b.from)&&parents.has(b.to))parents.set(root(b.to),root(b.from));
+  const groups=new Map();for(const n of data.nodes){const id=root(n.id);if(!groups.has(id))groups.set(id,[]);groups.get(id).push(n);}
+  return new Map(data.nodes.map(n=>[n.id,groups.get(root(n.id))]));
+}
+function setQuantityValue(data,row,value) {
+  const objects=row.role==='node'?data.nodes.filter(n=>(row.members||[row.id]).includes(n.id)):[data[COLLECTION[row.role]][row.index]];
+  for(const object of objects){if(value==='')delete object[row.field];else object[row.field]=value;}
+}
 function closeAnalysis(force=false) {
   if(!force && solveSession && sessionDirty()) {showSolveClose();return;}
   solveClose.close();valueFloat.hidden=true;valueNavigator.hidden=true;solveToolbar.hidden=true;
   solveSession=null;physicsReview=null;assessmentSequence++;
   solveOpen=false;solveValue=null;physicsRequest++;
-  $('ed-component-tools').hidden=false; $('ed-solve-panel').hidden=true;
+  $('ed-component-tools').hidden=false; $('ed-solve-panel').hidden=true;setPanelView('Components',true);
   document.body.classList.remove('ed-solving');
   $('ed-analysis').setAttribute('aria-expanded','false');
   if(typeof physicsMarks!=='undefined') physicsMarks.replaceChildren();
@@ -3367,7 +3900,7 @@ function setPhysicsUse(r,use) {
     if(r.role==='node') {
       d.analysis.network||={steady:false,unknowns:[]};
       const ids=new Set(d.analysis.network.unknowns||[]);
-      if(use==='unknown') ids.add(r.id);else ids.delete(r.id);
+      for(const id of r.members||[r.id])if(use==='unknown') ids.add(id);else ids.delete(id);
       d.analysis.network.unknowns=[...ids];
     } else if(r.role==='branch') {
       d.analysis.network||={steady:false,unknowns:[]};const targets=new Set(d.analysis.network.resistance_unknowns||[]);if(use==='unknown') targets.add(r.id||r.index);else targets.delete(r.id||r.index);d.analysis.network.resistance_unknowns=[...targets];
@@ -3413,7 +3946,7 @@ async function renderSolveScene() {
     else if(r.unknown) data[COLLECTION[r.role]][r.index][r.field]='?';
   }
   try {
-    const scene=await rpc.call('scene',data,S.notation,false,solveAdornments());
+    const scene=await rpc.call('scene',data,S.notation,false,solveAdornments(),S.file?.display||{mode:'automatic'});
     if(session!==solveSession || session.stale || key!==session.renderKey) return;
     if(scene.error) return;
     session.scene=scene;
@@ -3490,8 +4023,8 @@ function updateSolveStatus() {
   }
 }
 function analysisPanel(preserveValueFocus=false) {
-  if(!solveOpen) {cancelGesture();select(null);setMode('idle');solveOpen=true;startSolveSession();}
-  $('ed-component-tools').hidden=true;solvePanel.hidden=false;document.body.classList.add('ed-solving');
+  if(!solveOpen) {cancelGesture();setMode('idle');solveOpen=true;panelView='Solve';startSolveSession();}
+  $('ed-component-tools').hidden=true;solvePanel.hidden=false;document.body.classList.add('ed-solving');setPanelView(panelView,true);
   $('ed-analysis').setAttribute('aria-expanded','true');
   const rows=physicalValues(),selected=rows.find(r=>r.key===solveValue),result=physicsReview?.result;
   const working=solveSession.data,assessment=solveSession.assessment,stale=solveSession.stale;
@@ -3569,7 +4102,7 @@ function analysisPanel(preserveValueFocus=false) {
   }
   updateSolveStatus();solvePanel.querySelector('.ed-solve-body').scrollTop=scroll;drawPhysicsValues();renderSolveScene();if(!preserveValueFocus) renderValueFloat();renderSolveToolbar();
 }
-$('ed-analysis').addEventListener('click',()=>analysisPanel());
+$('ed-analysis').addEventListener('click',()=>solveOpen ? closeAnalysis() : analysisPanel());
 document.addEventListener('change',async e=>{
   if(!solveEvent(e)||!solveSession) return;
   const input=e.target,r=physicalValues().find(r=>r.key===solveValue);
@@ -3583,7 +4116,7 @@ document.addEventListener('change',async e=>{
     const session=solveSession,rev=session.revision;session.unitError=false;
     try {session.pendingUnit=rpc.call('physics_convert',r.value,input.value,r.unit,r.quantity||r.field,session.data.units?.T?.scale);const normalized=await session.pendingUnit;
       if(session!==solveSession || rev!==session.revision || session.stale) return;
-      sessionEdit(d=>{d[COLLECTION[r.role]][r.index][r.field]=normalized;session.overrides.add(r.key);});
+      sessionEdit(d=>{setQuantityValue(d,r,normalized);session.overrides.add(r.key);});
     } catch(err) {if(session===solveSession) {session.unitError=String(err.message||err);analysisPanel();}} finally {session.pendingUnit=null;}return;
   }
   if(input.hasAttribute('data-analysis-steady')) {sessionEdit(d=>{d.analysis||={};d.analysis.network||={unknowns:[]};d.analysis.network.steady=input.value==='steady';});return;}
@@ -3591,7 +4124,7 @@ document.addEventListener('change',async e=>{
   if(input.hasAttribute('data-physics-use')) {setPhysicsUse(r,input.value);return;}
   sessionEdit(d=>{
     const obj=d[COLLECTION[r.role]][r.index];d.analysis||={};
-    if(input.hasAttribute('data-physics-number')) {if(input.value.trim()==='') delete obj[r.field];else obj[r.field]=input.value.trim();solveSession.overrides.add(r.key);}
+    if(input.hasAttribute('data-physics-number')) {setQuantityValue(solveSession.data,r,input.value.trim());solveSession.overrides.add(r.key);}
     else if(input.hasAttribute('data-physics-volume-steady')) {obj.steady=input.checked;if(obj.steady) {delete obj.storage;if(d.analysis.volumes?.[obj.id]?.field==='storage') delete d.analysis.volumes[obj.id];}}
   });
 });
@@ -3647,14 +4180,302 @@ document.addEventListener('click',async e=>{
 });
 // In Solve mode, selecting a physical object must never start a drawing drag.
 canvas.addEventListener('pointerdown',e=>{
-  if(!solveOpen) return;
+  if(!solveOpen || panelView!=='Solve') return;
   const badge=e.target.closest('[data-physics-pick]'),hit=e.target.closest('[data-role]');
   const row=badge?physicalValues().find(r=>r.key===badge.dataset.physicsPick):hit?physicalValues().find(r=>r.role===hit.dataset.role && r.index===Number(hit.dataset.index)):null;
   if(!row && !hit) return;e.preventDefault();e.stopImmediatePropagation();if(row) {if(badge?.hasAttribute('data-physics-cycle')) cyclePhysics(row.key);else choosePhysics(row.key);}else toast('This component has no editable physical value.');
 },true);
-for(const event of ['click','dblclick']) canvas.addEventListener(event,e=>{if(solveOpen && e.target.closest('[data-physics-pick],[data-role]')) {e.preventDefault();e.stopImmediatePropagation();}},true);
+for(const event of ['click','dblclick']) canvas.addEventListener(event,e=>{if(solveOpen && panelView==='Solve' && e.target.closest('[data-physics-pick],[data-role]')) {e.preventDefault();e.stopImmediatePropagation();}},true);
 physicsMarks.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' ') {e.preventDefault();const key=e.target.closest('[data-physics-pick]').dataset.physicsPick;cyclePhysics(key);physicsMarks.querySelector(`[data-physics-cycle="${key}"]`)?.focus();}});
 window.addEventListener('resize',()=>{if(solveOpen) {drawPhysicsValues();renderSolveToolbar();if(!valueFloat.hidden) positionSolveFloat(valueFloat,physicalValues().find(r=>r.key===solveValue));if(!valueNavigator.hidden) positionSolveFloat(valueNavigator);}});
 
 
-document.addEventListener('keydown',e=>{if(solveOpen && e.key==='Escape') {if(solveClose.open) solveClose.close();else if(!valueFloat.hidden) {valueFloat.hidden=true;solveValue=null;drawPhysicsValues();}else if(!valueNavigator.hidden) valueNavigator.hidden=true;else closeAnalysis();e.preventDefault();e.stopImmediatePropagation();}},true);
+document.addEventListener('keydown',e=>{if(solveOpen && panelView==='Solve' && !S.present && e.key==='Escape') {if(solveClose.open) solveClose.close();else if(!valueFloat.hidden) {valueFloat.hidden=true;solveValue=null;drawPhysicsValues();}else if(!valueNavigator.hidden) valueNavigator.hidden=true;else closeAnalysis();e.preventDefault();e.stopImmediatePropagation();}},true);
+
+// Familiar menus own their actions; the primary controls remain one click away.
+function installEditorMenus() {
+  const top=$('ed-top'),nav=document.createElement('nav');nav.className='ed-menu-categories';nav.setAttribute('aria-label','Editor menus');
+  const panels=new Map(),buttons=new Map();
+  const editActions=document.createElement('div');editActions.id='ed-edit-actions';editActions.setAttribute('role','group');editActions.setAttribute('aria-label','Editing actions');
+  for(const name of ['File','View','Help']) {
+    const button=document.createElement('button');button.textContent=name;button.type='button';button.setAttribute('aria-expanded','false');
+    const panel=document.createElement('div');panel.className='ed-category-menu card';panel.setAttribute('role','menu');button.setAttribute('aria-haspopup','menu');panel.hidden=true;panel.setAttribute('aria-label',name+' menu');
+    button.onclick=()=>{const open=panel.hidden;for(const p of panels.values())p.hidden=true;for(const b of buttons.values())b.setAttribute('aria-expanded','false');panel.hidden=!open;button.setAttribute('aria-expanded',String(open));if(open)underButton(panel,button);};
+    panel.addEventListener('click',e=>{if(e.target.closest('button') && !e.target.closest('details') && e.target.closest('button').dataset.menuKind!=='toggle') {panel.hidden=true;button.setAttribute('aria-expanded','false');}});
+    nav.appendChild(button);document.body.appendChild(panel);panels.set(name,panel);buttons.set(name,button);
+  }
+  const move=(name,ids)=>{for(const id of ids) if($(id)) panels.get(name).appendChild($(id));};
+  move('File',['ed-new','ed-export','ed-share']);
+  panels.get('File').appendChild($('ed-import').closest('label'));
+  editActions.appendChild($('ed-delete'));
+  move('View',['ed-fit','ed-auto-labels','ed-notation','ed-theme','ed-present']);
+  move('Help',['ed-help']);$('ed-help').textContent='Editor guide';$('ed-help').classList.remove('ed-help-btn');
+  const action=(name,label,run)=>{const b=document.createElement('button');b.type='button';b.textContent=label;b.onclick=run;(name==='Edit'?editActions:panels.get(name)).appendChild(b);return b;};
+  action('File','Rename',()=>renameFile(S.file.id,$('ed-file')));
+  action('File','Duplicate',()=>{const data=structuredClone(S.data),name=S.file.name+' (copy)';if(data.title)data.title=name;newFile(name,data);});
+  action('Edit','Copy',()=>{toCanvas();document.execCommand('copy');});
+  action('Edit','Paste',async()=>{try{const data=new DataTransfer();data.setData('text/plain',await navigator.clipboard.readText());canvas.dispatchEvent(new ClipboardEvent('paste',{clipboardData:data,bubbles:true}));}catch{toast('Use Ctrl+V to paste from the clipboard.');}});
+  action('Edit','Merge selected nodes',()=>{
+    const selected=S.selection.filter(s=>s.role==='node').map(s=>element(s).id);
+    if(selected.length<2) {toast('Select at least two nodes using Shift-click.');return;}
+    const target=selected.at(-1);let data=S.data;
+    if(selected.length===2) {joinNodes(selected[0],target);return;}
+    for(const id of selected.slice(0,-1)) {const p=mergeNodes(data,id,target);if(p.conflicts.length){reviewSelectedMerge(selected,target);return;}data=p.document;}
+    commitTopology({document:data,conflicts:[],selection:{role:'node',index:data.nodes.findIndex(n=>n.id===target)}});
+  });
+  action('View','Files',()=>collapseFiles(!document.body.classList.contains('ed-files-collapsed'))).dataset.menuKind='toggle';
+  action('View','Components',()=>showComponents(document.body.classList.contains('ed-components-collapsed'))).dataset.menuKind='toggle';
+  action('View','Advanced layout',()=>{
+    select(null);pop.innerHTML='<h4>Advanced layout</h4><p>The reference rail is a shared reference-temperature line. Connecting to it uses the selected node’s temperature.</p>'+field('Reference node',selectBox('rail:reference',S.data.rail?.reference||'',['',...S.data.nodes.map(n=>n.id)],{'':'No rail'}))+field('Rail y',num('rail:y',S.data.rail?.y,10))+'<button data-act="solve">Place unplaced nodes</button>';
+    pop.hidden=false;underButton(pop,buttons.get('View'));
+  });
+  // Supplied-value checks remain in Solve and on the P shortcut.
+  $('ed-physics').closest('label').hidden=true;
+  action('Help','Keyboard shortcuts',showShortcuts);
+
+  const primary=document.createElement('div');primary.className='ed-primary';
+  for(const id of ['ed-file','ed-undo','ed-redo','ed-settings']) primary.appendChild($(id));
+  primary.insertBefore(editActions,primary.querySelector('#ed-settings'));
+  installEditIcons(editActions);
+  const examples=document.createElement('section');examples.id='ed-example-section';examples.setAttribute('aria-label','Examples');
+  const toggle=$('ed-open-example');toggle.textContent='Examples';toggle.setAttribute('aria-expanded','true');
+  const exampleList=$('ed-examples');exampleList.hidden=false;examples.append(toggle,exampleList);$('ed-files-panel').appendChild(examples);loadExamples();
+  top.append(nav,primary);
+  top.querySelectorAll(':scope > .ed-group').forEach(el=>el.hidden=true);
+  $('ed-sketch').hidden=true;$('ed-more').hidden=true;
+  const chip=document.createElement('button');chip.id='ed-components-reopen';chip.textContent='Components';chip.onclick=()=>showComponents(true);document.body.appendChild(chip);
+  document.addEventListener('pointerdown',e=>{if(!e.target.closest('.ed-category-menu,.ed-menu-categories')){for(const p of panels.values())p.hidden=true;for(const b of buttons.values())b.setAttribute('aria-expanded','false');}});
+  document.addEventListener('keydown',e=>{if(e.key==='Escape'){for(const p of panels.values())p.hidden=true;}});
+  for(const panel of panels.values()) wireMenu(panel);
+  const mobile=document.createElement('details');mobile.className='ed-mobile-menu';mobile.innerHTML='<summary>Menu</summary>';top.prepend(mobile);
+  const position=()=>{(innerWidth<760?mobile:top).appendChild(nav);};position();window.addEventListener('resize',position);
+}
+installEditorMenus();
+
+function interactionHelp(id) {
+  const entry=S.catalogue?.interactions?.find(x=>x.id===id);
+  return entry?`${entry.name}. ${entry.when} ${entry.action} Changes: ${entry.changes}. ${entry.cancel}`:'Unconnected endpoint — drag to connect. Escape cancels; Undo restores the connection.';
+}
+
+function installMiniPickers() {
+  const catalogue=S.catalogue;if(!catalogue)return;
+  const picker=document.createElement('div');picker.className='ed-mini-picker card';picker.hidden=true;picker.setAttribute('role','dialog');picker.setAttribute('aria-label','Scientific notation picker');document.body.appendChild(picker);
+  let owner=null,start=0,end=0;
+  const close=()=>{picker.hidden=true;owner?.focus({preventScroll:true});};
+  function insert(token,prefix=false) {
+    if(!owner)return;
+    if(owner.tagName==='SELECT') {
+      if(![...owner.options].some(o=>o.value===token)){toast('Choose one of the supported temperature units.');return;}
+      owner.value=token;owner.dispatchEvent(new Event('change',{bubbles:true}));close();return;
+    }
+    let value=owner.value,a=start,b=end;
+    if(prefix) {
+      const selected=value.slice(a,b);
+      if(selected && !/^[A-Za-zµμ°]+$/.test(selected)) {toast('Select one unit token before applying a prefix.');return;}
+      if(!selected) {
+        const left=value.slice(0,a).match(/[A-Za-zµμ°]+$/)?.[0]||'',right=value.slice(a).match(/^[A-Za-zµμ°]+/)?.[0]||'';
+        a-=left.length;b+=right.length;
+      }
+      const unit=value.slice(a,b);
+      if(!unit || ['kg','°C','°F'].includes(unit)) {toast('Choose a prefixable unit token, such as g, W, J, m, or K.');return;}
+      const base=unit.match(/(?:W|J|K|g|m|s)$/)?.[0];
+      if(!base) {toast('Select a supported unit token.');return;}
+      token+=base;
+    }
+    owner.focus();
+    if(owner.type==='number')owner.value=value.slice(0,a)+token+value.slice(b);
+    else {owner.setSelectionRange(a,b);if(!document.execCommand('insertText',false,token))owner.setRangeText(token,a,b,'end');}
+    owner.dispatchEvent(new Event('input',{bubbles:true}));owner.dispatchEvent(new Event('change',{bubbles:true}));close();
+  }
+  function open(field,button) {
+    owner=field;start=field.selectionStart??field.value.length;end=field.selectionEnd??start;
+    const key=field.dataset.field||field.dataset.physical||'',isUnit=key.startsWith('unit:'),integer=key==='count',notation=['label','sub'].includes(key);
+    const quantity=isUnit?key.slice(5):null;
+    picker.replaceChildren();
+    const search=document.createElement('input');search.type='search';search.placeholder='Find a symbol or unit';search.setAttribute('aria-label','Search picker');picker.appendChild(search);
+    const entries=[];
+    const section=name=>{const heading=document.createElement('h4');heading.textContent=name;picker.appendChild(heading);};
+    const option=(token,name,details='',prefix=false)=>{
+      const b=document.createElement('button');b.type='button';b.textContent=token||'No prefix';b.title=name+(details?' — '+details:'');b.setAttribute('aria-label',b.title);b.onclick=()=>insert(token,prefix);picker.appendChild(b);entries.push([b,(token+' '+name).toLowerCase()]);
+    };
+    section('Common');
+    if(integer)for(const digit of '1234567890')option(digit,digit);
+    else if(isUnit) {
+      const presets=catalogue.presets;
+      for(const unit of presets[quantity]||[])option(unit,unit);
+      section('Units');for(const unit of catalogue.units.filter(x=>x.quantity===quantity))option(unit.symbol,unit.name,unit.help);
+      if(quantity!=='T') {
+        section('Prefixes');for(const p of catalogue.prefixes)option(p.symbol,p.name,'10'+String(p.exponent).replace(/[-0-9]/g,c=>'⁻⁰¹²³⁴⁵⁶⁷⁸⁹'['-0123456789'.indexOf(c)]),true);
+        section('Notation');for(const [s,n] of [['·','multiplication dot'],['/','division'],['(','opening parenthesis'],[')','closing parenthesis'],['²','squared'],['³','cubed']])option(s,n);
+      }
+    } else if(notation) {
+      section('Symbols');for(const s of catalogue.symbols)option(s.symbol,s.name);
+    } else {option('e','scientific exponent');option('-','minus sign');option('.','decimal point');}
+    const help=document.createElement('p');help.textContent='Inserts at the caret. Prefixes apply to the selected unit token. Escape closes; Undo restores inserted text.';picker.appendChild(help);
+    const done=document.createElement('button');done.textContent='Close';done.onclick=close;picker.appendChild(done);
+    search.oninput=()=>{for(const [b,text]of entries)b.hidden=!text.includes(search.value.toLowerCase());};
+    picker.hidden=false;underButton(picker,button);search.focus();
+  }
+  function attach(root) {
+    for(const field of root.querySelectorAll('input[data-field],input[data-physical],input[data-physics-number],select[data-field="unit:T"]')) {
+      if(field.dataset.picker || field.readOnly || field.type==='checkbox' || ['count','angle','id'].includes(field.dataset.field))continue;
+      field.dataset.picker='true';const b=document.createElement('button');b.type='button';b.className='ed-picker-button';b.textContent='⌨';b.setAttribute('aria-label','Open notation picker');b.title='Units and scientific notation';
+      b.onpointerdown=e=>e.preventDefault();b.onclick=()=>open(field,b);
+      const focused=document.activeElement===field,caret=field.selectionStart,tail=field.selectionEnd;
+      const wrap=document.createElement('span');wrap.className='ed-field-picker';field.replaceWith(wrap);wrap.append(field,b);
+      if(focused){field.focus({preventScroll:true});if(caret!=null)field.setSelectionRange(caret,tail);}
+    }
+    for(const control of root.querySelectorAll('[data-field],[data-act]')) {
+      const key=control.dataset.field||control.dataset.act,help=catalogue.controls[key];
+      if(!help || control.dataset.helpReady)continue;
+      control.dataset.helpReady='true';control.title=help;control.setAttribute('aria-description',help);
+      const label=control.closest('label')?.querySelector('span');if(label){label.title=help;label.tabIndex=0;label.setAttribute('aria-description',help);}
+    }
+  }
+  for(const root of [pop,valueFloat]) {new MutationObserver(()=>attach(root)).observe(root,{childList:true,subtree:true});attach(root);}
+  picker.onkeydown=e=>{if(e.key==='Escape'){e.preventDefault();e.stopPropagation();close();}};
+  document.addEventListener('pointerdown',e=>{if(!picker.hidden && !picker.contains(e.target) && !e.target.closest('.ed-picker-button'))picker.hidden=true;});
+}
+
+// Shared panel shell. Document edits remain in the existing inspector handlers.
+let panelView='Components',inspectorTab='Properties';
+function setPanelView(view,force=false) {
+  if(!force&&groupDraft){gateGroup(()=>setPanelView(view,true));return;}
+  if(view==='Solve'&&!solveOpen){analysisPanel();return;}
+  panelView=view;document.body.dataset.panelView=view;
+  const palette=$('ed-palette');
+  let tabs=$('ed-panel-views');
+  if(!tabs){tabs=document.createElement('nav');tabs.id='ed-panel-views';tabs.setAttribute('aria-label','Panel views');palette.prepend(tabs);}
+  tabs.replaceChildren();document.body.classList.toggle('ed-right-overlay',innerWidth<1100);
+  for(const name of ['Components','Properties','Solve']) {
+    const b=document.createElement('button');b.textContent=name;b.type='button';b.disabled=name==='Properties'&&!S.sel;b.setAttribute('aria-pressed',String(name===view));
+    b.onclick=()=>{if(name==='Properties'&&!pop.classList.contains('ed-docked')){if(groupDraft)gateGroup(()=>openPopover(S.sel));else openPopover(S.sel);}else setPanelView(name);};tabs.appendChild(b);
+  }
+  $('ed-component-tools').hidden=view!=='Components';$('ed-solve-panel').hidden=view!=='Solve';
+  if(pop.classList.contains('ed-docked'))pop.hidden=view!=='Properties';
+  if(view==='Properties'||view==='Solve'){document.body.classList.remove('ed-components-collapsed');document.body.classList.add('ed-components-open');}
+}
+function dockInspector(sel) {
+  if(!pop.querySelector('[data-inspector-tabs]')) {
+    const heading=pop.querySelector('h4');
+    const header=document.createElement('header');header.className='ed-inspector-head';if(heading)header.appendChild(heading);
+    const close=document.createElement('button');close.type='button';close.textContent='×';close.setAttribute('aria-label','Close properties');close.onclick=()=>{if(groupDraft)gateGroup(()=>select(null));else select(null);};header.appendChild(close);
+    const nav=document.createElement('nav');nav.dataset.inspectorTabs='';nav.setAttribute('aria-label','Property sections');
+    const sections=new Map();
+    for(const name of ['Properties','Connections','Appearance']){const section=document.createElement('section');section.dataset.inspectorSection=name;sections.set(name,section);const b=document.createElement('button');b.textContent=name;b.type='button';b.onclick=()=>showInspectorTab(name);nav.appendChild(b);}
+    const footer=document.createElement('footer');footer.className='ed-inspector-footer';
+    // Flatten old layout containers; move live fields, preserving delegation.
+    for(const label of [...pop.querySelectorAll('label')]) {
+      if(label.parentElement?.closest('label') || label.closest('fieldset'))continue;
+      const field=label.querySelector('[data-field],[data-physical]'),key=field?.dataset.field||field?.dataset.physical;
+      const name=['from','to','direction'].includes(key)?'Connections':['angle','side','symbol-position'].includes(key)?'Appearance':'Properties';
+      if(key==='id')continue;
+      if(key==='arrangement'){sections.get(name).appendChild(label.parentElement);continue;}
+      sections.get(name).appendChild(label);
+    }
+    for(const e of [...pop.querySelectorAll('[data-act]')]) {
+      if(e.closest('.ed-vias'))continue;
+      const act=e.dataset.act;if(['delete','delete-selection'].includes(act)){footer.appendChild(e);continue;}
+      const name=['connect','swap','via-add','disconnect-from','disconnect-to','disconnect-both'].includes(act)?'Connections':'Appearance';
+      if(['disconnect-from','disconnect-to'].includes(act)){const field=sections.get(name).querySelector(`[data-field="${act==='disconnect-from'?'from':'to'}"]`);if(field){const wrap=document.createElement('span');wrap.className='ed-endpoint-control';field.replaceWith(wrap);wrap.append(field,e);continue;}}
+      if(act==='disconnect-both'){const advanced=document.createElement('details');advanced.innerHTML='<summary>More connection actions</summary>';advanced.appendChild(e);sections.get(name).appendChild(advanced);}
+      else sections.get(name).appendChild(e);
+    }
+    const advanced=document.createElement('details');advanced.innerHTML='<summary>Advanced</summary>';
+    if(['region','volume','surface','transfer','annotation'].includes(sel.role)){const id=header.querySelector('code');if(id){const row=document.createElement('p');row.textContent='Identifier: '+id.textContent;id.remove();advanced.appendChild(row);}}
+    for(const e of [...pop.querySelectorAll('input[data-field="id"],.ed-vias')])advanced.appendChild(e.matches('input')?e.closest('label'):e);
+    if(advanced.children.length>1)sections.get('Appearance').appendChild(advanced);
+    for(const hint of [...pop.querySelectorAll('p.ed-hint')])if(hint.textContent.startsWith('Label position:'))sections.get('Appearance').appendChild(hint);
+    const selectionSummary=pop.querySelector('[data-selection-summary]');if(selectionSummary)sections.get('Properties').appendChild(selectionSummary);
+    const preview=pop.querySelector('[data-group-preview]');if(preview)sections.get('Properties').appendChild(preview);
+    const actions=pop.querySelector('[data-group-actions]');if(actions)footer.prepend(actions);
+    // Physical relationships are already grouped semantically.
+    for(const e of [...pop.querySelectorAll('fieldset,.ed-error,[data-budget],[data-review-budget]')])sections.get('Properties').appendChild(e);
+    pop.replaceChildren(header,nav,...sections.values(),footer);
+    for(const [name,section] of sections){const help=document.createElement('button');help.type='button';help.className='ed-section-help';help.textContent='Help';help.onclick=()=>{
+      let text=section.querySelector('.ed-section-explanation');if(text){text.remove();return;}
+      text=document.createElement('div');text.className='ed-section-explanation';text.setAttribute('role','note');
+      const definitions=[...section.querySelectorAll('[data-field],[data-act]')].map(e=>S.catalogue?.controls?.[e.dataset.field||e.dataset.act]).filter(Boolean);
+      text.textContent=[...new Set(definitions)].join(' ')||'Edit the selected component. Undo restores a committed change.';help.after(text);
+    };section.prepend(help);}
+  }
+  pop.classList.add('ed-docked');pop.style.cssText='';if(pop.parentElement!==$('ed-palette'))$('ed-palette').appendChild(pop);pop.hidden=false;setPanelView('Properties',true);showInspectorTab(inspectorTab);
+}
+function showInspectorTab(name) {
+  inspectorTab=name;
+  for(const section of pop.querySelectorAll('[data-inspector-section]'))section.hidden=section.dataset.inspectorSection!==name;
+  for(const b of pop.querySelectorAll('[data-inspector-tabs] button'))b.setAttribute('aria-pressed',String(b.textContent===name));
+}
+function wireMenu(panel) {
+  const items=()=>[...panel.querySelectorAll('button,label.btn')].filter(e=>!e.disabled&&!e.hidden);
+  for(const e of items()) {if(['ed-theme','ed-notation'].includes(e.id))e.dataset.menuKind='toggle';e.dataset.menuKind||='command';e.setAttribute('role',e.dataset.menuKind==='toggle'?'menuitemcheckbox':'menuitem');e.setAttribute('aria-label',e.textContent.trim());if(e.tagName==='LABEL')e.tabIndex=0;}
+  const sync=()=>{for(const e of items())if(e.dataset.menuKind==='toggle'){const checked=e.id==='ed-theme'?document.documentElement.dataset.theme==='dark':e.id==='ed-notation'?S.notation==='zigzags':e.textContent==='Files'?!document.body.classList.contains('ed-files-collapsed'):!document.body.classList.contains('ed-components-collapsed');e.setAttribute('aria-checked',String(checked));e.setAttribute('aria-label',e.textContent.trim());}};
+  panel.addEventListener('click',()=>queueMicrotask(sync));sync();
+  panel.addEventListener('keydown',e=>{if(e.target.tagName==='LABEL'&&['Enter',' '].includes(e.key)){e.preventDefault();e.target.click();return;}const rows=items(),i=rows.indexOf(document.activeElement);if(['ArrowDown','ArrowUp','Home','End'].includes(e.key)){e.preventDefault();rows[e.key==='Home'?0:e.key==='End'?rows.length-1:(i+(e.key==='ArrowDown'?1:-1)+rows.length)%rows.length]?.focus();}if(e.key==='Escape'){e.preventDefault();e.stopPropagation();panel.hidden=true;document.querySelector('.ed-menu-categories button[aria-expanded="true"]')?.focus();for(const b of document.querySelectorAll('.ed-menu-categories button'))b.setAttribute('aria-expanded','false');}});
+}
+function drawHover(hit,append=false) {
+  if(!append)ui.querySelectorAll('.ed-hover-ink').forEach(e=>e.remove());if(!hit)return;
+  if(hit.element==='label'&&hit.rect){const b=['x','y','width','height'].map(k=>+hit.rect.getAttribute(k));ui.appendChild(svgEl('rect',{x:b[0],y:b[1],width:b[2],height:b[3],fill:'none'},'ed-hover-ink'));}
+  else if(hit.role==='branch') {const route=routeOf(element(hit)),symbol=symbolHit(hit);if(route){let runs=[route];if(symbol){const near=nearestSegment(route,symbol.at),half=symbol.terminal_half||62;const tip=t=>near.a.map((v,i)=>v+near.u[i]*t);runs=[route.slice(0,near.i+1).concat([tip(Math.max(0,near.along-half))]),[tip(Math.min(near.len,near.along+half))].concat(route.slice(near.i+1))];}for(const run of runs)ui.appendChild(svgEl('polyline',{points:run.map(p=>p.join(',')).join(' '),fill:'none'},'ed-hover-ink'));}}
+
+  else {const b=boundsOf(hit);if(b)ui.appendChild(svgEl('rect',{x:b[0]-3,y:b[1]-3,width:b[2]-b[0]+6,height:b[3]-b[1]+6,rx:4,fill:'none'},'ed-hover-ink'));}
+}
+function showShortcuts() {
+  const dialog=document.createElement('dialog');dialog.className='ed-help-dialog';dialog.setAttribute('aria-label','Keyboard shortcuts');dialog.innerHTML='<header class="ed-dialog-heading"><h2>Keyboard shortcuts</h2></header>';
+  for(const group of ['Editing','Navigation','Connections']){const h=document.createElement('h3');h.textContent=group;dialog.appendChild(h);for(const item of SHORTCUTS.filter(x=>x.group===group)){const row=document.createElement('p');row.innerHTML=`<span>${escapeHtml(item.label)}</span><kbd>${escapeHtml(item.keys.replaceAll('Mod',/Mac|iPhone|iPad/.test(navigator.platform)?'⌘':'Ctrl'))}</kbd>`;dialog.appendChild(row);}}
+  const close=document.createElement('button');close.className='ed-dialog-close';close.textContent='×';close.setAttribute('aria-label','Close keyboard shortcuts');close.title='Close (Escape)';close.onclick=()=>dialog.close();dialog.querySelector('.ed-dialog-heading').appendChild(close);dialog.onclose=()=>dialog.remove();document.body.appendChild(dialog);dialog.showModal();
+}
+const SHORTCUTS=[
+ {group:'Editing',label:'Copy selection',keys:'Mod+C',match:()=>false},
+ {group:'Editing',label:'Paste selection',keys:'Mod+V',match:()=>false},
+ {group:'Navigation',label:'Cancel / close',keys:'Escape',match:()=>false},
+ {group:'Navigation',label:'Previous / next file in Present',keys:'← / →',match:()=>false},
+ {group:'Editing',label:'Undo',keys:'Mod+Z',match:e=>(e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'&&!e.shiftKey,run:()=>undo()},
+ {group:'Editing',label:'Redo',keys:'Mod+Shift+Z / Ctrl+Y',match:e=>(e.ctrlKey||e.metaKey)&&(e.key.toLowerCase()==='y'||e.key.toLowerCase()==='z'&&e.shiftKey),run:()=>redo()},
+ {group:'Editing',label:'Delete selection',keys:'Delete / Backspace',match:e=>['Delete','Backspace'].includes(e.key),run:()=>{if(S.sel&&!S.present)removeSelected();}},
+ {group:'Navigation',label:'Fit drawing',keys:'F',match:e=>e.key.toLowerCase()==='f',run:()=>fitFromCommand()},
+ {group:'Navigation',label:'Switch theme',keys:'D',match:e=>e.key.toLowerCase()==='d',run:()=>$('ed-theme').click()},
+ {group:'Navigation',label:'Switch notation',keys:'Z',match:e=>e.key.toLowerCase()==='z',run:()=>$('ed-notation').click()},
+ {group:'Navigation',label:'Check supplied values',keys:'P',match:e=>e.key.toLowerCase()==='p',run:()=>{$('ed-physics').checked=!$('ed-physics').checked;$('ed-physics').dispatchEvent(new Event('change'));}},
+ {group:'Connections',label:'Rotate counterclockwise / clockwise',keys:'[ / ]',match:e=>['[',']'].includes(e.key),run:e=>turnSelected(e.key===']'?1:-1)},
+ {group:'Connections',label:'Quick add',keys:'/',match:e=>e.key==='/',run:()=>{const r=canvas.getBoundingClientRect();requestQuick(lastPointer.x||r.left+r.width/2,lastPointer.y||r.top+r.height/2);}}
+];
+(function installPanelChrome(){
+  const header=document.createElement('div');header.id='ed-canvas-header';header.setAttribute('aria-label','Panel controls');$('ed-stage').prepend(header);
+  for(const [id,label] of [['ed-files-reopen','Files'],['ed-components-reopen','Components']]){const b=$(id);b.textContent='▥ '+label;b.setAttribute('aria-label',label);header.appendChild(b);if(id==='ed-files-reopen')b.onclick=()=>{collapseFiles(false);filesPanel.classList.add('ed-open');};}
+  for(const [id,reverse] of [['ed-undo',false],['ed-redo',true]]){const b=$(id);b.setAttribute('aria-label',reverse?'Redo':'Undo');b.title=(reverse?'Redo (':'Undo (')+(/Mac/.test(navigator.platform)?'⌘':'Ctrl')+(reverse?'+Shift+Z)':'+Z)');b.innerHTML=`<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" ${reverse?'style="transform:scaleX(-1)"':''}><path d="M8 5 3 10l5 5M3 10h10a7 7 0 0 1 7 7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;}
+  setPanelView('Components',true);
+  document.querySelector('.ed-menu-categories').addEventListener('keydown',e=>{if(['ArrowDown','ArrowUp'].includes(e.key)){e.preventDefault();if(e.target.getAttribute('aria-expanded')!=='true')e.target.click();const panel=[...document.querySelectorAll('.ed-category-menu')].find(p=>!p.hidden);panel?.querySelector('[role^="menuitem"]')?.focus();}});
+})();
+
+// Menu dismissal takes precedence over canvas and Solve Escape handlers.
+window.addEventListener('keydown',e=>{
+  const panel=[...document.querySelectorAll('.ed-category-menu')].find(p=>!p.hidden);
+  if(!panel)return;
+  const triggers=[...document.querySelectorAll('.ed-menu-categories button')],active=triggers.find(b=>b.getAttribute('aria-expanded')==='true');
+  if(e.key==='Escape'){e.preventDefault();e.stopImmediatePropagation();panel.hidden=true;active?.setAttribute('aria-expanded','false');const mobile=document.querySelector('.ed-mobile-menu');if(mobile?.open){mobile.open=false;mobile.querySelector('summary').focus();}else active?.focus();}
+  else if(['ArrowLeft','ArrowRight'].includes(e.key)&&!e.target.matches('input,textarea')){e.preventDefault();e.stopImmediatePropagation();const next=triggers[(triggers.indexOf(active)+(e.key==='ArrowRight'?1:-1)+triggers.length)%triggers.length];next?.click();next?.focus();}
+},true);
+document.addEventListener('pointerdown',e=>{
+  if(!e.target.closest('.ed-mobile-menu,.ed-category-menu')){const mobile=document.querySelector('.ed-mobile-menu');if(mobile)mobile.open=false;}
+});
+
+function installEditIcons(container){
+  const mod=/Mac|iPhone|iPad/.test(navigator.platform)?'⌘':'Ctrl';
+  const icons={
+    'Copy':['ed-copy',`Copy (${mod}+C)`,'<rect x="8" y="8" width="12" height="12" rx="1"/><path d="M16 8V4H4v12h4"/>'],
+    'Paste':['ed-paste',`Paste (${mod}+V)`,'<path d="M9 5H5v16h14V5h-4"/><rect x="9" y="3" width="6" height="4" rx="1"/>'],
+    'Delete':['ed-delete','Delete selection (Delete)','<path d="M4 7h16M9 7V4h6v3M6 7l1 14h10l1-14M10 10v7M14 10v7"/>'],
+    'Merge selected nodes':['ed-merge','Merge selected nodes','<circle cx="5" cy="5" r="2"/><circle cx="19" cy="5" r="2"/><path d="M5 7v3l7 5 7-5V7"/><circle cx="12" cy="18" r="3"/>']
+  };
+  for(const button of container.querySelectorAll('button')){
+    const label=button.textContent.trim(),entry=icons[label];if(!entry)continue;
+    button.id=entry[0];button.className='ed-icon-button';button.title=entry[1];button.setAttribute('aria-label',label==='Delete'?'Delete selection':label);
+    button.innerHTML=`<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${entry[2]}</svg>`;
+  }
+  for(const id of ['ed-copy','ed-paste','ed-delete','ed-merge'])container.appendChild(container.querySelector('#'+id));
+}
+// A programmatic canvas focus after a pointer action is not keyboard navigation.
+document.addEventListener('pointerdown',()=>document.body.classList.remove('ed-keyboard-navigation'),true);
+document.addEventListener('keydown',e=>{if(e.key==='Tab')document.body.classList.add('ed-keyboard-navigation');},true);
+new ResizeObserver(()=>document.documentElement.style.setProperty('--ed-toolbar-height',$('ed-top').getBoundingClientRect().height+'px')).observe($('ed-top'));

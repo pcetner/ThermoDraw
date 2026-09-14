@@ -120,3 +120,28 @@ Supplied resistance `rate` remains a whole-group magnitude; calculated report
 rates are signed from source to target. Analysis tolerances govern supplied
 assertions and volume checks, while unknown network equations retain strict
 numerical residual checks. See `physics-analysis.md` for partial-application rules.
+
+## Editor rendering additions
+
+Existing Python entry points and unit-declared JSON documents remain supported.
+Repeated branches now accept `via` for the outer route; the assembly occupies
+the selected segment. Very large groups use bounded compact rendering.
+
+The internal editor bridge accepts optional presentation arguments:
+`_editor.scene(data, notation="boxes", physics=False, adornments=None, display=None)`
+and `_editor.export(data, what="svg", mode=None, notation="boxes", display=None)`.
+`display={"mode":"automatic"}` uses engineering prefixes and
+`display={"mode":"scientific"}` uses SI scientific notation. Omitting this
+argument retains existing Python rendering behavior. `Diagram.display` provides
+the same optional rendering preference and is excluded from JSON serialization.
+
+Editor file metadata stores display and panel preferences separately from
+full-precision unit-declared diagram data. Kelvin temperature state is separate
+from editable text; display toggles never parse rendered labels back into data.
+Finite temperature conversion round trips are tested against independent decimal
+references within `max(1e-10 K, 8 ULPs)`. Symbolic conversions remain explicit.
+
+Topology proposals are pure copies. Worker validation and generation/revision
+checks precede interactive topology commits; Undo restores the whole operation.
+Compatible legacy overlaps normalize once when opened, with their original
+state retained in Undo. The supplied regression fixture originals are unchanged.

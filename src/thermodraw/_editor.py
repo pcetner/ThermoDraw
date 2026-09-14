@@ -13,6 +13,8 @@ Private. The editor is built from the same commit as the wheel it loads,
 so nothing here is a promise to anyone else.
 """
 import difflib
+import hashlib
+import re
 import json
 from typing import Any, Dict, List, Optional, Sequence
 
@@ -47,6 +49,8 @@ def _hit(p, element: str, bounds: Sequence[float]) -> Dict[str, Any]:
         # reaches 62 for leads the symbol is only 42 long. An editor routing
         # a wire around a dragged symbol needs the 42.
         out["half_len"] = float(p.symbol.half_len)
+        out["terminal_half"] = float(p.symbol.terminals[1][0])
+        out["terminals"] = [list(t) for t in p.symbol.terminals]
     if element == "symbol" and p.role == "branch" and p.via:
         out["via"] = [[float(x), float(y)] for x, y in p.via]
     return out
@@ -76,7 +80,7 @@ def _hits(placements, scene) -> List[Dict[str, Any]]:
 
 
 def scene(data: Dict[str, Any], notation: str = "boxes",
-          physics: bool = False, adornments=None) -> Dict[str, Any]:
+          physics: bool = False, adornments=None, display=None) -> Dict[str, Any]:
     """The drawing, its hit map and its findings, from one layout.
 
     `parts` is the page in page coordinates with no wrapper: the editor
@@ -86,6 +90,7 @@ def scene(data: Dict[str, Any], notation: str = "boxes",
     """
     try:
         diagram = Diagram.from_dict(data)
+        diagram.display = display or {}
         placements = layout(diagram)
     except DiagramError as exc:
         return _refuse(exc)
@@ -94,12 +99,41 @@ def scene(data: Dict[str, Any], notation: str = "boxes",
     composed = _render.compose(drawn, label_adornments=reserved)
     report = _check.check(diagram, physics=physics, _scene=composed, _placements_override=drawn)
     from ._physical import budgets
+    hit_map = _hits(drawn, composed)
+    findings = report.to_dict()['findings']
+    for finding in findings:
+        targets = {(h['role'],h['index']) for h in hit_map
+                   if h['index'] is not None and (h['ref'] == finding['where'] or re.search(re.escape(h['ref']) + r'(?![\w-])', finding['message']))}
+        finding['targets'] = [{'role':role,'index':index} for role,index in sorted(targets)]
+        titles = {
+            'label-collision': 'Labels overlap', 'label-on-wire': 'A label overlaps a connection',
+            'wire-through-label': 'A connection crosses a label',
+            'off-canvas': 'Part of the drawing is outside the canvas',
+            'network-in-pieces': 'The network has disconnected parts',
+            'label-in-a-corridor': 'A label needs more space',
+        }
+        finding['title'] = titles.get(finding['code'], finding['code'].replace('-', ' ').capitalize())
+        explanations = {
+            'label-collision': 'Text overlaps another label or drawing element, making the diagram harder to read. Move the affected label or create more space.',
+            'label-in-a-corridor': 'This label is squeezed between connections. Move it to a clearer side or increase the spacing.',
+            'network-in-pieces': 'Some objects have no connection to the rest of the network. Connect them if they belong to the same thermal system.',
+            'nodes-too-close': 'The nodes leave too little room for their connected components. Increase their spacing.',
+            'symbols-overlap': 'Component symbols overlap. Separate them so each component and connection is readable.',
+            'wire-through-symbol': 'A connection passes through a component symbol. Adjust its route or separate the objects.',
+            'wire-through-wall': 'A connection crosses a boundary symbol. Add a straight lead before turning around that boundary.',
+            'off-canvas': 'Some drawing content falls outside the defined canvas. Increase the canvas size or move that content inside.',
+        }
+        finding['explanation'] = explanations.get(finding['code'], 'Inspect the affected objects and their supplied values. Technical details contain the original check and suggested remedy.')
+        identity = finding['code'] + ':' + finding['where'] + ':' + str(sorted(targets))
+        finding['key'] = hashlib.sha256(identity.encode()).hexdigest()[:16]
+        if not targets:
+            finding['action'] = 'units' if 'unit' in finding['code'] else 'explain'
     return {
         "parts": "".join(composed.parts),
         "ink": [float(v) for v in composed.ink],
         "labels": len(composed.rects),
-        "hits": _hits(drawn, composed),
-        "findings": report.to_dict()["findings"],
+        "hits": hit_map,
+        "findings": findings,
         "preview": composed.preview,
         "adornments": [{"role": r.owner.role, "index": r.owner.index,
                          "bounds": r.adornment, "clear": r.clear}
@@ -117,9 +151,10 @@ def solve(data: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def export(data: Dict[str, Any], what: str = "svg",
-           mode: Optional[str] = None, notation: str = "boxes") -> str:
+           mode: Optional[str] = None, notation: str = "boxes", display=None) -> str:
     """A file the editor hands the user: `svg`, `page` or `json`."""
     diagram = Diagram.from_dict(data)
+    diagram.display = display or {}
     if what == "svg":
         return diagram.svg(mode, notation=notation)
     if what == "page":
@@ -138,7 +173,9 @@ def head() -> Dict[str, Any]:
     follows it is the one `_solve` would have produced, so it is sent
     from here rather than written down a second time in the page.
     """
+    from ._catalogue import catalogue
     return {
+        "units": catalogue(),
         "css": symbols.CSS,
         "vars": theme._VARS,
         "faces": [theme.font_face(f) for f in ("regular", "italic", "semibold")],
