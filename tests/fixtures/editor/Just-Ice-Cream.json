@@ -1,0 +1,123 @@
+{
+  "units": {
+    "R": "K/W",
+    "C": "J/K",
+    "T": "°C",
+    "P": "W",
+    "q": "W",
+    "q″": "W/cm²",
+    "mdot": "kg/s",
+    "cp": "kJ/kg·K"
+  },
+  "nodes": [
+    {
+      "id": "n1",
+      "label": "Outer wall of container",
+      "sub": "outer",
+      "at": [
+        410,
+        10
+      ]
+    },
+    {
+      "id": "n2",
+      "kind": "fixed",
+      "label": "Ambient",
+      "sub": "sur",
+      "value": "20",
+      "at": [
+        30,
+        10
+      ],
+      "label_offset": [
+        -40,
+        -50
+      ]
+    },
+    {
+      "id": "n4",
+      "at": [
+        100,
+        10
+      ]
+    },
+    {
+      "id": "n5",
+      "label": "Inner wall of contatiner",
+      "sub": "inner",
+      "at": [
+        710,
+        10
+      ],
+      "label_offset": [
+        -60,
+        20
+      ]
+    },
+    {
+      "id": "n3",
+      "kind": "fixed",
+      "label": "Ice cream",
+      "sub": "ice",
+      "value": "0",
+      "at": [
+        1010,
+        10
+      ],
+      "label_offset": [
+        -30,
+        -50
+      ]
+    }
+  ],
+  "branches": [
+    {
+      "from": "n2",
+      "to": "n1",
+      "kind": "conv",
+      "via": [
+        [
+          70,
+          10
+        ],
+        [
+          300,
+          10
+        ]
+      ],
+      "at": [
+        250,
+        10
+      ]
+    },
+    {
+      "from": "n4",
+      "to": "n1",
+      "kind": "rad",
+      "via": [
+        [
+          100,
+          -100
+        ],
+        [
+          410,
+          -100
+        ]
+      ],
+      "at": [
+        250,
+        -100
+      ]
+    },
+    {
+      "from": "n1",
+      "to": "n5",
+      "kind": "cond"
+    },
+    {
+      "from": "n5",
+      "to": "n3",
+      "kind": "contact"
+    }
+  ]
+}

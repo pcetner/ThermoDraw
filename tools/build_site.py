@@ -30,6 +30,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from thermodraw import Diagram, __version__  # noqa: E402
 from thermodraw import _editor  # noqa: E402
+from thermodraw._catalogue import catalogue  # noqa: E402
 
 SITE = "https://pcetner.github.io/ThermoDraw/"
 GALLERY = ROOT / "examples" / "gallery"
@@ -89,7 +90,7 @@ def paths() -> List[str]:
              "symbol-reference.html",
              "raptor.html", "raptor.svg", "raptor.json", "hero.json",
              "gallery/index.html", ".nojekyll",
-             "editor/index.html", "editor/editor.css", "editor/editor.js",
+             "editor/index.html", "editor/guide.html", "editor/editor.css", "editor/editor.js", "editor/topology.js", "editor/group.js",
              "editor/worker.js", f"editor/{editor_revision()}/{WHEEL}", "editor/examples.json"]
     per = [f"gallery/{e.name}.{ext}" for e in entries()
            for ext in ("html", "svg", "json")]
@@ -123,9 +124,9 @@ def _palette_markup() -> str:
                        f'{svg}<span>{html.escape(name)}</span></button>'
                        f'<button type="button" class="ed-component-help" aria-label="About {html.escape(name)}" aria-expanded="false" aria-controls="ed-definition-{key}" data-component-note>?</button><p class="ed-component-definition" id="ed-definition-{key}" hidden>{html.escape(e["note"] or name)}</p></div>')
         out.append('</div></section>')
-    for category, entries in [("Physical", [("region", "Region rectangle", "A rectangular material layer or spatial region. It defines geometry, not an energy balance."), ("volume", "Control-volume rectangle", "A region of space chosen for an energy balance. Heat, work and mass can cross its boundary."), ("surface", "Control surface", "A segment of a control-volume boundary through which energy or mass can pass."), ("transfer", "Energy transfer", "Heat, work or energy carried by mass across a control surface. The direction sets whether energy enters or leaves.")]), ("Annotations", [("text", "Text", "A label, assumption or equation placed independently on the drawing."), ("line", "Line", "A line used for dimensions, boundaries or callouts. It creates no thermal connection."), ("arrow", "Arrow", "An arrow used to indicate direction or identify a feature. It contributes no energy to a balance.")])]:
+    for category, category_entries in [("Physical", [("region", "Region rectangle", "A rectangular material layer or spatial region. It defines geometry, not an energy balance."), ("volume", "Control-volume rectangle", "A region of space chosen for an energy balance. Heat, work and mass can cross its boundary."), ("surface", "Control surface", "A segment of a control-volume boundary through which energy or mass can pass."), ("transfer", "Energy transfer", "Heat, work or energy carried by mass across a control surface. The direction sets whether energy enters or leaves.")]), ("Annotations", [("text", "Text", "A label, assumption or equation placed independently on the drawing."), ("line", "Line", "A line used for dimensions, boundaries or callouts. It creates no thermal connection."), ("arrow", "Arrow", "An arrow used to indicate direction or identify a feature. It contributes no energy to a balance.")])]:
         out.append(f'<section data-component-group data-category="{category}" hidden><h3>{category}</h3><div class="ed-cards">')
-        for key, name, note in entries:
+        for key, name, note in category_entries:
             out.append(f'<div class="ed-component-row" data-search="{name.lower()}"><button type="button" class="ed-shape-card" data-sketch="{key}">{name}</button><button type="button" class="ed-component-help" aria-label="About {name}" aria-expanded="false" aria-controls="ed-definition-{key}" data-component-note>?</button><p class="ed-component-definition" id="ed-definition-{key}" hidden>{note}</p></div>')
         out.append('</div></section>')
     return "".join(out)
@@ -163,11 +164,36 @@ def _editor_pages(out: pathlib.Path) -> None:
                     .replace("{{REVISION}}", revision)
                     .replace("{{WHEEL}}", f"{revision}/{WHEEL}")
                     .replace("{{PYODIDE}}", PYODIDE)
+                    .replace("{{INTERACTIONS}}", ''.join(
+                        '<dt>'+html.escape(e['name'])+'</dt><dd>'+html.escape(
+                            e['when']+' '+e['action']+' Changes: '+e['changes']+'. '+e['cancel'])+'</dd>'
+                        for e in catalogue()['interactions']))
                     .replace("{{PALETTE}}", _palette_markup()))
     assert "{{" not in page, "unfilled placeholder in the editor template"
+    guide = (ROOT / 'docs' / 'editor-guide.md').read_text(encoding='utf-8')
+    def inline(text: str) -> str:
+        text = html.escape(text)
+        text = re.sub(r'`([^`]+)`', r'<code>\1</code>', text)
+        text = re.sub(r'\*\*([^*]+)\*\*', r'<strong>\1</strong>', text)
+        return re.sub(r'\[([^]]+)\]\(([^)]+\.md)\)',
+                      r'<a href="https://github.com/pcetner/ThermoDraw/blob/main/docs/\2">\1</a>', text)
+    blocks: List[str] = []
+    for block in guide.strip().split('\n\n'):
+        if block.startswith('#'):
+            depth = min(len(block) - len(block.lstrip('#')), 6)
+            blocks.append(f'<h{depth}>'+inline(block[depth:].strip())+f'</h{depth}>')
+        elif block.startswith('- '):
+            blocks.append('<ul>'+''.join('<li>'+inline(line[2:])+'</li>' for line in block.splitlines())+'</ul>')
+        else:
+            blocks.append('<p>'+inline(block.replace('\n', ' '))+'</p>')
+    _write(out / 'editor' / 'guide.html', '<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Editor documentation</title><style>body{max-width:800px;margin:40px auto;padding:20px;font:16px/1.6 system-ui;color:#252830}h2{margin-top:2em}code{background:#f0f2f4;padding:2px 4px;border-radius:4px}a{color:#894d29}</style><main>'+''.join(blocks)+'</main></html>')
     _write(out / "editor" / "index.html", page)
-    for name in ("editor.css", "editor.js", "worker.js"):
-        shutil.copyfile(EDITOR / name, out / "editor" / name)
+    for name in ("editor.css", "editor.js", "topology.js", "group.js", "worker.js"):
+        if name.endswith('.js'):
+            script=(EDITOR/name).read_text(encoding='utf-8')
+            script=re.sub(r"from './(topology|group)\.js'",lambda m:f"from './{m[1]}.js?build={revision}'",script)
+            _write(out/'editor'/name,script)
+        else:shutil.copyfile(EDITOR / name, out / "editor" / name)
     _write(out / "editor" / "examples.json",
            json.dumps(examples(), indent=1, ensure_ascii=False) + "\n")
     _wheel(out / "editor" / revision / WHEEL)

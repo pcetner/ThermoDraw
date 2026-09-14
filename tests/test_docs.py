@@ -348,3 +348,8 @@ class TestTheDictionary:
         assert M.OUTWARD_KINDS, "no outbound source kinds left to describe"
         definition = gen_dictionary.WHERE["source"][2].lower()
         assert "leaving" in definition or "out of" in definition, definition
+
+
+def test_editor_interaction_catalogue_documentation_is_current():
+    result=subprocess.run([sys.executable,str(ROOT/'tools/gen_editor_guide.py'),'--check'],capture_output=True,text=True,cwd=ROOT)
+    assert result.returncode==0,result.stdout+result.stderr

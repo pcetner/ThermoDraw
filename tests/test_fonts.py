@@ -61,3 +61,11 @@ def test_only_the_needed_faces_are_embedded():
 def test_embedding_is_deterministic():
     svg = symbols.diagonal_demo()
     assert theme.bake(svg, "light") == theme.bake(svg, "light")
+
+
+@pytest.mark.parametrize("face", sorted(FACE_FILE))
+def test_every_picker_symbol_has_embedded_glyph_and_metrics(face):
+    from thermodraw._catalogue import SCIENTIFIC_CHARS
+    real=advances(theme.FONT_DIR / FACE_FILE[face])
+    assert set(SCIENTIFIC_CHARS)<=set(real)
+    assert set(SCIENTIFIC_CHARS)<=set(_metrics.WIDTHS[face])

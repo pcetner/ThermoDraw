@@ -416,8 +416,8 @@ def wire_graph(placements):
                 add(pts[i], pts[i + 1], p.ref)
         elif p.symbol is not None:
             r = math.radians(p.angle)
-            ux = math.cos(r) * p.symbol.half_len
-            uy = math.sin(r) * p.symbol.half_len
+            ux = math.cos(r) * p.symbol.terminals[1][0]
+            uy = math.sin(r) * p.symbol.terminals[1][0]
             add((p.at[0] - ux, p.at[1] - uy),
                 (p.at[0] + ux, p.at[1] + uy), p.ref)
 
@@ -997,9 +997,16 @@ def _wire_through_wall(placements, out):
     for ground, (centre, half, angle) in walls:
         shaved = (max(0.0, half[0] - SHAVE), max(0.0, half[1] - SHAVE))
         for p in placements:
-            if p.element != "wire" or p.ref == ground.ref:
+            if p.ref == ground.ref:
                 continue
-            pts = [tuple(q) for q in p.points]
+            if p.element == 'wire':
+                pts = [tuple(q) for q in p.points]
+            elif p.symbol is not None and p.role == 'branch':
+                r=math.radians(p.angle)
+                length=p.symbol.terminals[1][0]
+                pts=[(p.at[0]+s*math.cos(r)*length,p.at[1]+s*math.sin(r)*length) for s in (-1,1)]
+            else:
+                continue
             for i in range(len(pts) - 1):
                 if core.segment_box(pts[i], pts[i + 1], centre, shaved, angle):
                     hits.setdefault((str(ground.ref), str(p.ref)),

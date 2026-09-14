@@ -1,0 +1,213 @@
+{
+  "title": "Insulation",
+  "units": {
+    "R": "K/W",
+    "C": "J/K",
+    "T": "°C",
+    "P": "W",
+    "q": "W",
+    "q″": "W/cm²",
+    "mdot": "kg/s",
+    "cp": "kJ/kg·K"
+  },
+  "nodes": [
+    {
+      "id": "n1",
+      "at": [
+        310,
+        10
+      ],
+      "label_offset": [
+        -60,
+        20
+      ]
+    },
+    {
+      "id": "n2",
+      "kind": "fixed",
+      "label": "Ambient",
+      "sub": "sur",
+      "value": "20",
+      "at": [
+        70,
+        10
+      ]
+    },
+    {
+      "id": "n5",
+      "label": "Inner wall of insulation",
+      "sub": "inner",
+      "at": [
+        550,
+        10
+      ],
+      "label_offset": [
+        -60,
+        20
+      ]
+    },
+    {
+      "id": "n3",
+      "kind": "fixed",
+      "label": "Ice cream",
+      "sub": "ice",
+      "value": "0",
+      "at": [
+        1250,
+        10
+      ],
+      "side": "down",
+      "label_offset": [
+        -30,
+        40
+      ]
+    },
+    {
+      "id": "n1_copy1",
+      "label": "Outer side of container",
+      "sub": "outer_cont",
+      "at": [
+        780,
+        10
+      ],
+      "label_offset": [
+        -60,
+        20
+      ]
+    },
+    {
+      "id": "n1_copy1_copy1",
+      "label": "Outer side of insulation",
+      "sub": "outer_ins",
+      "at": [
+        310,
+        10
+      ],
+      "label_offset": [
+        -60,
+        20
+      ]
+    },
+    {
+      "id": "n6",
+      "at": [
+        780,
+        10
+      ]
+    },
+    {
+      "id": "n4",
+      "at": [
+        1020,
+        10
+      ]
+    },
+    {
+      "id": "n7",
+      "label": "Inner side of container",
+      "sub": "inner_cont",
+      "at": [
+        1020,
+        10
+      ],
+      "side": "down",
+      "label_offset": [
+        -60,
+        20
+      ]
+    }
+  ],
+  "branches": [
+    {
+      "from": "n2",
+      "to": "n1",
+      "kind": "conv",
+      "via": [
+        [
+          70,
+          10
+        ],
+        [
+          300,
+          10
+        ]
+      ],
+      "at": [
+        190,
+        10
+      ]
+    },
+    {
+      "from": "n1",
+      "to": "n5",
+      "kind": "cond",
+      "label": "Stryofoam",
+      "at": [
+        440,
+        10
+      ]
+    },
+    {
+      "from": "n5",
+      "to": "n1_copy1",
+      "kind": "rad",
+      "via": [
+        [
+          550,
+          -100
+        ],
+        [
+          780,
+          -100
+        ]
+      ],
+      "at": [
+        670,
+        -100
+      ]
+    },
+    {
+      "from": "n5",
+      "to": "n6",
+      "kind": "conv"
+    },
+    {
+      "from": "n2",
+      "to": "n1_copy1_copy1",
+      "kind": "rad",
+      "via": [
+        [
+          70,
+          -100
+        ],
+        [
+          310,
+          -100
+        ]
+      ],
+      "at": [
+        190,
+        -100
+      ]
+    },
+    {
+      "from": "n6",
+      "to": "n7",
+      "kind": "cond",
+      "label": "Paper Container",
+      "at": [
+        890,
+        10
+      ]
+    },
+    {
+      "from": "n7",
+      "to": "n3",
+      "kind": "contact",
+      "at": [
+        1140,
+        10
+      ]
+    }
+  ]
+}

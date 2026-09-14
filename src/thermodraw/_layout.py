@@ -157,11 +157,13 @@ def _longest(route):
     return lengths.index(max(lengths))
 
 
-def _split(route, index, centre, half_len):
+def _split(route, index, centre, half_len, angle=None):
     """The route with a gap of 2*half_len cut out around `centre`."""
     a, b = route[index], route[index + 1]
     seg = _length(a, b) or 1.0
     ux, uy = (b[0] - a[0]) / seg, (b[1] - a[1]) / seg
+    if angle is not None:
+        ux, uy = math.cos(math.radians(angle)), math.sin(math.radians(angle))
     before = list(route[:index + 1]) + [
         (centre[0] - ux * half_len, centre[1] - uy * half_len)]
     after = [(centre[0] + ux * half_len, centre[1] + uy * half_len)] + \
@@ -223,10 +225,12 @@ def _along(a, b, centre, offsets):
     return [(centre[0] + ux * d, centre[1] + uy * d) for d in offsets]
 
 
-def _series_runs(a, b, centres, half_len):
+def _series_runs(a, b, centres, half_len, angle=None):
     """The wire either side of, and between, symbols set end to end."""
     span = _length(a, b) or 1.0
     ux, uy = (b[0] - a[0]) / span, (b[1] - a[1]) / span
+    if angle is not None:
+        ux, uy = math.cos(math.radians(angle)), math.sin(math.radians(angle))
 
     def edge(p, sign):
         return (p[0] + ux * half_len * sign, p[1] + uy * half_len * sign)
@@ -253,11 +257,12 @@ def _form(b, ref, sym, source, target, centre, angle, label, n, variant,
     dots = variant == "condensed"
 
     if b.arrangement == "series":
-        pitch = 2 * sym.half_len + SERIES_PAD
-        gap = 2 * sym.half_len + 2 * ELLIPSIS_STEP + 22
+        pitch = 2 * sym.terminals[1][0] + SERIES_PAD
+        gap = 2 * sym.terminals[1][0] + 2 * ELLIPSIS_STEP + 22
         offsets = ([-gap / 2, gap / 2] if dots else _centred(n, pitch))
-        spots = _along(source, target, centre, offsets)
-        for run in _series_runs(source, target, spots, sym.half_len):
+        ux,uy=math.cos(math.radians(angle)),math.sin(math.radians(angle))
+        spots = [(centre[0]+ux*d,centre[1]+uy*d) for d in offsets]
+        for run in _series_runs(source, target, spots, sym.terminals[1][0], angle):
             out.append(Placement("wire", points=run, ref=ref, **tag))
         for k, c in enumerate(spots):
             out.append(Placement("symbol", at=c, angle=angle, symbol=sym,
@@ -267,7 +272,7 @@ def _form(b, ref, sym, source, target, centre, angle, label, n, variant,
         pitch = 2 * sym.half + PITCH_PAD
         offsets = [-pitch / 2, pitch / 2] if dots else _centred(n, pitch)
         for k, (route, c) in enumerate(_lanes(source, target, offsets)):
-            for run in _split(route, 2, c, sym.half_len):
+            for run in _split(route, 2, c, sym.terminals[1][0], angle):
                 out.append(Placement("wire", points=run, ref=ref, copy=k,
                                      **tag))
             out.append(Placement("symbol", at=c, angle=angle, symbol=sym,
@@ -301,6 +306,11 @@ def _repeat(b, ref, sym, source, target, centre, angle, label, index=None):
     hidden and no control is offered.
     """
     n, condensed = b.count, b.condensed
+    if n > 100:
+        # A million identical components must not create a million hidden
+        # SVG elements. The labelled condensed assembly is the only form.
+        return _form(b, ref, sym, source, target, centre, angle, label, 2,
+                     'condensed', True, index)
     if not condensed:
         return _form(b, ref, sym, source, target, centre, angle, label, n,
                      None, True, index)
@@ -423,7 +433,13 @@ def layout(diagram) -> List[Placement]:
                           half=sym.half, half_len=sym.half_len,
                           side=b.side)
         if b.repeated:
-            out += _repeat(b, ref, sym, source, target, centre, angle, label,
+            if index > 0:
+                out.append(Placement('wire', points=list(route[:index+1]), ref=ref,
+                                     role='branch', index=i, ends=(b.source,b.target)))
+            if index + 1 < len(route)-1:
+                out.append(Placement('wire', points=list(route[index+1:]), ref=ref,
+                                     role='branch', index=i, ends=(b.source,b.target)))
+            out += _repeat(b, ref, sym, route[index], route[index+1], centre, angle, label,
                            index=i)
             continue
         # `Dict[str, Any]`, and it has to be. These are the
@@ -436,7 +452,7 @@ def layout(diagram) -> List[Placement]:
         # surfaced.
         who: Dict[str, Any] = {"role": "branch", "ends": (b.source, b.target),
                "via": tuple(tuple(p) for p in b.via), "index": i}
-        for run in _split(route, index, centre, sym.half_len):
+        for run in _split(route, index, centre, sym.terminals[1][0], angle):
             out.append(Placement("wire", points=run, ref=ref, **who))
         out.append(Placement(
             "symbol", at=centre, angle=angle, symbol=sym, ref=ref,

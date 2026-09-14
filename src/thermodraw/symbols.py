@@ -347,6 +347,19 @@ class Symbol:
     texture: Optional[Callable[[], str]] = None
     note: str = ""
     reach: Optional[Tuple[float, float]] = None
+    terminal_half: Optional[float] = None
+
+    @property
+    def terminals(self):
+        """Local connection tips, shared by routing and alternate notation.
+
+        Custom symbols may supply terminal_half; the default preserves the
+        historical half_len contract. Resistance glyphs include straight leads.
+        """
+        extent = self.terminal_half
+        if extent is None:
+            extent = self.half_len + (LEAD if self.key in RESISTANCE_KEYS else 0)
+        return ((-extent, 0.0), (extent, 0.0))
 
     @property
     def ink(self):
