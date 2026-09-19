@@ -147,3 +147,20 @@ test('parallel leads clear measured endpoint labels in either orientation',()=>{
     }
   }
 });
+
+
+test('case membership and layout starts follow node merges and deletion',()=>{
+  const d={nodes:[{id:'a'},{id:'b'},{id:'c'}],branches:[],sources:[],cases:[{id:'one',nodes:['a','b','c']}],layout_options:{starts:['a']}};
+  const merged=mergeNodes(d,'a','b');assert.deepEqual(merged.conflicts,[]);
+  assert.deepEqual(merged.document.cases[0].nodes,['b','c']);assert.deepEqual(merged.document.layout_options.starts,['b']);
+  const removed=deleteNode(merged.document,'b').document;
+  assert.deepEqual(removed.cases[0].nodes,['c']);assert.deepEqual(removed.layout_options.starts,[]);
+  const separate=structuredClone(d);separate.cases=[{id:'one',nodes:['a']},{id:'two',nodes:['b','c']}];
+  assert.match(mergeNodes(separate,'a','b').conflicts[0],/case declarations/);
+});
+
+test('capacitance deletion leaves an unresolved stable reference, never another branch',()=>{
+  const d={nodes:[{id:'a'},{id:'b'}],branches:[{id:'c',kind:'cap',from:'a',to:'b'},{id:'r',from:'a',to:'b',value:2}],sources:[],control_volumes:[{id:'v',storage_relation:{branch:'c'}}]};
+  const removed=deletePath(d,'branch',0).document;
+  assert.equal(removed.branches[0].id,'r');assert.equal(removed.control_volumes[0].storage_relation.branch,'c');
+});

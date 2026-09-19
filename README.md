@@ -76,6 +76,7 @@ thermodraw check --physics examples/raptor.json
 
 ```
 examples/raptor.json: 9 labels placed, 0 errors, 0 warnings, 0 notes
+Physics: balanced-within-tolerance; 5 checks performed, 0 unchecked (2 steady nodes, 3 rate assertions, 0 volumes checked). Network policy legacy: relative 15.0%, absolute 0 W.
 ```
 
 Twelve checks look at how the drawing reads: text over text, a label pushed
@@ -86,18 +87,9 @@ to 0.20 and run it again:
 
 ```
 examples/raptor.json: 9 labels placed, 0 errors, 2 warnings, 0 notes
-warning: [node-does-not-balance] node 'hw': 1.38e+04 W arrives and 1e+04 W
-         leaves at the stated values: 1.3e+04 W in by branch 0 gas->hw
-         (2.6e+03 K over 0.2 K/W); 800 W in by branch 1 gas->hw (2.6e+03 K
-         over 3.25 K/W); 1e+04 W out by branch 2 hw->cw (250 K over
-         0.025 K/W)
-         -> check the values. If one box stands for several identical paths,
-         give it `count` and `arrangement`; if a temperature is a limit
-         rather than a result, or a flow is a capacity rather than a load,
-         say so in the `label`
-warning: [rate-does-not-match] branch 0 gas->hw says it carries 9.2e+03 W,
-         and its ends imply 1.3e+04 W (2.6e+03 K over 0.2 K/W)
-         -> one of `rate`, `value` or an end temperature is wrong
+Physics: findings; 5 checks performed, 0 unchecked (2 steady nodes, 3 rate assertions, 0 volumes checked). Network policy legacy: relative 15.0%, absolute 0 W.
+warning: [node-does-not-balance] node 'hw': 1.38e+04 W arrives and 1e+04 W leaves at the stated values: 1.3e+04 W in by branch 0 gas->hw (2.6e+03 K over 0.2 K/W); 800 W in by branch 1 gas->hw (2.6e+03 K over 3.25 K/W); 1e+04 W out by branch 2 hw->cw (250 K over 0.025 K/W)  -> check the values. If one box stands for several identical paths, give it `count` and `arrangement`; if a temperature is a limit rather than a result, or a flow is a capacity rather than a load, say so in the `label`
+warning: [rate-does-not-match] branch 0 gas->hw says it carries 9.2e+03 W, and its ends imply 1.3e+04 W (2.6e+03 K over 0.2 K/W)  -> one of `rate`, `value` or an end temperature is wrong
 ```
 
 Every finding names the schema field that fixes it. Exit 0 is clean, 1 is a
@@ -223,3 +215,7 @@ Drag or click to place components and join endpoints. Shift-click or Shift-drag 
 Steady network temperatures, identifiable constant resistances and single-unknown control-volume balances are now available through `solve_physics`, `solve-physics`, and the editor’s Solve physics inspector. See [physics analysis](docs/physics-analysis.md) for the optional analysis schema, equations, workflow, diagnostics and limits. Drawing layout and existing checker tolerances retain their meanings.
 
 The editor offers only the four answered HW2 problems: oven, frost, wall and hot plate. See the [editor guide](docs/editor-guide.md) for component search, floating properties, drawing gestures, checking and solving, and the [homework guide](docs/example-guide.md) for supplied answers and limitations.
+
+## Assignment workflows
+
+[Explicit network bases, compact layout, derivations and verification](docs/assignment-workflows.md) cover the 1.1 additions. New files opt into stricter checking; existing files keep their original defaults.

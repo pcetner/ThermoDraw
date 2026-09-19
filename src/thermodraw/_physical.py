@@ -17,6 +17,9 @@ class Region:
     size: Sequence[float] = (200, 120)
     label: Optional[str] = None
     label_offset: Optional[Sequence[float]] = None
+    label_runs: Optional[List[Dict[str, str]]] = None
+    show_label: Optional[bool] = None
+    label_inside: Optional[bool] = None
     links: List[str] = field(default_factory=list)
 
 
@@ -32,8 +35,12 @@ class ControlVolume:
     steady: bool = False
     unit: str = "W"
     label_offset: Optional[Sequence[float]] = None
+    label_runs: Optional[List[Dict[str, str]]] = None
+    show_label: Optional[bool] = None
+    label_inside: Optional[bool] = None
     links: List[str] = field(default_factory=list)
     incomplete: bool = False
+    storage_relation: Optional[Dict[str, Any]] = None
 
 
 @dataclass
@@ -47,6 +54,9 @@ class ControlSurface:
     area_unit: str = "m²"
     label: Optional[str] = None
     label_offset: Optional[Sequence[float]] = None
+    label_runs: Optional[List[Dict[str, str]]] = None
+    show_label: Optional[bool] = None
+    label_inside: Optional[bool] = None
     links: List[str] = field(default_factory=list)
 
 
@@ -64,6 +74,9 @@ class Transfer:
     label: Optional[str] = None
     at: Sequence[float] = (0, 0)  # fallback for a detached arrow
     label_offset: Optional[Sequence[float]] = None
+    label_runs: Optional[List[Dict[str, str]]] = None
+    show_label: Optional[bool] = None
+    label_inside: Optional[bool] = None
     links: List[str] = field(default_factory=list)
 
 
@@ -75,6 +88,9 @@ class Annotation:
     end: Sequence[float] = (100, 0)
     label: Optional[str] = None
     label_offset: Optional[Sequence[float]] = None
+    label_runs: Optional[List[Dict[str, str]]] = None
+    show_label: Optional[bool] = None
+    label_inside: Optional[bool] = None
     links: List[str] = field(default_factory=list)
 
 
@@ -247,6 +263,15 @@ def placements(diagram):
                 points = [at, tuple(obj.end)]
                 geometry["arrow"] = obj.kind == "arrow"
             label = Label(user=obj.label or obj.id, value=value)
+            if obj.show_label is False: label = Label()
+            elif obj.label_runs is not None:
+                from .core import RichText
+                label.user = RichText(obj.label_runs)
+            geometry["label_inside"] = obj.label_inside
+            if role=='surface':geometry['association']='surface:'+obj.id
+            elif role=='transfer' and obj.surface:geometry['association']='surface:'+obj.surface
+            if role=='surface':geometry['parent_ref']=f"volume '{obj.volume}'"
+            elif role=='transfer' and obj.surface:geometry['parent_ref']=f"volume '{surfaces[obj.surface].volume}'"
             if role in ("region", "volume", "annotation"):
                 label.offset = obj.label_offset
                 label.preferred = (8, 8)
@@ -306,10 +331,10 @@ def budgets(diagram, *, tolerance=None):
     return result
 
 
-def findings(diagram):
+def findings(diagram, *, tolerance=None):
     from ._check import Finding
     out = []
-    for v, budget in zip(diagram.control_volumes, budgets(diagram)):
+    for v, budget in zip(diagram.control_volumes, budgets(diagram, tolerance=tolerance)):
         if budget["status"] == "balanced":
             continue
         unchecked = budget["status"] == "unchecked"

@@ -26,6 +26,7 @@ carrying one is skipped rather than guessed at.
 import math
 from typing import Dict, List, Optional, Tuple
 from ._physical import number
+from ._units import QUANTITIES, PRESETS
 
 from . import model as M
 from ._check import Finding
@@ -160,7 +161,7 @@ def _grouped(skipped) -> str:
                      for why, who in by_reason.items())
 
 
-def balance(diagram) -> List[Finding]:
+def balance(diagram, coverage=None) -> List[Finding]:
     """Findings for every free node whose stated numbers do not close.
 
     And one `note` saying which free nodes it could not ask, and why. Every
@@ -172,7 +173,26 @@ def balance(diagram) -> List[Finding]:
     examined, and both asked for one line saying so.
     """
     out: List[Finding] = []
+    from ._extensions import trust_findings, policy
+    out.extend(trust_findings(diagram))
+    relative, absolute = policy(diagram)
+    from ._extensions import total_network
+    original = diagram
+    from .derivations import evaluate
+    diagram, derivation_reports, derivation_errors = evaluate(diagram)
+    if coverage is not None: coverage["derivations"] = derivation_reports
+    for error in derivation_errors:
+        out.append(Finding("derivation-invalid", "warning", error["where"], error["message"], remedy="Correct the derivation inputs; cached values are never used."))
+    try:
+        diagram = total_network(diagram)
+    except (ValueError, KeyError, OverflowError) as exc:
+        out.append(Finding("physics-not-checked", "note", "units", str(exc), remedy="Declare a common network_basis and use compatible resistance and rate units."))
+        if coverage is not None: coverage.update(checked_nodes=0, unchecked_nodes=len(diagram.nodes), unchecked_reasons=[str(exc)])
+        return out
+    if coverage is not None: coverage["network_basis"] = original.network_basis or {"kind":"total"}
     units = diagram.units
+    if coverage is not None:
+        coverage.update(checked_nodes=0, unchecked_nodes=sum(n.kind=="free" for n in diagram.nodes), checked_rates=0, unchecked_rates=sum(b.rate is not None and b.kind in RESISTANCES for b in diagram.branches))
     # `mdot` and `cp` only where a stream actually uses them: a diagram
     # without one has no entry to check, and demanding a default would be
     # asking every drawing about a quantity it does not state.
@@ -186,10 +206,10 @@ def balance(diagram) -> List[Finding]:
             out.append(Finding(
                 "physics-not-checked", "note", "the diagram",
                 f"nothing was checked: `units` gives {quantity!r} as "
-                f"{unit!r}, and the check knows only "
-                + ", ".join(table),
-                remedy="state it in one of those, or read the diagram as "
-                       "unchecked"))
+                f"{unit!r}; expected dimensions of {QUANTITIES[quantity]}; examples: "
+                + ", ".join(PRESETS.get(quantity, [QUANTITIES[quantity]]))
+                + ", including supported SI prefixes.",
+                remedy="Use compatible units, or declare a shared network_basis for normalized resistances and rates. Symbolic values remain explicitly unchecked."))
             return out
     p_scale, q_scale = P_SCALE[units.get("P", "W")], P_SCALE[units.get("q", "W")]
     net = _Net(diagram)
@@ -347,13 +367,13 @@ def balance(diagram) -> List[Finding]:
         if not all(math.isfinite(v) for v in (arrive, leave)):
             why = "energy calculation exceeded numerical range"
         if why is None and not said:
-            why = "nothing is attached to it"
+            why = "no steady heat path is attached (capacitances and breaks carry zero steady heat)"
         if why:
             skipped.append((plain, why))
             continue
 
         biggest = max(arrive, leave)
-        if biggest == 0 or abs(arrive - leave) <= SLACK * biggest:
+        if biggest == 0 or abs(arrive - leave) <= max(absolute, relative * biggest):
             continue
         out.append(Finding(
             "node-does-not-balance", "warning", f"node {who}",
@@ -384,12 +404,16 @@ def balance(diagram) -> List[Finding]:
             unchecked_rate(i, "resistance exceeded numerical range")
             continue
         interval = 5 / 9 if units.get('T') in ('°F', 'F') else 1
-        implied = abs(ta - tb) * interval / r_eff
+        implied = (ta - tb) * interval / r_eff
+        if b.rate_convention != "signed": implied = abs(implied)
         stated = rate * q_scale
         if not all(math.isfinite(v) for v in (implied, stated)):
             unchecked_rate(i, "rate calculation exceeded numerical range")
             continue
-        if abs(implied - stated) <= SLACK * max(implied, stated, 1e-12):
+        if coverage is not None:
+            coverage["checked_rates"] += 1
+            coverage["unchecked_rates"] -= 1
+        if abs(implied - stated) <= max(absolute, relative * max(abs(implied), abs(stated), 1e-12)):
             continue
         out.append(Finding(
             "rate-does-not-match", "warning", f"branch {i} {b.source}->{b.target}",
@@ -399,6 +423,8 @@ def balance(diagram) -> List[Finding]:
             remedy="one of `rate`, `value` or an end temperature is wrong",
             at=tuple(b.at) if b.at else None))
 
+    if coverage is not None:
+        coverage.update(checked_nodes=len(free)-len(skipped), unchecked_nodes=len(skipped), unchecked_reasons=[{"id": who, "reason": why} for who, why in skipped])
     if skipped:
         checked = len(free) - len(skipped)
         out.append(Finding(
@@ -407,8 +433,7 @@ def balance(diagram) -> List[Finding]:
             # and answers to several names.
             f"checked {checked} of {len(free)} free places; not checked: "
             + _grouped(skipped),
-            remedy="give the node, or its neighbour, a `value`, or read "
-                   "those nodes as unchecked"))
+            remedy="Supply missing steady inputs; capacitance-only networks require a storage relation rather than steady balancing."))
 
     # The balance above uses differences, so it is the same on either
     # scale. A radiation resistance is not: it is linearised at a pair of

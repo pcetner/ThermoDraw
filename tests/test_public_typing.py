@@ -16,6 +16,11 @@ def test_consumer_types(tmp_path):
 d: Diagram = DiagramBuilder(T="K").node("hot", value=400).build()
 loaded: Diagram = Diagram.from_dict({})
 result: PhysicsResult = solve_physics(d)
+from thermodraw import derive_resistance, derive_capacity, derive_storage, convert_basis
+resistance: float = derive_resistance({})
+capacity: float = derive_capacity({})
+storage: dict[str, float] = derive_storage({})
+normalized: Diagram = convert_basis(d, {"kind":"total"})
 status: str = result.to_dict()["status"]
 svg: str = d.svg("light")
 ''', encoding="utf-8")

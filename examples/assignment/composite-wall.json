@@ -1,0 +1,111 @@
+{
+  "title": "HW3 3.20 — contact resistance",
+  "units": {
+    "T": "°C",
+    "R": "K*m²/W",
+    "q": "W/m²"
+  },
+  "nodes": [
+    {
+      "id": "n0",
+      "label": "Hot gas",
+      "kind": "fixed",
+      "value": 2400
+    },
+    {
+      "id": "n1",
+      "label": "BeO surface"
+    },
+    {
+      "id": "n2",
+      "label": "BeO contact"
+    },
+    {
+      "id": "n3",
+      "label": "Steel contact"
+    },
+    {
+      "id": "n4",
+      "label": "Steel surface"
+    },
+    {
+      "id": "n5",
+      "label": "Coolant",
+      "kind": "fixed",
+      "value": 100
+    }
+  ],
+  "branches": [
+    {
+      "id": "r0",
+      "from": "n0",
+      "to": "n1",
+      "kind": "conv",
+      "value": 0.04
+    },
+    {
+      "id": "r1",
+      "from": "n1",
+      "to": "n2",
+      "kind": "cond",
+      "value": 0.000652
+    },
+    {
+      "id": "r2",
+      "from": "n2",
+      "to": "n3",
+      "kind": "contact",
+      "value": 0.05,
+      "derivation": {
+        "kind": "contact",
+        "inputs": {
+          "contact_resistivity": {
+            "value": 0.05,
+            "unit": "K*m²/W"
+          },
+          "A": {
+            "value": 2,
+            "unit": "m²"
+          }
+        },
+        "source": "Explicit regression input; no material-property validation implied."
+      }
+    },
+    {
+      "id": "r3",
+      "from": "n3",
+      "to": "n4",
+      "kind": "cond",
+      "value": 0.001455
+    },
+    {
+      "id": "r4",
+      "from": "n4",
+      "to": "n5",
+      "kind": "conv",
+      "value": 0.001
+    }
+  ],
+  "analysis": {
+    "network": {
+      "steady": true,
+      "unknowns": [
+        "n1",
+        "n2",
+        "n3",
+        "n4"
+      ]
+    },
+    "check_policy": "analysis"
+  },
+  "network_basis": {
+    "kind": "area",
+    "value": 2,
+    "unit": "m²"
+  },
+  "layout_options": {
+    "max_width": 640,
+    "wrap": true,
+    "stack": true
+  }
+}

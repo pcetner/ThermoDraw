@@ -5,6 +5,35 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-09-14
+
+Assignment workflows now support explicit physical bases and auditable derivations.
+
+### Added
+
+- Shared total, per-area and per-length network bases with value-preserving conversion.
+- Explicit checking policy, effective tolerance and coverage reports, signed branch rates.
+- Optional measured chain wrapping, stacking, orientation and intentional case groups.
+- Fixed-coefficient resistance, capacitance and finite-interval storage derivations.
+- Structured scientific labels, temperature-rise captions and physical label controls.
+- Editor reviewable conversion and derivation actions with Undo and stale-result guards.
+- Repository-owned assignment regression examples.
+
+### Fixed
+
+- Negative source values can no longer pass as unqualified verified arrow directions.
+- Invalid capacitance units and failed derivations receive actionable diagnostics.
+- Transfer labels avoid their own shafts and arrowheads; manual collisions are reported.
+- Machine console JSON preserves Unicode through ASCII-safe escaping.
+- Documentation accepts numeric calculated values alongside authored strings.
+
+### Compatibility
+
+- Existing files retain their field meanings, layout and legacy network tolerance.
+- New editor files explicitly select analysis checking and compact layout.
+- No runtime dependencies, material database or transient/nonlinear solver added.
+
+
 ## [Unreleased]
 
 ### Editor UI redesign

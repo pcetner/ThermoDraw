@@ -154,7 +154,7 @@ sides. Set it and the canvas is fixed instead, which is how ink ends up off the
 page — the two findings `off-canvas` and `frame-off-centre` exist only for
 diagrams that set it.
 
-Every `value` is a **string**, not a number: you get exactly the digits you
+Every `value` may be a string or a finite JSON number. Authored strings preserve the digits you
 typed, so `"2.10"` stays `2.10` and does not become `2.1`.
 
 Coordinates are SVG user units with the origin at the top left, so **y
@@ -870,3 +870,20 @@ Steady network temperatures, identifiable resistance values, and single-unknown 
 ## Editor representation
 
 The [editor guide](editor-guide.md) documents Network, Physical and Annotations categories and floating properties. Display categories do not change model roles or kinds. Region membership and associations use stable IDs. A repeated resistance value is per item; its optional `rate` is the whole group heat rate in both checking and solving. Analysis time assumptions are not drawn automatically; use text annotations for exported callouts.
+
+
+## Assignment workflow additions in 1.1
+
+See [assignment workflows](assignment-workflows.md) for complete examples and
+semantics. Additive diagram fields are `network_basis`, `layout_options`, `cases`
+and `temperature_reference`. Network basis carries `kind`, `value`, `unit`;
+layout options carry `max_width`, `wrap`, `stack`, `starts`.
+
+Nodes, branches, sources and physical objects accept `label_runs` (text plus
+normal/subscript/superscript position). Branches accept `rate_convention` and
+`derivation`; physical objects accept `show_label` and `label_inside`.
+Control volumes accept `storage_relation`. Analysis accepts `check_policy`.
+Existing fields retain their meanings and omitted options retain legacy defaults.
+
+New public helpers are `derive_resistance`, `derive_capacity`, `derive_storage`
+and `convert_basis`. Builder additions are `basis`, `layout_config` and `case`.

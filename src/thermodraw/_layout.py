@@ -375,6 +375,8 @@ def layout(diagram) -> List[Placement]:
     with every node placed goes through untouched.
     """
     diagram.validate()
+    from .derivations import evaluate
+    diagram, _, _ = evaluate(diagram)
     diagram = _solve.solve(diagram)
     out = []
 
@@ -405,7 +407,10 @@ def layout(diagram) -> List[Placement]:
         # A rate is written `q = 12 W`, not `12 W`. It is a quantity, and
         # every quantity on the page is stated with its own symbol; without
         # one it reads as a second, unexplained number under the resistance.
+        prime = {"area":"″", "length":"′"}.get(diagram.network_basis.get("kind"), "")
+        if M.QUANTITY.get(b.kind) == "R": base = (base or "R") + prime
         rate = diagram.rate_text(b.rate)
+        if rate and b.rate_convention == "signed": rate += f" ({b.source} → {b.target})"
         if b.kind == "stream":
             # A stream states two numbers and the page wants a third. The
             # derived line is written like any other quantity, `q = ...`,
@@ -427,7 +432,7 @@ def layout(diagram) -> List[Placement]:
                           name=S.S_(base, sub) if base else None,
                           value=diagram.value_text(b.kind, b.value),
                           extra=[x for x in (
-                              (S.S_(M.RATE), rate) if rate else None,
+                              (S.S_(M.RATE + prime), rate) if rate else None,
                               diagram.count_text(b.count, b.arrangement,
                                                  b.kind, b.value)) if x],
                           half=sym.half, half_len=sym.half_len,
@@ -488,7 +493,7 @@ def layout(diagram) -> List[Placement]:
         out.append(Placement(
             "symbol", at=centre, angle=s.angle, symbol=sym, ref=ref,
             label=Label(user=s.label,
-                        name=S.S_(M.SOURCE_SYMBOL[s.kind], s.sub),
+                        name=S.S_(M.SOURCE_SYMBOL[s.kind] + ({'area':'″','length':'′'}.get(diagram.network_basis.get('kind'),'') if s.kind!='flux' else ''), s.sub),
                         value=diagram.value_text(s.kind, s.value),
                         extra=[x for x in
                                (diagram.source_count_text(
@@ -551,7 +556,7 @@ def layout(diagram) -> List[Placement]:
         out.append(Placement(
             "node", at=at, angle=n.angle, ref=ref,
             label=Label(user=n.label,
-                        name=S.S_("T", n.sub) if names else None,
+                        name=S.S_("ΔT" if diagram.scale == "rise" else "T", n.sub) if names else None,
                         value=diagram.value_text(n.kind, n.value),
                         half=half, half_len=half_len,
                         side=side), **who))
@@ -578,8 +583,25 @@ def layout(diagram) -> List[Placement]:
         if p.label and p.role in ("node", "branch", "source") and p.index is not None:
             entries = getattr(diagram, {"node": "nodes", "branch": "branches", "source": "sources"}[p.role])
             p.label.offset = entries[p.index].label_offset
+            if entries[p.index].label_runs is not None:
+                from .core import RichText
+                p.label.user = RichText(entries[p.index].label_runs)
     from ._physical import placements as physical_placements
-    return physical_placements(diagram) + out
+    result = physical_placements(diagram) + out
+    captions = []
+    if diagram.network_basis.get("kind", "total") != "total":
+        b = diagram.network_basis
+        captions.append(f"Per {b['kind']} network; reference {b['value']} {b['unit']}")
+    if diagram.scale == "rise": captions.append("Temperature rise above " + (diagram.temperature_reference or "reference"))
+    for group in diagram.cases:
+        if group.get("label"):
+            ns = [diagram.node(n) for n in group["nodes"]]
+            result.append(Placement("annotation", at=(min(n.at[0] for n in ns), min(n.at[1] for n in ns)-90), role="annotation", label=Label(user=group["label"])))
+    if captions:
+        x = min([n.at[0] for n in diagram.nodes] or [0])
+        y = min([n.at[1] for n in diagram.nodes] or [0])-120
+        result.append(Placement("annotation", at=(x,y), role="annotation", label=Label(user="; ".join(captions))))
+    return result
 
 
 # ---------------------------------------------------------------- topology

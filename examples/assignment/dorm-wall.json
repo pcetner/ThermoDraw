@@ -1,0 +1,138 @@
+{
+  "title": "HW3 3.4 — separate wall cases",
+  "units": {
+    "T": "°C",
+    "R": "K*m²/W",
+    "q": "W/m²"
+  },
+  "nodes": [
+    {
+      "id": "n0",
+      "label": "Inside",
+      "kind": "fixed",
+      "value": 22
+    },
+    {
+      "id": "n1",
+      "label": "Surface 1"
+    },
+    {
+      "id": "n2",
+      "label": "Surface 2"
+    },
+    {
+      "id": "n3",
+      "label": "Outside",
+      "kind": "fixed",
+      "value": 0
+    },
+    {
+      "id": "n0b",
+      "label": "Inside",
+      "kind": "fixed",
+      "value": 22
+    },
+    {
+      "id": "n1b",
+      "label": "Surface 1"
+    },
+    {
+      "id": "n2b",
+      "label": "Surface 2"
+    },
+    {
+      "id": "n3b",
+      "label": "Outside",
+      "kind": "fixed",
+      "value": 0
+    }
+  ],
+  "branches": [
+    {
+      "id": "r0",
+      "from": "n0",
+      "to": "n1",
+      "kind": "conv",
+      "value": 0.2
+    },
+    {
+      "id": "r1",
+      "from": "n1",
+      "to": "n2",
+      "kind": "cond",
+      "value": 0.3
+    },
+    {
+      "id": "r2",
+      "from": "n2",
+      "to": "n3",
+      "kind": "conv",
+      "value": 0.03333333333333333
+    },
+    {
+      "id": "r0b",
+      "from": "n0b",
+      "to": "n1b",
+      "kind": "conv",
+      "value": 0.2
+    },
+    {
+      "id": "r1b",
+      "from": "n1b",
+      "to": "n2b",
+      "kind": "cond",
+      "value": 2.3
+    },
+    {
+      "id": "r2b",
+      "from": "n2b",
+      "to": "n3b",
+      "kind": "conv",
+      "value": 0.03333333333333333
+    }
+  ],
+  "analysis": {
+    "network": {
+      "steady": true,
+      "unknowns": [
+        "n1",
+        "n2",
+        "n1b",
+        "n2b"
+      ]
+    },
+    "check_policy": "analysis"
+  },
+  "network_basis": {
+    "kind": "area",
+    "value": 2,
+    "unit": "m²"
+  },
+  "cases": [
+    {
+      "id": "original",
+      "label": "Original wall",
+      "nodes": [
+        "n0",
+        "n1",
+        "n2",
+        "n3"
+      ]
+    },
+    {
+      "id": "retrofit",
+      "label": "Insulated wall",
+      "nodes": [
+        "n0b",
+        "n1b",
+        "n2b",
+        "n3b"
+      ]
+    }
+  ],
+  "layout_options": {
+    "max_width": 640,
+    "wrap": true,
+    "stack": true
+  }
+}

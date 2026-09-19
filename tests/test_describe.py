@@ -246,7 +246,7 @@ class TestWhatOnePointZeroAdded:
 
     def test_the_scale_is_said_when_declared(self):
         text = describe(self.mount(scale="rise")).text()
-        assert "\ntemperatures: rise above ambient, in K\n" in text
+        assert "\ntemperatures: rise above reference, in K\n" in text
         text = describe(self.mount(scale="absolute")).text()
         assert "\ntemperatures: absolute, in K\n" in text
 

@@ -52,6 +52,30 @@ def uid(prefix, *parts):
 CLASS_FACE = {"user": "semibold", "lbl": "italic"}
 
 
+class RichText(str):
+    runs: list
+    """Plain-text identity plus explicitly structured, escaped presentation."""
+    def __new__(cls, runs):
+        obj = super().__new__(cls, ''.join(r['text'] for r in runs))
+        obj.runs = runs
+        return obj
+
+    def __reduce__(self):
+        return RichText, (self.runs,)
+
+    def markup(self):
+        result = []
+        for run in self.runs:
+            position = run.get('position', 'normal')
+            content = escape(run['text'])
+            if position == 'normal': result.append(content)
+            else:
+                dy = '4' if position == 'subscript' else '-4'
+                back = '-4' if position == 'subscript' else '4'
+                result.append(f'<tspan data-label-run="true" dy="{dy}" font-size="0.7em">{content}</tspan><tspan dy="{back}"></tspan>')
+        return ''.join(result)
+
+
 def text_w(s, size, face="regular"):
     # Measured after unescaping, so an `&amp;` that `escape` produced is
     # measured as the one `&` glyph the renderer will draw. This replaced a
@@ -89,9 +113,13 @@ def measure(s, size, face="regular"):
     s = s.replace(DOT_ABOVE, "")
     if "<tspan" not in s:
         return text_w(s, size, face)
-    base, _, rest = s.partition("<tspan")
-    inner = rest.partition(">")[2].partition("</tspan>")[0]
-    return text_w(base, size, face) + text_w(inner, size * 0.7, face)
+    import re
+    width, end = 0.0, 0
+    for match in re.finditer(r'<tspan([^>]*)>(.*?)</tspan>', s, re.S):
+        width += text_w(s[end:match.start()], size, face)
+        width += text_w(match[2], size * (.7 if 'font-size=' in match[1] else 1), face)
+        end = match.end()
+    return width + text_w(s[end:], size, face)
 
 
 def dotted(base, subscript=None):
@@ -360,7 +388,13 @@ def _line_w(line):
 
 
 def _line_h(line):
-    return max(s for _, s, _ in line) * LINE_LEAD
+    return max(s for _, s, _ in line) * LINE_LEAD + _rich_padding(line)
+
+
+def _rich_padding(line):
+    # Structured runs can extend above and below the normal baseline. Reserve
+    # that geometry in the same block used by layout, export and collisions.
+    return 8 if any('data-label-run=' in t for t, _, _ in line) else 0
 
 
 def _stated(name, value, size, vsize):
@@ -404,7 +438,7 @@ def build_block(user=None, name=None, value=None, extra=(),
     # on the way in and wrapped it in the library's own <tspan>.
     lines = []
     if user:
-        lines.append([(escape(user), usize, "user")])
+        lines.append([(user.markup() if isinstance(user, RichText) else escape(user), usize, "user")])
     value = escape(value) if value else value
     if name and value:
         lines += _stated(name, value, size, vsize)
@@ -579,7 +613,7 @@ def annotate(cx, cy, a, out, user=None, name=None, value=None, extra=(),
     y = top
     for line in lines:
         lh = _line_h(line)
-        base = y + max(s for _, s, _ in line) * 0.80
+        base = y + max(s for _, s, _ in line) * 0.80 + _rich_padding(line)/2
         x = left + (bw - _line_w(line)) / 2
         for txt, sz, cls in line:
             face = CLASS_FACE.get(cls, "regular")

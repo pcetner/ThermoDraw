@@ -155,6 +155,9 @@ def solve(diagram):
     """
     if all(n.at is not None for n in diagram.nodes):
         return _with_rail(diagram)
+    if diagram.layout_options:
+        from ._compact import place
+        return place(diagram)
     order = _chain(diagram)
     first = _place(diagram, order, {})
     return _with_rail(_place(diagram, order, _room(first, order)))

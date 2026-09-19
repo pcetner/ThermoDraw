@@ -20,8 +20,10 @@ def validate(diagram):
     a = diagram.analysis
     def fail(message) -> NoReturn:
         raise DiagramError("analysis: " + message)
-    if not isinstance(a, dict) or set(a) - {"network", "volumes", "tolerance", "provenance"}:
+    if not isinstance(a, dict) or set(a) - {"network", "volumes", "tolerance", "provenance", "check_policy"}:
         fail("expected network, volumes, tolerance or provenance")
+    if a.get("check_policy", "legacy") not in ("legacy", "analysis"):
+        fail("check_policy must be legacy or analysis")
     net = a.get("network", {})
     if not isinstance(net, dict) or set(net) - {"steady", "unknowns", "resistance_unknowns"}:
         fail("network accepts steady, unknowns and resistance_unknowns")
@@ -42,6 +44,8 @@ def validate(diagram):
         index = resistance_index(diagram, target)
         if index is None or QUANTITY.get(diagram.branches[index].kind) != 'R':
             fail('resistance unknown must identify an existing resistance branch')
+        if diagram.branches[index].derivation:
+            fail("a derived resistance cannot also be selected as an unknown")
         indices.append(index)
     if len(set(indices)) != len(indices):
         fail('duplicate resistance unknown')
@@ -60,6 +64,8 @@ def validate(diagram):
         if role == "volume":
             if ident != vid or name not in ("generation", "storage"):
                 fail("volume target must be its generation or storage")
+            if name == "storage" and vs[vid].storage_relation is not None:
+                fail("storage_relation owns storage; remove the relation before selecting storage as unknown")
             if name == "storage" and vs[vid].steady:
                 fail("steady state already fixes storage at zero")
         elif role == "transfer":
@@ -121,6 +127,9 @@ class PhysicsResult:
             obj = next(x for x in entries if x.id == u["id"])
             setattr(obj, u["field"], u["value"])
         out.analysis["provenance"] = {"input_hash": self.input_hash, "calculated": copy.deepcopy(self.updates)}
+        from .derivations import evaluate
+        out, _, errors = evaluate(out)
+        if errors: raise DiagramError("Cannot apply unresolved derivations")
         return out.validate()
 
 
@@ -246,7 +255,7 @@ def _network(d, result, check_supplied=False):
                 r = _folded(d, b)
                 scale = R_SCALE.get(d.units.get("R", "K/W"))
                 if r is None or r <= 0 or scale is None or not math.isfinite(r*scale) or r*scale <= 0:
-                    missing.append(f"{ref}: positive resistance in supported units required")
+                    missing.append(f"{ref}: positive resistance in supported units required (got {d.units.get('R', 'K/W')!r}; declare network_basis for normalized units)")
                 else:
                     paths.append((a, c, r*scale, i))
             elif b.kind == "flow":
@@ -269,7 +278,7 @@ def _network(d, result, check_supplied=False):
             q = number(s.value)
             scale = P_SCALE.get(d.units.get("P" if s.kind == "diss" else "q", "W"))
             if q is None or scale is None:
-                missing.append(f"source:{i}: numeric power and supported unit required")
+                missing.append(f"source:{i}: numeric power and supported unit required; supplied {d.units.get('P' if s.kind=='diss' else 'q', 'W')!r}, expected W or dimensionally equivalent prefixed units; declare network_basis for normalized rates")
             else:
                 power[g] += q*scale*(s.count or 1)*(-1 if s.outward else 1)
         if missing or unsupported or report["status"] != "solved":
@@ -310,7 +319,9 @@ def _network(d, result, check_supplied=False):
                 # Supplied rate is a magnitude. Direction follows known temperatures;
                 # otherwise conservation must resolve it, without guessing a sign.
                 a, c = root(branch.source), root(branch.target)
-                if a in known and c in known:
+                if branch.rate_convention == "signed":
+                    rows.append(row); rhs.append(stated*qscale)
+                elif a in known and c in known:
                     rows.append(row)
                     rhs.append(stated*qscale*(-1 if known[a] < known[c] else 1))
                 elif stated == 0:
@@ -388,7 +399,8 @@ def _network(d, result, check_supplied=False):
                 report["diagnostics"].append(f"branch:{i}: supplied rate assertion must be numeric in supported units")
                 continue
             # The rate label is the whole group, as in the legacy checker.
-            calculated = abs(temps[root(b.source)]-temps[root(b.target)])/resistance
+            calculated = (temps[root(b.source)]-temps[root(b.target)])/resistance
+            if b.rate_convention != "signed": calculated = abs(calculated)
             tol = d.analysis.get("tolerance", {})
             if abs(stated*qscale-calculated) > max(tol.get("absolute_w", .001), tol.get("relative", .01)*max(abs(stated*qscale), abs(calculated))):
                 report["status"] = "inconsistent"
@@ -450,7 +462,21 @@ def solve_physics(diagram: Union["Diagram", "DiagramBuilder"], *, check_supplied
     from .builder import DiagramBuilder
     d = diagram.build() if isinstance(diagram, DiagramBuilder) else diagram
     d.validate()
+    original = d
     result = PhysicsResult("not-configured", fingerprint(d))
+    from ._extensions import total_network, network_scale
+    from .derivations import evaluate
+    d, derivation_reports, derivation_errors = evaluate(d)
+    if derivation_errors:
+        result.status = "not-solved"
+        result.coverage = {"diagnostics": derivation_errors, "derivations": derivation_reports, "network_configured": "network" in original.analysis}
+        return result
+    try:
+        d = total_network(d)
+    except (ValueError, KeyError, OverflowError) as exc:
+        result.status = "not-solved"
+        result.coverage = {"diagnostics": [str(exc)], "network_configured": "network" in original.analysis}
+        return result
     if "network" in d.analysis:
         _network(d, result, check_supplied=check_supplied)
     _volumes(d, result)
@@ -480,6 +506,11 @@ def solve_physics(diagram: Union["Diagram", "DiagramBuilder"], *, check_supplied
                 report["status"] = "numerically-unreliable"
                 report["diagnostics"].append("Values exceed reliable numerical range; rescale supplied units or magnitudes")
                 reports[i] = clean(report)
+    for c in result.components:
+        conflicts = [f"source:{i}: source-direction-conflict: negative magnitude reverses the drawn arrow; explicitly reverse direction and use a positive value" for i, source in enumerate(d.sources) if source.node in c["nodes"] and number(source.value) is not None and float(source.value) < 0]
+        if conflicts:
+            c["diagnostics"].extend(conflicts)
+            if c["status"] == "solved": c["status"] = "direction-conflict"
     successful_nodes = {n for c in result.components if c["status"] == "solved" for n in c["nodes"]}
     successful_targets = [v.get("target") for v in result.volumes if v["status"] == "solved"]
     result.updates = [u for u in result.updates if (u["entity"] == 'branch' and d.branches[u['index']].source in successful_nodes) or (u["entity"] == "node" and u["id"] in successful_nodes) or
@@ -487,4 +518,23 @@ def solve_physics(diagram: Union["Diagram", "DiagramBuilder"], *, check_supplied
     statuses = [r["status"] for r in result.components+result.volumes]
     if statuses:
         result.status = "solved" if all(s in ("solved", "balanced") for s in statuses) else "partial" if any(s in ("solved", "balanced") for s in statuses) else "not-solved"
+    result.coverage["derivations"] = derivation_reports
+    successful=sum(s in ('solved','balanced') for s in statuses)
+    result.coverage.update(checked_systems=successful,unchecked_systems=len(statuses)-successful,
+                           reasons=[message for r in result.components+result.volumes if r['status'] not in ('solved','balanced') for message in r['diagnostics']],
+                           assertion_tolerance={"relative":original.analysis.get('tolerance',{}).get('relative',.01),
+                                                "absolute_w":original.analysis.get('tolerance',{}).get('absolute_w',.001)},
+                           check_policy=original.analysis.get('check_policy','legacy'),
+                           network_basis=copy.deepcopy(original.network_basis) or {'kind':'total'})
+    if result.status == "not-configured": result.coverage["configuration_help"] = "Select unknowns or set analysis.network.steady=true for known-only checking; capacitances alone do not verify steady physics."
+    if original.network_basis:
+        result.coverage["network_basis"] = copy.deepcopy(original.network_basis)
+        for component in result.components:
+            for rate in component["branch_rates"]:
+                if rate.get("watts") is not None:
+                    rate.update(display_value=rate["watts"]/network_scale(original,"q"), display_unit=original.units.get("q","W"))
+        for update in result.updates:
+            if update["entity"] == "branch":
+                update["value"] /= network_scale(original,"R")
+                update["unit"] = original.units.get("R","K/W")
     return result

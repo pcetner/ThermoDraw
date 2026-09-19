@@ -1,0 +1,80 @@
+{
+  "title": "HW3 3.44 — per-length wire",
+  "units": {
+    "T": "°C",
+    "R": "m*K/W",
+    "q": "W/m",
+    "P": "W/m"
+  },
+  "nodes": [
+    {
+      "id": "n0",
+      "label": "Wire"
+    },
+    {
+      "id": "n1",
+      "label": "Inner sheath"
+    },
+    {
+      "id": "n2",
+      "label": "Outer sheath"
+    },
+    {
+      "id": "n3",
+      "label": "Air",
+      "kind": "fixed",
+      "value": 20
+    }
+  ],
+  "branches": [
+    {
+      "id": "r0",
+      "from": "n0",
+      "to": "n1",
+      "kind": "contact",
+      "value": 0.03183
+    },
+    {
+      "id": "r1",
+      "from": "n1",
+      "to": "n2",
+      "kind": "cond",
+      "value": 1.0373
+    },
+    {
+      "id": "r2",
+      "from": "n2",
+      "to": "n3",
+      "kind": "conv",
+      "value": 3.0315
+    }
+  ],
+  "analysis": {
+    "network": {
+      "steady": true,
+      "unknowns": [
+        "n0",
+        "n1",
+        "n2"
+      ]
+    },
+    "check_policy": "analysis"
+  },
+  "network_basis": {
+    "kind": "length",
+    "value": 300,
+    "unit": "cm"
+  },
+  "sources": [
+    {
+      "to": "n0",
+      "kind": "diss",
+      "value": 7.373
+    }
+  ],
+  "layout_options": {
+    "max_width": 640,
+    "wrap": true,
+    "stack": true
+  }
+}

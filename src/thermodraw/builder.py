@@ -35,12 +35,12 @@ class DiagramBuilder:
 
     # ------------------------------------------------------------- the parts
     def node(self, node_id: str, label: Optional[str] = None, value: Union[str, float, None] = None, at: Optional[Sequence[float]] = None, kind: str = "free",
-             sub: str = "", angle: float = 0.0, side: str = "auto", wall: str = "down", label_offset: Optional[Sequence[float]] = None) -> "DiagramBuilder":
+             sub: str = "", angle: float = 0.0, side: str = "auto", wall: str = "down", label_offset: Optional[Sequence[float]] = None, label_runs: Optional[List[Dict[str, str]]] = None) -> "DiagramBuilder":
         """`wall` turns a `fixed` or `break` node's wall: `down` (default),
         `up`, `left` or `right`."""
         self.diagram.nodes.append(M.Node(
             id=node_id, kind=kind, label=label, sub=sub, value=value,
-            at=at, angle=angle, side=side, wall=wall, label_offset=label_offset))
+            at=at, angle=angle, side=side, wall=wall, label_offset=label_offset, label_runs=label_runs))
         return self
 
     def branch(self, source: str, target: str, kind: str = "cond",
@@ -50,20 +50,20 @@ class DiagramBuilder:
                side: str = "auto", rate: Union[str, float, None] = None,
                count: Optional[int] = None, arrangement: Optional[str] = None,
                id: Optional[str] = None, label_offset: Optional[Sequence[float]] = None,
-               *, mdot: Union[str, float, None] = None, cp: Union[str, float, None] = None) -> "DiagramBuilder":
+               *, mdot: Union[str, float, None] = None, cp: Union[str, float, None] = None, rate_convention: Optional[str] = None, derivation: Optional[Dict[str, Any]] = None, label_runs: Optional[List[Dict[str, str]]] = None) -> "DiagramBuilder":
         """`sub` is only meaningful on a capacitance, where the subscript
         names a place. A resistance carries its own, naming the mechanism."""
         self.diagram.branches.append(M.Branch(
             source=source, target=target, kind=kind, label=label, sub=sub,
-            value=value, rate=rate, mdot=mdot, cp=cp, count=count, arrangement=arrangement,
-            via=list(via or []), at=at, angle=angle, side=side, id=id, label_offset=label_offset))
+            value=value, rate=rate, mdot=mdot, cp=cp, rate_convention=rate_convention, derivation=derivation, count=count, arrangement=arrangement,
+            via=list(via or []), at=at, angle=angle, side=side, id=id, label_offset=label_offset, label_runs=label_runs))
         return self
 
     def source(self, node: str, kind: str = "diss", label: Optional[str] = None,
                value: Union[str, float, None] = None, sub: str = "",
                at: Optional[Sequence[float]] = None, angle: float = 0.0,
                side: str = "auto", outward: bool = False, count: Optional[int] = None,
-               id: Optional[str] = None, label_offset: Optional[Sequence[float]] = None) -> "DiagramBuilder":
+               id: Optional[str] = None, label_offset: Optional[Sequence[float]] = None, label_runs: Optional[List[Dict[str, str]]] = None) -> "DiagramBuilder":
         """Heat crossing into `node`, or out of it with `outward=True`.
 
         `outward` is the `from` of the schema against its `to`. Only `flow`
@@ -72,7 +72,20 @@ class DiagramBuilder:
         end = {"source" if outward else "target": node}
         self.diagram.sources.append(M.Source(
             kind=kind, label=label, sub=sub, value=value,
-            at=at, angle=angle, side=side, count=count, id=id, label_offset=label_offset, **end))
+            at=at, angle=angle, side=side, count=count, id=id, label_offset=label_offset, label_runs=label_runs, **end))
+        return self
+
+    def basis(self, kind: str = "total", value: Union[str, float, None] = None, unit: Optional[str] = None) -> "DiagramBuilder":
+        self.diagram.network_basis = {"kind": kind}
+        if kind != "total": self.diagram.network_basis.update(value=value, unit=unit)
+        return self
+
+    def layout_config(self, **settings: Any) -> "DiagramBuilder":
+        self.diagram.layout_options = settings
+        return self
+
+    def case(self, id: str, nodes: List[str], label: Optional[str] = None) -> "DiagramBuilder":
+        self.diagram.cases.append({"id": id, "nodes": nodes, **({"label": label} if label else {})})
         return self
 
     def rail(self, reference: str, y: Optional[float] = None, span: Optional[Sequence[float]] = None) -> "DiagramBuilder":
@@ -131,9 +144,9 @@ class DiagramBuilder:
         return self.build().svg(mode, size=size, padding=padding,
                                 notation=notation)
 
-    def check(self, size: Optional[Sequence[float]] = None, padding: float = R.PADDING, physics: bool = False) -> "Report":
+    def check(self, size: Optional[Sequence[float]] = None, padding: float = R.PADDING, physics: bool = False, *, check_policy: Optional[str] = None) -> "Report":
         """What is wrong with this diagram, without rendering it to look."""
-        return self.build().check(size=size, padding=padding, physics=physics)
+        return self.build().check(size=size, padding=padding, physics=physics, check_policy=check_policy)
 
     def describe(self, size: Optional[Sequence[float]] = None, padding: float = R.PADDING) -> "Description":
         """What this diagram contains, without rendering it to look.

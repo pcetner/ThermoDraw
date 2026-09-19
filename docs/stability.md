@@ -29,6 +29,17 @@ finding codes, which a script may key on:
 `node-does-not-balance`, `rate-does-not-match`, `rad-needs-absolute-scale`,
 `link-temperatures-disagree`, `physics-not-checked`,
 `control-volume-not-checked` and `control-volume-does-not-balance`.
+Added in 1.1: `source-direction-conflict`, `unit-spelling-clarification`,
+`capacitance-unit-invalid`, `derivation-invalid`, `label-outside-region`,
+and `layout-width-exceeded`. Physics reports add a `physics` metadata object
+only when physics checking was requested.
+This object reports the effective policy, relative and absolute tolerances,
+network basis, checked/unchecked counts, status and reasons. Invocation policy
+overrides affect the report without changing the document. Solver `coverage`
+adds `assertion_tolerance`, `check_policy`, `network_basis`, `checked_systems`,
+`unchecked_systems`, `reasons` and evaluated `derivations`. Existing `watts`
+fields remain total watts; normalized results add `display_value` and
+`display_unit`.
 
 A code's severity may not rise within 1.x. A new code may be added, and a
 script that gates on `ok` will see it; a script that gates on a list of
@@ -40,6 +51,8 @@ codes will not.
 `edges` (each with `from`, `to`, `kind`, `count`, `arrangement`,
 `directed`), `sources`, `pieces`, `rail`, `scale` and `elements`. Keys may
 be added; none is removed.
+The optional 1.1 keys `network_basis`, `cases` and `temperature_reference`
+preserve the declared basis and reference meaning in descriptions.
 
 **`Placement`.** The fields `element`, `at`, `angle`, `symbol`, `points`,
 `label`, `radius`, `ref`, `wall`, `role`, `ends`, `via`, `count`,
@@ -49,6 +62,9 @@ a repeated group's label. Physical geometry adds `region`, `volume`, `surface`,
 `transfer` and `annotation`; phase nodes also have a `phase` placement.
 
 **The public names.**
+
+Additive 1.1 helpers: `derive_resistance`, `derive_capacity`, `derive_storage`,
+`convert_basis`.
 
 `assess_physics` assesses temporary scenarios and proposes complete-system application without changing its inputs.
 

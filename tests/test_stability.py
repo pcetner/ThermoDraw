@@ -29,6 +29,7 @@ ALL = [
     "Symbol", "SYMBOLS",
     "save", "theme",
     "symbols", "core", "model", "io",
+    "derive_resistance", "derive_capacity", "derive_storage", "convert_basis",
 ]
 
 
@@ -47,9 +48,9 @@ def test_the_public_names_are_the_ones_promised():
 
 
 def test_every_finding_code_is_promised_and_every_promised_code_exists():
-    pattern = r'"([a-z]+(?:-[a-z]+)+)", "(?:error|warning|note)"'
+    pattern = r'["\']([a-z]+(?:-[a-z]+)+)["\'],\s*["\'](?:error|warning|note)["\']'
     in_code = set()
-    for name in ("_check.py", "_physics.py", "_physical.py"):
+    for name in ("_check.py", "_physics.py", "_physical.py", "_extensions.py"):
         in_code |= set(re.findall(pattern, (SRC / name).read_text(
             encoding="utf-8")))
     promised = {c for c in backticked("**`check`'s report.**")

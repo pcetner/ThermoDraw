@@ -1374,3 +1374,7 @@ The old all-symbols-visible constraint is superseded by readable rows and search
 ## Optional Quick start
 
 The forced gesture-gated tour is replaced by four manually navigated pages. Quick start never creates a file or advances on edits. It is offered in Help and the empty state, not launched automatically. Readiness is explained by the actual Solve assessment, never inferred from completing drawing gestures.
+
+## Assignment findings and explicit derivations
+
+Version 1.1 preserves the 1.x meanings while adding explicit shared network bases, check policies, component layout and input-owned derivations. Legacy negative source arithmetic remains readable but now reports a direction conflict. The arrow correction is an explicit undoable edit. Geometry belongs to physical inputs, never drawing coordinates. Storage relations cover finite intervals only. See assignment-workflows.md for current contracts.
