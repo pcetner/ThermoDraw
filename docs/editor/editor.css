@@ -663,3 +663,11 @@ body.ed-keyboard-navigation #ed-canvas:focus-visible{outline:1px solid var(--acc
  body.ed-files-overlay #ed-files-panel,#ed-files-panel{top:calc(var(--ed-toolbar-height,45px) + 36px)}
  body[data-panel-view=Properties]:not(.ed-present) #ed-palette,body.ed-components-open[data-panel-view=Properties]:not(.ed-present) #ed-palette{top:auto}
 }
+
+.ed-assignment-dialog {box-sizing:border-box;width:min(620px,calc(100vw - 32px));max-height:85vh;overflow:auto;padding:24px;border:1px solid var(--ink-3);border-radius:12px;background:var(--panel);color:var(--ink);}
+.ed-assignment-dialog::backdrop {background:rgba(0,0,0,.35);}
+.ed-assignment-dialog details {margin:16px 0;padding:12px 0;border-top:1px solid var(--ink-3,#aaa);}
+.ed-assignment-dialog label {display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:10px 0;align-items:center;}
+.ed-assignment-dialog input,.ed-assignment-dialog select {min-width:0;max-width:100%;padding:7px;}
+.ed-assignment-dialog button {margin:5px;padding:8px;}
+.ed-assignment-dialog [role=alert] {color:#b43725;}

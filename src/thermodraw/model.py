@@ -377,6 +377,7 @@ class Node:
     side: str = "auto"
     wall: str = "down"      # `fixed` and `break` only
     label_offset: Optional[Sequence[float]] = None
+    label_runs: Optional[List[Dict[str, str]]] = None
 
 
 @dataclass
@@ -400,6 +401,8 @@ class Branch:
     sub: str = ""
     value: Union[str, float, None] = None
     rate: Union[str, float, None] = None
+    rate_convention: Optional[str] = None
+    derivation: Optional[Dict[str, Any]] = None
     # `stream` only, and both or neither: what it carries is their product
     # with the temperature rise across it, so one alone states nothing.
     mdot: Union[str, float, None] = None
@@ -412,6 +415,7 @@ class Branch:
     side: str = "auto"
     id: Optional[str] = None
     label_offset: Optional[Sequence[float]] = None
+    label_runs: Optional[List[Dict[str, str]]] = None
 
     @property
     def repeated(self):
@@ -451,6 +455,7 @@ class Source:
     source: Optional[str] = None            # `from`: heat leaving that node
     id: Optional[str] = None
     label_offset: Optional[Sequence[float]] = None
+    label_runs: Optional[List[Dict[str, str]]] = None
 
     @property
     def outward(self):
@@ -491,6 +496,10 @@ class Diagram:
     transfers: List[Transfer] = field(default_factory=list)
     annotations: List[Annotation] = field(default_factory=list)
     analysis: Dict[str, Any] = field(default_factory=dict)
+    network_basis: Dict[str, Any] = field(default_factory=dict)
+    layout_options: Dict[str, Any] = field(default_factory=dict)
+    cases: List[Dict[str, Any]] = field(default_factory=list)
+    temperature_reference: Optional[str] = None
     display: Dict[str, Any] = field(default_factory=dict, repr=False, init=False)
 
     def node(self, node_id):
@@ -880,7 +889,7 @@ class Diagram:
                     if not self.rail:
                         raise DiagramError(
                             f"branch {b.source}-{b.target} joins the rail, "
-                            "but the diagram has no rail")
+                            "but the diagram has no rail. Declare a rail reference explicitly; it is a modeling choice, not an inferred temperature. For finite-interval storage without a rail, use a control-volume storage relation.")
                 elif end not in seen:
                     raise DiagramError(
                         f"branch {b.source}-{b.target}: no node named {end!r}")
@@ -902,6 +911,8 @@ class Diagram:
         # `mdot` and `cp` are quantities a stream states without either
         # being its headline, so they are not values in `QUANTITY`.
         known = set(QUANTITY.values()) | {MDOT, CP}
+        from ._extensions import validate_extensions
+        validate_extensions(self)
         for quantity in self.units:
             if quantity not in known:
                 raise DiagramError(
@@ -980,6 +991,8 @@ class Diagram:
     def to_dict(self) -> Dict[str, Any]:
         """JSON-shaped, using from/to rather than the Python-safe names."""
         out: Dict[str, Any] = {}
+        for key in ("network_basis", "layout_options", "cases", "temperature_reference"):
+            if getattr(self, key): out[key] = copy.deepcopy(getattr(self, key))
         if self.analysis:
             out["analysis"] = copy.deepcopy(self.analysis)
         if self.title:
@@ -1010,7 +1023,7 @@ class Diagram:
         if not isinstance(data, dict):
             raise DiagramError(f"a diagram is an object, got {data!r}")
         extra = sorted(set(data) - {"title", "units", "size", "nodes",
-                                    "branches", "sources", "rail", "analysis"} - set(COLLECTIONS))
+                                    "branches", "sources", "rail", "analysis", "network_basis", "layout_options", "cases", "temperature_reference"} - set(COLLECTIONS))
         if extra:
             top = ["title", "units", "size", "nodes", "branches",
                    "sources", "rail"]
@@ -1061,11 +1074,11 @@ class Diagram:
                           {"to": "target", "from": "source"})
                    for i, s in enumerate(data.get("sources", []))]
         rail = _build(Rail, data["rail"], "rail") if data.get("rail") else None
+        physical: Dict[str, Any] = {key: [_build(kind, obj, f"{key} {i}") for i, obj in enumerate(data.get(key, []))] for key, kind in COLLECTIONS.items()}
         return cls(nodes=nodes, branches=branches, sources=sources, rail=rail,
                    units=units, scale=scale, analysis=copy.deepcopy(data.get("analysis", {})),
-                   **{key: [_build(kind, obj, f"{key} {i}")
-                            for i, obj in enumerate(data.get(key, []))]
-                      for key, kind in COLLECTIONS.items()},
+                   **{k: copy.deepcopy(data[k]) for k in ("network_basis", "layout_options", "cases", "temperature_reference") if k in data},
+                   **physical,
                    size=data.get("size"), title=data.get("title")).validate()
 
     def to_json(self, **kw: Any) -> str:
@@ -1108,13 +1121,13 @@ class Diagram:
         return theme.bake(out, mode) if mode else theme.with_variables(out)
 
     def check(self, size: Optional[Sequence[float]] = None, padding: Optional[float] = None, source: str = "diagram",
-              physics: bool = False) -> "Report":
+              physics: bool = False, check_policy: Optional[str] = None) -> "Report":
         """What is wrong with this diagram, without rendering it to look."""
         from ._check import check
         from ._render import PADDING
         return check(self.validate(), size=size or self.size,
                      padding=PADDING if padding is None else padding,
-                     source=source, physics=physics)
+                     source=source, physics=physics, check_policy=check_policy)
 
     def describe(self, size: Optional[Sequence[float]] = None, padding: Optional[float] = None, source: str = "diagram") -> "Description":
         """What this diagram contains, without rendering it to look."""
@@ -1179,21 +1192,21 @@ def _node_dict(n):
     if n.kind != "free":
         out["kind"] = n.kind
     return _keep(out, n, ("label", "sub", "value", "at", "angle", "side",
-                          "wall", "label_offset"))
+                          "wall", "label_offset", "label_runs"))
 
 
 def _branch_dict(b):
     out = {"from": b.source, "to": b.target, "kind": b.kind}
-    return _keep(out, b, ("label", "sub", "value", "rate", "mdot", "cp",
+    return _keep(out, b, ("label", "sub", "value", "rate", "rate_convention", "derivation", "mdot", "cp",
                           "count", "arrangement", "via", "at", "angle",
-                          "side", "id", "label_offset"))
+                          "side", "id", "label_offset", "label_runs"))
 
 
 def _source_dict(s):
     out = {"from": s.source} if s.outward else {"to": s.target}
     out["kind"] = s.kind
     return _keep(out, s, ("label", "sub", "value", "count", "at", "angle",
-                          "side", "id", "label_offset"))
+                          "side", "id", "label_offset", "label_runs"))
 
 
 def _rail_dict(r):

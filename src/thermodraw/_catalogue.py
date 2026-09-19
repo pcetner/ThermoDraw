@@ -27,6 +27,11 @@ INTERACTIONS = {
                  'Known is supplied; Unknown is requested; Override is temporary; Calculated is a proposal; Missing needs input.', 'Temporary solve values until explicitly applied'),
 }
 CONTROLS = {
+    'network_basis':'One shared total, area or length basis. Convert explicitly to preserve total heat rates; mK/W means millikelvin per watt.',
+    'derivation':'Physical dimensions and coefficients determine this value. Edit inputs in the inspector or in a temporary Solve scenario.',
+    'case':'Names an intentionally independent network. A break inside a case still needs attention.',
+    'layout_options':'Wrap unplaced chains at the measured width without reducing font sizes. Re-layout explicitly replaces coordinates and is undoable.',
+    'label_runs':'Literal text segments with normal, subscript or superscript positioning. Scientific symbols insert at the caret.',
     'count':'Number of identical components sharing one per-component value. Edit a draft, choose an arrangement, then Apply or Enter. Escape cancels.',
     'arrangement':'Series adds resistances and divides capacitance; parallel divides resistance and adds capacitance. Changes remain a draft until Apply.',
     'symbol-position':'Automatic places the symbol on its route. Manual retains its chosen position. Reset removes the position constraint while preserving authored route points.',

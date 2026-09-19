@@ -185,3 +185,7 @@ The Components panel scrolls independently to expose the full catalogue. Preview
 images use a larger 104-by-58-pixel area. Keyboard shortcuts closes with the X
 in its upper-right corner or Escape. Pointer actions do not add a focus border
 to the drawing; keyboard navigation retains a subtle focus indicator.
+
+## Assignment options in 1.1
+
+Open **Physics and document options** from Units or an object’s Properties to set network basis, check policy, compact layout, case grouping, structured labels, and physical derivations. See [assignment workflows](assignment-workflows.md) for the JSON/API contracts and limits. Each conversion or applied relation is one Undo step.

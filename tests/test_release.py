@@ -64,8 +64,8 @@ class TestTheReleaseNotesAreTheChangelogsSection:
         notes = self.tool().section(
             thermodraw.__version__,
             (ROOT / "CHANGELOG.md").read_text(encoding="utf-8"))
-        assert notes.startswith("The first release whose promises")
-        assert "### Added" in notes and "### Removed" in notes
+        assert notes.startswith("Assignment workflows now support")
+        assert "### Added" in notes and "### Compatibility" in notes
         assert "## [" not in notes, "ran into the next version's section"
 
     def test_a_version_with_no_section_is_refused_by_name(self, capsys):

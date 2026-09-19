@@ -1,0 +1,50 @@
+{
+  "title": "HW3 2.6 — source direction",
+  "units": {
+    "T": "°C",
+    "R": "K/W",
+    "q": "W"
+  },
+  "nodes": [
+    {
+      "id": "n0",
+      "label": "Boundary",
+      "kind": "fixed",
+      "value": 70
+    },
+    {
+      "id": "n1",
+      "label": "Wall"
+    }
+  ],
+  "branches": [
+    {
+      "id": "r0",
+      "from": "n0",
+      "to": "n1",
+      "kind": "cond",
+      "value": 0.007
+    }
+  ],
+  "analysis": {
+    "network": {
+      "steady": true,
+      "unknowns": [
+        "n1"
+      ]
+    },
+    "check_policy": "analysis"
+  },
+  "sources": [
+    {
+      "kind": "flow",
+      "from": "n1",
+      "value": -8000
+    }
+  ],
+  "layout_options": {
+    "max_width": 640,
+    "wrap": true,
+    "stack": true
+  }
+}

@@ -1,0 +1,118 @@
+{
+  "title": "HW3 3.60 — spherical insulation",
+  "units": {
+    "T": "°C",
+    "R": "K/W",
+    "q": "W"
+  },
+  "nodes": [
+    {
+      "id": "n0",
+      "label": "Air",
+      "kind": "fixed",
+      "value": 20
+    },
+    {
+      "id": "n1",
+      "label": "Outer surface"
+    },
+    {
+      "id": "n2",
+      "label": "Split radius"
+    },
+    {
+      "id": "n3",
+      "label": "LPG",
+      "kind": "fixed",
+      "value": -60
+    }
+  ],
+  "branches": [
+    {
+      "id": "r0",
+      "from": "n0",
+      "to": "n1",
+      "kind": "conv",
+      "value": null,
+      "derivation": {
+        "kind": "convection",
+        "inputs": {
+          "h": {
+            "value": 6,
+            "unit": "W/(m²*K)"
+          },
+          "A": {
+            "value": 63.61725123519331,
+            "unit": "m²"
+          }
+        },
+        "source": "Explicit regression input; no material-property validation implied."
+      }
+    },
+    {
+      "id": "r1",
+      "from": "n1",
+      "to": "n2",
+      "kind": "cond",
+      "value": null,
+      "derivation": {
+        "kind": "sphere",
+        "inputs": {
+          "r1": {
+            "value": 2.2,
+            "unit": "m"
+          },
+          "r2": {
+            "value": 2.25,
+            "unit": "m"
+          },
+          "k": {
+            "value": 0.06,
+            "unit": "W/(m*K)"
+          }
+        },
+        "source": "Explicit regression input; no material-property validation implied."
+      }
+    },
+    {
+      "id": "r2",
+      "from": "n2",
+      "to": "n3",
+      "kind": "cond",
+      "value": null,
+      "derivation": {
+        "kind": "sphere",
+        "inputs": {
+          "r1": {
+            "value": 2,
+            "unit": "m"
+          },
+          "r2": {
+            "value": 2.2,
+            "unit": "m"
+          },
+          "k": {
+            "value": 0.06,
+            "unit": "W/(m*K)"
+          }
+        },
+        "source": "Explicit regression input; no material-property validation implied."
+      }
+    }
+  ],
+  "analysis": {
+    "network": {
+      "steady": true,
+      "unknowns": [
+        "n1",
+        "n2"
+      ]
+    },
+    "check_policy": "analysis"
+  },
+  "layout_options": {
+    "max_width": 640,
+    "wrap": true,
+    "stack": true
+  }
+}

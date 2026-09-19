@@ -14,6 +14,8 @@ function remap(d, source, target) {
     for (const end of ['from', 'to']) if (x[end] === source) x[end] = target;
   }
   if (d.rail?.reference === source) d.rail.reference = target;
+  for(const g of d.cases||[])g.nodes=[...new Set(g.nodes.map(n=>n===source?target:n))];
+  if(d.layout_options?.starts)d.layout_options.starts=[...new Set(d.layout_options.starts.map(n=>n===source?target:n))];
   for (const key of physical) for (const x of d[key] || []) {
     if (x.links) x.links = [...new Set(x.links.map(r => r === `node:${source}` ? `node:${target}` : r))];
   }
@@ -39,6 +41,8 @@ export function mergeNodes(document, sourceId, targetId) {
   const d = copy(document), conflicts = [];
   const source = d.nodes.find(n => n.id === sourceId), target = d.nodes.find(n => n.id === targetId);
   if (!source || !target || source === target) return {document: d, conflicts: ['Choose two different nodes.'], mapping: {}};
+  const sourceCase=d.cases?.find(g=>g.nodes.includes(sourceId)),targetCase=d.cases?.find(g=>g.nodes.includes(targetId));
+  if(sourceCase && targetCase && sourceCase!==targetCase) return {document:d,conflicts:['Remove or change the separate case declarations before joining these nodes.'],mapping:{}};
   const parent=new Map(d.nodes.map(n=>[n.id,n.id]));
   const find=id=>{while(parent.has(id)&&parent.get(id)!==id)id=parent.get(id);return id;};
   for(const b of d.branches)if(b.kind==='link')parent.set(find(b.from),find(b.to));
@@ -100,6 +104,7 @@ export function detachEndpoint(document, role, index, end, position) {
   if (!x || !x[end]) return {document: d, conflicts: ['Endpoint no longer exists.']};
   const n = d.nodes.find(n => n.id === x[end]);
   const id = fresh(d);
+  const group=d.cases?.find(g=>g.nodes.includes(x[end]));if(group)group.nodes.push(id);
   d.nodes.push({id, at: position || [(n?.at?.[0] || 0) + 20, (n?.at?.[1] || 0) + 20]});
   x[end] = id;
   return {document: d, conflicts: [], mapping: {}, selection: {role, index}};
@@ -119,6 +124,8 @@ export function deleteNode(document, id) {
     }
   }
   d.nodes = d.nodes.filter(n => n.id !== id);
+  if(d.cases)d.cases=d.cases.map(g=>({...g,nodes:g.nodes.filter(n=>n!==id)})).filter(g=>g.nodes.length);
+  if(d.layout_options?.starts)d.layout_options.starts=d.layout_options.starts.filter(n=>n!==id);
   if (d.rail?.reference === id) delete d.rail;
   if (d.analysis?.network?.unknowns) d.analysis.network.unknowns = d.analysis.network.unknowns.filter(x => x !== id);
   for (const key of physical) for (const x of d[key] || []) if (x.links) x.links = x.links.filter(r => r !== `node:${id}`);
@@ -128,6 +135,7 @@ export function pruneEndpoints(document, candidates) {
   const d = copy(document);
   const referenced = id => [...d.branches, ...(d.sources || [])].some(x => x.from === id || x.to === id) ||
     d.rail?.reference === id || d.analysis?.network?.unknowns?.includes(id) ||
+    d.cases?.some(g=>g.nodes.includes(id)) || d.layout_options?.starts?.includes(id) ||
     physical.some(key => (d[key] || []).some(x => x.links?.includes(`node:${id}`)));
   d.nodes = d.nodes.filter(n => !candidates.includes(n.id) || !emptyFree(n) || referenced(n.id));
   return d;

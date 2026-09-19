@@ -103,6 +103,7 @@ class Report:
     findings: List[Finding] = field(default_factory=list)
     labels: int = 0
     source: str = "diagram"
+    physics: dict = field(default_factory=dict)
 
     @property
     def ok(self):
@@ -130,10 +131,11 @@ class Report:
         head = (f"{self.source}: {plural(self.labels, 'label')} placed, "
                 + ", ".join(plural(self.count(s), s)
                             for s in ("error", "warning", "note")))
-        return "\n".join([head] + [f.line(colour) for f in self.findings])
+        return "\n".join([head] + ([self.physics["summary"]] if self.physics else []) + [f.line(colour) for f in self.findings])
 
     def to_dict(self):
         return {
+            **({"physics": self.physics} if self.physics else {}),
             "source": self.source,
             "ok": self.ok,
             "labels": self.labels,
@@ -218,6 +220,12 @@ def _segment_rect_gap(a, b, centre, half):
 
 def _placement_gap(centre, half, p):
     """Clear distance from a label rectangle to one placement's geometry."""
+    if p.element in ('region','volume','surface','transfer','annotation'):
+        if p.points:
+            return min((_segment_rect_gap(tuple(a),tuple(b),centre,half) for a,b in zip(p.points,p.points[1:])),default=float('inf'))
+        if 'size' in p.geometry:
+            x,y=p.at;w,h=p.geometry['size']
+            return core.gap(centre,half,(x+w/2,y+h/2),(w/2,h/2),0)
     if p.element == "wire":
         pts = [tuple(q) for q in p.points]
         return min([_segment_rect_gap(pts[i], pts[i + 1], centre, half)
@@ -555,17 +563,25 @@ def _adrift(scene, placements, out):
         if rect.used - rect.solved <= ADRIFT:
             continue
         centre, half = _rect_of(rect)
+        physical=rect.owner is not None and rect.owner.element in ('region','volume','surface','transfer','annotation')
+        if physical and rect.owner.label and rect.owner.label.offset is not None:
+            continue  # Explicit external placement is intentional; collisions still count.
+        association=rect.owner.geometry.get('association') if physical else None
+        parent_ref=rect.owner.geometry.get('parent_ref') if physical else None
+        def related(p):
+            return p.ref==rect.ref or parent_ref is not None and p.ref==parent_ref or association is not None and p.geometry.get('association')==association
         # Everything not belonging to the label's own element, boundary walls
         # included: a node's own wall shares its ref and is skipped by that
         # alone, so a neighbour's wall can still be named as the culprit.
         others = [(_placement_gap(centre, half, p), p) for p in placements
-                  if p.ref != rect.ref]
+                  if not related(p)]
         others = [o for o in others if o[0] < float("inf")]
         if not others:
             continue
         near, culprit = min(others, key=lambda o: o[0])
         own = min([_placement_gap(centre, half, p) for p in placements
-                   if p.ref == rect.ref] or [float("inf")])
+                   if related(p)] or [float("inf")])
+        if physical and near>=own: continue
         closer = (" and now sits nearer that than the thing it names"
                   if near < own else "")
         wide = _too_wide(rect, half, culprit, placements)
@@ -712,7 +728,7 @@ def _crowded_run(scene, placements, out):
             at=tuple(p.at)))
 
 
-def _islands(placements, out):
+def _islands(placements, out, cases=()):
     """Whether the network is actually one network.
 
     A two-phase loop drawn with a `flow` annotation at each end looks joined
@@ -744,7 +760,9 @@ def _islands(placements, out):
     if len(groups) < 2:
         return
 
+    declared = [set(case["nodes"]) for case in cases]
     for group in groups[1:]:
+        if set(group) in declared: continue
         named = ", ".join(f"{v!r}" for v in group)
         out.append(Finding(
             "network-in-pieces", "warning", f"node '{group[0]}'",
@@ -1227,7 +1245,7 @@ def _placements(diagram):
 
 def check(diagram, size: Optional[Sequence[float]] = None,
           padding: float = PADDING, source: str = "diagram",
-          physics: bool = False, *, _scene=None, _placements_override=None) -> "Report":
+          physics: bool = False, *, check_policy: Optional[str] = None, _scene=None, _placements_override=None) -> "Report":
     """Everything wrong with this diagram, as a `Report`.
 
     Takes a `Diagram`, a `DiagramBuilder`, or a list of `Placement`. `size`
@@ -1244,15 +1262,21 @@ def check(diagram, size: Optional[Sequence[float]] = None,
         raise ValueError("physics=True needs a Diagram, not placements: the "
                          "numbers are on the diagram")
     model = diagram.build() if hasattr(diagram, "build") else diagram
+    if check_policy is not None:
+        import copy
+        if check_policy not in ("legacy", "analysis"): raise ValueError("check_policy must be legacy or analysis")
+        model = copy.deepcopy(model)
+        model.analysis["check_policy"] = check_policy
     placements = _placements(diagram) if _placements_override is None else _placements_override
     scene = compose(placements, size, padding) if _scene is None else _scene
+    all_placements=placements
     placements = [p for p in placements if p.role not in ("region", "volume", "surface", "transfer", "annotation")]
 
     findings: List[Finding] = []
     _collisions(scene, findings)
-    _adrift(scene, placements, findings)
+    _adrift(scene, all_placements, findings)
     _crowded_run(scene, placements, findings)
-    _islands(placements, findings)
+    _islands(placements, findings, getattr(model, "cases", ()))
     edges = wire_graph(placements)
     _corridor(scene, edges, cycles(edges), findings)
     _symbols_overlap(placements, findings)
@@ -1261,12 +1285,41 @@ def check(diagram, size: Optional[Sequence[float]] = None,
     _symbol_off_its_run(placements, findings)
     _run_off_axis(placements, findings)
     _frame(scene, padding, findings)
+    for rect in scene.rects:
+        owner = rect.owner
+        if owner is None or not owner.geometry.get('label_inside') or owner.element not in ('region','volume'): continue
+        centre, half = _rect_of(rect)
+        x,y = owner.at; w,h = owner.geometry['size']
+        if centre[0]-half[0] < x or centre[1]-half[1] < y or centre[0]+half[0] > x+w or centre[1]+half[1] > y+h:
+            findings.append(Finding("label-outside-region", "warning", owner.ref or 'region', 'The label does not satisfy its explicit inside constraint.', remedy='Enlarge the region, shorten the label or remove the inside constraint.'))
+    limit = getattr(model, 'layout_options', {}).get('max_width')
+    if limit and scene.box[2]-scene.box[0] > limit+1:
+        findings.append(Finding("layout-width-exceeded", "warning", 'diagram', f"Measured drawing exceeds requested width {limit:g}; fonts were not reduced.", remedy='Increase maximum width, shorten labels, or re-layout the component.'))
     _parallel_pairs(placements, scene, findings)
+    coverage: Dict[str, Any] = {}
     if physics:
+        from ._extensions import policy
+        relative, absolute = policy(model)
+        coverage.update(policy=model.analysis.get("check_policy", "legacy"), relative=relative, absolute_w=absolute)
         from ._physics import balance          # imports Finding from here
-        findings += balance(model)
+        findings += balance(model, coverage)
         from ._physical import findings as physical_findings
-        findings += physical_findings(model)
+        from .derivations import evaluate
+        physical_model, _, _ = evaluate(model)
+        volume_tolerance = model.analysis.get("tolerance") if model.analysis.get("check_policy") == "analysis" else None
+        findings += physical_findings(physical_model, tolerance=volume_tolerance)
+        from ._physical import budgets
+        volume_budgets = budgets(physical_model, tolerance=volume_tolerance)
+        coverage["checked_volumes"] = sum(b["status"] != "unchecked" for b in volume_budgets)
+        coverage["unchecked_volumes"] = sum(b["status"] == "unchecked" for b in volume_budgets)
+        coverage["volume_tolerance"] = volume_tolerance or {"relative": .01, "absolute_w": .001}
 
     findings.sort(key=lambda f: (ORDER[f.severity], f.code, f.where or ""))
-    return Report(findings=findings, labels=len(scene.rects), source=source)
+    if physics:
+        checked = sum(coverage.get(k,0) for k in ('checked_nodes','checked_rates','checked_volumes'))
+        unchecked = sum(coverage.get(k,0) for k in ('unchecked_nodes','unchecked_rates','unchecked_volumes'))
+        failed = any(f.severity in ('warning','error') and f.code in ('node-does-not-balance','rate-does-not-match','source-direction-conflict','derivation-invalid','capacitance-unit-invalid','control-volume-does-not-balance') for f in findings)
+        coverage['status'] = 'findings' if failed else 'nothing-checkable' if not checked else 'partially-checked' if unchecked else 'balanced-within-tolerance'
+        coverage['checked'], coverage['unchecked'] = checked, unchecked
+        coverage["summary"] = f"Physics: {coverage['status']}; {checked} checks performed, {unchecked} unchecked ({coverage.get('checked_nodes',0)} steady nodes, {coverage.get('checked_rates',0)} rate assertions, {coverage.get('checked_volumes',0)} volumes checked). Network policy {coverage['policy']}: relative {relative:.1%}, absolute {absolute:g} W."
+    return Report(findings=findings, labels=len(scene.rects), source=source, physics=coverage)

@@ -396,8 +396,16 @@ def compose(placements, size=None, padding=PADDING, label_adornments=None):
             for a, b in zip(corners, corners[1:]):
                 occupied.add_segment(a, b, owner=p)
         elif p.element in ("surface", "transfer", "annotation"):
+            import copy
+            obstacle = copy.copy(p)  # own shaft must not be exempt from label collision
             for a, b in zip(p.points, p.points[1:]):
-                occupied.add_segment(a, b, owner=p)
+                occupied.add_segment(a, b, owner=obstacle)
+            if p.geometry.get('arrow') and len(p.points) >= 2:
+                a, b = p.points[-2:]
+                angle = math.atan2(b[1]-a[1], b[0]-a[0])
+                for sign in (-1,1):
+                    end = (b[0]-10*math.cos(angle+sign*.45), b[1]-10*math.sin(angle+sign*.45))
+                    occupied.add_segment(b,end,owner=obstacle)
 
     for p in placements:
         lab = p.label

@@ -1,0 +1,101 @@
+{
+  "title": "HW3 2.16 — finite-interval storage",
+  "units": {
+    "T": "K",
+    "C": "J/K"
+  },
+  "nodes": [
+    {
+      "id": "mass",
+      "value": 300
+    }
+  ],
+  "rail": {
+    "reference": "mass"
+  },
+  "branches": [
+    {
+      "id": "capacity",
+      "from": "mass",
+      "to": "rail",
+      "kind": "cap",
+      "derivation": {
+        "kind": "capacity",
+        "inputs": {
+          "rho": {
+            "value": 1000,
+            "unit": "kg/m³"
+          },
+          "cp": {
+            "value": 4200,
+            "unit": "J/(kg*K)"
+          },
+          "V": {
+            "value": 1,
+            "unit": "m³"
+          }
+        },
+        "source": "Explicit regression input; no material-property validation implied."
+      }
+    }
+  ],
+  "control_volumes": [
+    {
+      "id": "block",
+      "at": [
+        150,
+        500
+      ],
+      "size": [
+        270,
+        160
+      ],
+      "generation": 0,
+      "storage_relation": {
+        "branch": "capacity",
+        "delta_t": {
+          "value": 1,
+          "unit": "K"
+        },
+        "duration": {
+          "value": 1,
+          "unit": "h"
+        }
+      }
+    }
+  ],
+  "control_surfaces": [
+    {
+      "id": "surface",
+      "volume": "block",
+      "show_label": false
+    }
+  ],
+  "transfers": [
+    {
+      "id": "heat",
+      "surface": "surface",
+      "direction": "in",
+      "label": "Heating",
+      "label_offset": [
+        80,
+        0
+      ]
+    }
+  ],
+  "analysis": {
+    "volumes": {
+      "block": {
+        "entity": "transfer",
+        "id": "heat",
+        "field": "rate"
+      }
+    },
+    "check_policy": "analysis"
+  },
+  "layout_options": {
+    "max_width": 640,
+    "wrap": true,
+    "stack": true
+  }
+}

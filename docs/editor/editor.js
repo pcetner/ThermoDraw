@@ -66,7 +66,108 @@ const BLANK = () => ({
   units: {R: "K/W", C: "J/K", T: "°C", P: "W", q: "W", "q″": "W/cm²",
           mdot: "kg/s", cp: "kJ/kg·K"},
   nodes: [], branches: [], sources: [],
+  analysis: {check_policy:"analysis", tolerance:{relative:0.01,absolute_w:0.001}},
+  layout_options: {max_width:640,wrap:true,stack:true},
 });
+
+// Additional document and physics controls use the same validated Python bridge.
+// Each committed edit is one Undo step; every asynchronous result is revision guarded.
+async function openAssignmentOptions(selection=null, scenarioMode=false) {
+  const session=scenarioMode?solveSession:null, sessionRevision=session?.revision;
+  const revision=S.revision, base=structuredClone(session?session.data:S.data), sel=selection?{...selection}:null;
+  const current=()=>S.revision===revision && (!session || session===solveSession && !session.stale && session.revision===sessionRevision);
+  const info=await rpc.call('assignment_info',base);
+  if(!current()) return;
+  if(info.error){toast(info.error);return;}
+  const object=sel?base[COLLECTION[sel.role]]?.[sel.index]:null;
+  const dialog=document.createElement('dialog');dialog.className='ed-assignment-dialog';
+  const field=(label,markup)=>`<label><span>${escapeHtml(label)}</span>${markup.replace(/<(input|select) /,`<$1 aria-label="${escapeHtml(label)}" `)}</label>`;
+  const input=(id,value='',type='text')=>`<input id="${id}" type="${type}" ${type==='number'?'step="any"':''} value="${escapeHtml(String(value??''))}">`;
+  const choice=(id,value,items)=>`<select id="${id}">${items.map(([v,label])=>`<option value="${v}" ${value===v?'selected':''}>${escapeHtml(label)}</option>`).join('')}</select>`;
+  const button=(op,label)=>`<button type="button" data-assignment="${op}">${label}</button>`;
+  const basis=base.network_basis||{kind:'total'}, opts=base.layout_options||{};
+  let h='<h2>Physics and document options</h2><p>Apply one change at a time. Undo restores the previous drawing.</p>';
+  h+='<details '+(!object?'open':'')+'><summary>Network basis and checking</summary>';
+  h+=field('Network basis',choice('hw-basis',basis.kind,[['total','Total heat rate'],['area','Per unit area'],['length','Per unit length']]))+field('Reference size',input('hw-reference',basis.value??1,'number'))+field('Reference unit',input('hw-reference-unit',basis.unit||'m²'));
+  h+=button('basis','Convert basis, preserving total heat rates');
+  h+='<p>All network branches share this reference. Separate volume balances remain total rates. mK/W means millikelvin per watt; use m·K/W for metre-kelvin per watt.</p>';
+  h+=field('Check policy',choice('hw-policy',base.analysis?.check_policy||'legacy',[['legacy','Legacy rounded annotations (15%)'],['analysis','Use analysis tolerance']]))+field('Relative tolerance (%)',input('hw-relative',100*(base.analysis?.tolerance?.relative??.01),'number'))+field('Absolute tolerance (W)',input('hw-absolute',base.analysis?.tolerance?.absolute_w??.001,'number'))+button('policy','Apply checking policy');
+  h+=field('Temperature reference description',input('hw-reference-label',base.temperature_reference||''))+field('Temperature meaning',choice('hw-scale',temperatureScale(base)||'',[['','Unspecified'],['absolute','Actual temperature'],['rise','Temperature rise']]))+button('reference','Apply temperature meaning')+'</details>';
+  const node=sel?.role==='node'?object.id:sel?.role==='branch'?object.from:sel?.role==='source'?(object.to||object.from):null;
+  const component=info.components.find(ids=>ids.includes(node))||[];
+  h+='<details><summary>Document layout and separate cases</summary>'+field('Maximum width (drawing units)',input('hw-width',opts.max_width??640,'number'))+field('Starting endpoint',choice('hw-start',opts.starts?.find(n=>component.includes(n))||'',[['','Use temperature heuristic'],...component.map(n=>[n,nodeName(n)])]));
+  h+=field('Wrap long chains',choice('hw-wrap',opts.wrap===false?'no':'yes',[['yes','Yes'],['no','No']]))+field('Stack separate components',choice('hw-stack',opts.stack===false?'no':'yes',[['yes','Yes'],['no','No']]));
+  h+=button('layout','Re-layout all components');if(component.length)h+=button('layout-selected','Re-layout this component');
+  h+='<p>Re-layout replaces the affected node positions and routes. Fonts retain their size. Width limits that cannot be met appear in Findings.</p>';
+  if(component.length){const existing=(base.cases||[]).find(g=>g.nodes.includes(node));h+=field('Case ID',input('hw-case-id',existing?.id||''))+field('Case heading',input('hw-case-label',existing?.label||''))+button('case','Declare this component as a separate case')+button('uncase','Remove case declaration');}
+  h+='</details>';
+  if(sel?.role==='source' && Number(object.value)<0) h+='<section><h3>Source direction conflict</h3><p>The negative magnitude reverses the drawn arrow. This correction makes the magnitude positive and reverses the arrow'+(!['flow','flux'].includes(object.kind)?' by converting this source to Flow':'')+'.</p>'+button('correct-source','Correct direction explicitly')+'</section>';
+  const resistance=sel?.role==='branch' && !['cap','flow','stream','break','link'].includes(object.kind||'cond');
+  if(resistance){h+='<details open><summary>Branch heat rate</summary>'+field('Rate convention',choice('hw-rate',object.rate_convention||'magnitude',[['magnitude','Magnitude'],['signed','Signed from start to end']]))+button('rate','Apply rate convention')+button('calculate-rate','Calculate heat rate')+'<p data-rate-result></p>'+button('apply-rate','Apply calculated heat rate to label')+'</details>';}
+  if(sel?.role==='branch' && (resistance||object.kind==='cap')) {
+    const kinds=object.kind==='cap'?['capacity']:['plane','cylinder','sphere','convection','contact'];
+    const labels={plane:'Plane conduction',cylinder:'Cylindrical conduction',sphere:'Spherical conduction',convection:'Convection',contact:'Contact resistance',capacity:'Heat capacity'};
+    h+='<details open><summary>Derive from physical inputs</summary>'+field('Relation',choice('hw-derivation',object.derivation?.kind||'manual',[['manual','Manual value'],...kinds.map(k=>[k,labels[k]])]))+'<div data-derivation-inputs></div>'+field('Source or assumptions',input('hw-source',object.derivation?.source||''))+button('derivation','Switch to selected relation')+'<p>Physical dimensions are independent of drawing size. Derived values are recalculated at full precision.</p></details>';
+  }
+  if(sel?.role==='volume') {
+    const relation=object.storage_relation||{};
+    const mode=relation.branch?'branch':relation.capacity_derivation?'materials':relation.capacity?'capacity':'manual';
+    h+='<details open><summary>Finite-interval energy storage</summary>'+field('Capacity source',choice('hw-storage-mode',mode,[['manual','Manual storage power'],['capacity','Known heat capacity'],['materials','Density, specific heat and volume'],['branch','Capacitance branch']]))+'<div data-storage-inputs></div>'+field('Temperature change (signed)',input('hw-delta',relation.delta_t?.value??1,'number'))+field('Temperature change unit',input('hw-delta-unit',relation.delta_t?.unit||'K'))+field('Duration',input('hw-duration',relation.duration?.value??1,'number'))+field('Duration unit',input('hw-duration-unit',relation.duration?.unit||'h'))+button('storage','Apply storage relation')+'<p>Calculates energy change and average storage power over this interval. It does not integrate a transient temperature history.</p></details>';
+  }
+  if(object){
+    h+='<details><summary>Label formatting</summary><div data-label-runs></div>'+button('add-run','Add text segment')+button('plain-label','Use plain label')+button('labels','Apply formatted label');
+    if(['region','volume','surface','transfer','annotation'].includes(sel.role))h+=field('Show label',choice('hw-show',object.show_label===false?'no':'yes',[['yes','Yes'],['no','No']]));
+    if(['region','volume'].includes(sel.role))h+=field('Keep label inside',choice('hw-inside',object.label_inside?'yes':'no',[['no','Allow outside'],['yes','Require inside']]))+'<p>Labels that cannot fit inside produce a finding.</p>';
+    h+='</details>';
+  }
+  if(info.derivations.length)h+='<details><summary>Evaluated relations</summary>'+info.derivations.map(r=>`<p>${escapeHtml(r.id||'Branch '+r.index)}: ${escapeHtml(r.formula)} = ${fmtPhysics(r.value)} ${escapeHtml(r.unit)}${r.energy_j==null?'':`<br>Energy change: ${fmtPhysics(r.energy_j)} J; C = ${fmtPhysics(r.capacity_j_per_k)} J/K`}</p><pre>${escapeHtml(JSON.stringify(r.inputs,null,2))}</pre>`).join('')+'</details>';
+  h+='<p data-assignment-error role="alert"></p><button type="button" data-assignment="close">Close</button>';
+  dialog.innerHTML=h;document.body.appendChild(dialog);
+  if(scenarioMode) {
+    dialog.querySelector('h2').textContent='Scenario derivation inputs';
+    dialog.querySelector('p').textContent='Changes stay in this calculation until Review and Apply.';
+    for(const section of dialog.querySelectorAll('details,section')) if(!section.querySelector('#hw-derivation,#hw-storage-mode') && section.querySelector('summary')?.textContent!=='Evaluated relations') section.remove();
+  }
+  const val=id=>dialog.querySelector('#'+id)?.value;
+  const numeric=id=>{const raw=val(id);if(raw==null||!raw.trim()||!Number.isFinite(Number(raw)))throw Error('Enter a finite number for '+id.replace('hw-',''));return Number(raw);};
+  const names={L:'Length / thickness',A:'Physical area',k:'Thermal conductivity',r1:'Inner radius',r2:'Outer radius',h:'Convection coefficient',contact_resistivity:'Contact resistivity',rho:'Density',cp:'Specific heat',V:'Physical volume'};
+  function quantityFields(prefix,kind,record={}) {return Object.entries(info.inputs[kind]||{}).map(([key,unit])=>field(names[key],input(prefix+key,record[key]?.value??'','number'))+field(names[key]+' unit',input(prefix+key+'-unit',record[key]?.unit||unit))).join('');}
+  function readQuantities(prefix,kind){return Object.fromEntries(Object.keys(info.inputs[kind]).map(key=>[key,{value:numeric(prefix+key),unit:val(prefix+key+'-unit')}]));}
+  const renderDerivation=()=>{const slot=dialog.querySelector('[data-derivation-inputs]');if(slot)slot.innerHTML=quantityFields('hw-d-',val('hw-derivation'),object.derivation?.inputs||{});};
+  const renderStorage=()=>{const slot=dialog.querySelector('[data-storage-inputs]');if(!slot)return;const r=object.storage_relation||{},mode=val('hw-storage-mode');slot.innerHTML=mode==='materials'?quantityFields('hw-c-','capacity',r.capacity_derivation?.inputs||{}):mode==='capacity'?field('Heat capacity',input('hw-capacity',r.capacity?.value??'','number'))+field('Capacity unit',input('hw-capacity-unit',r.capacity?.unit||'J/K')):mode==='branch'?field('Capacitance branch',choice('hw-cap-branch',r.branch||'',[['','Choose a branch with an ID'],...base.branches.filter(b=>b.kind==='cap'&&b.id).map(b=>[b.id,b.label||b.id])])):'';};
+  renderDerivation();renderStorage();
+  const runSlot=dialog.querySelector('[data-label-runs]');
+  function addRun(run={text:'',position:'normal'}){const row=document.createElement('div');row.className='ed-row';row.innerHTML=`<input data-run-text aria-label="Text segment" value="${escapeHtml(run.text)}"><select data-run-position aria-label="Text position">${['normal','subscript','superscript'].map(p=>`<option ${p===(run.position||'normal')?'selected':''}>${p}</option>`).join('')}</select><button type="button" data-remove-run aria-label="Remove text segment">Remove</button>`;runSlot.appendChild(row);}
+  if(runSlot)(object.label_runs||[{text:object.label||''}]).forEach(addRun);
+  dialog.addEventListener('change',e=>{if(e.target.id==='hw-derivation')renderDerivation();if(e.target.id==='hw-storage-mode')renderStorage();if(e.target.id==='hw-basis')dialog.querySelector('#hw-reference-unit').value=val('hw-basis')==='length'?'m':'m²';});
+  dialog.addEventListener('close',()=>dialog.remove(),{once:true});
+  dialog.addEventListener('click',async e=>{
+    if(e.target.closest('[data-remove-run]')){e.target.closest('.ed-row').remove();return;}
+    let op=e.target.closest('[data-assignment]')?.dataset.assignment;if(!op)return;
+    if(op==='close'){dialog.close();return;}if(op==='add-run'){addRun();return;}
+    const error=dialog.querySelector('[data-assignment-error]');error.textContent='';
+    try {
+      if(!current()||JSON.stringify(session?session.data:S.data)!==JSON.stringify(base))throw Error('The drawing changed. Close and reopen these options.');
+      let payload={};
+      if(op==='basis'){const kind=val('hw-basis');payload=kind==='total'?{kind}:{kind,value:numeric('hw-reference'),unit:val('hw-reference-unit')};}
+      if(op==='policy')payload={policy:val('hw-policy'),tolerance:{relative:numeric('hw-relative')/100,absolute_w:numeric('hw-absolute')}};
+      if(op==='reference')payload={scale:val('hw-scale'),reference:val('hw-reference-label')};
+      if(op==='layout'||op==='layout-selected'){const starts=(opts.starts||[]).filter(n=>!component.includes(n));if(val('hw-start'))starts.push(val('hw-start'));payload={settings:{max_width:numeric('hw-width'),wrap:val('hw-wrap')==='yes',stack:val('hw-stack')==='yes',starts},apply:true,node:op==='layout-selected'?node:null};op='layout';}
+      if(op==='case'||op==='uncase'){payload={id:op==='uncase'?'':val('hw-case-id'),label:val('hw-case-label'),nodes:component};if(op==='case'&&!payload.id.trim())throw Error('Enter a case ID.');op='case';}
+      if(['correct-source','calculate-rate','apply-rate'].includes(op))payload={index:sel.index};
+      if(op==='rate')payload={index:sel.index,signed:val('hw-rate')==='signed'};
+      if(op==='derivation'){const kind=val('hw-derivation');payload={index:sel.index,replace_unknown:true,derivation:kind==='manual'?null:{kind,inputs:readQuantities('hw-d-',kind),source:val('hw-source')}};}
+      if(op==='storage'){const mode=val('hw-storage-mode');let relation=null;if(mode!=='manual'){relation={delta_t:{value:numeric('hw-delta'),unit:val('hw-delta-unit')},duration:{value:numeric('hw-duration'),unit:val('hw-duration-unit')}};if(mode==='capacity')relation.capacity={value:numeric('hw-capacity'),unit:val('hw-capacity-unit')};if(mode==='materials')relation.capacity_derivation={kind:'capacity',inputs:readQuantities('hw-c-','capacity')};if(mode==='branch')relation.branch=val('hw-cap-branch');}payload={index:sel.index,relation};}
+      if(op==='labels'||op==='plain-label'){payload={role:sel.role,index:sel.index,runs:op==='plain-label'?null:[...runSlot.children].map(row=>({text:row.querySelector('[data-run-text]').value,position:row.querySelector('[data-run-position]').value})),show:val('hw-show')!=='no',inside:val('hw-inside')==='yes'};op='labels';}
+      const response=await rpc.call('assignment_edit',base,op,payload);
+      if(!current())throw Error('The drawing or scenario changed while calculating. Reopen these options.');
+      if(response.error)throw Error(response.error);
+      if(op==='calculate-rate'){dialog.querySelector('[data-rate-result]').textContent=`${response.value} ${response.unit}, positive from ${response.from} to ${response.to} (${response.watts} W total).`;return;}
+      if(session)sessionEdit(d=>replaceDocument(d,response.document));else edit(d=>replaceDocument(d,response.document));dialog.close();if(!session)closePopover();toast(session?'Scenario updated. Calculate, review and apply to save.':'Change applied. Undo restores the previous drawing.');
+    }catch(exc){error.textContent=exc.message;}
+  });
+  dialog.showModal();
+}
 
 let physicsReview = null;
 let solveSession=null, assessmentSequence=0;
@@ -198,7 +299,7 @@ function edit(fn) {
   const net=S.data.analysis?.network;
   const targets=(net?.resistance_unknowns||[]).map(t=>({target:t,obj:typeof t==='number'?S.data.branches[t]:S.data.branches.find(b=>b.id===t)}));
   fn(S.data);
-  if(net && net===S.data.analysis?.network && net.resistance_unknowns) net.resistance_unknowns=targets.filter(t=>S.data.branches.includes(t.obj)).map(t=>typeof t.target==='number'?S.data.branches.indexOf(t.obj):t.target);
+  if(net && net===S.data.analysis?.network && net.resistance_unknowns) net.resistance_unknowns=targets.filter(t=>S.data.branches.includes(t.obj)).map(t=>typeof t.target==='number'?S.data.branches.indexOf(t.obj):t.obj.id);
   afterEdit();
 }
 
@@ -280,6 +381,9 @@ function renameNode(oldId, newId) {
   for (const b of d.branches) { if (b.from === oldId) b.from = newId; if (b.to === oldId) b.to = newId; }
   for (const s of d.sources) { if (s.from === oldId) s.from = newId; if (s.to === oldId) s.to = newId; }
   if (d.rail && d.rail.reference === oldId) d.rail.reference = newId;
+  for(const g of d.cases||[])g.nodes=g.nodes.map(n=>n===oldId?newId:n);
+  if(d.layout_options?.starts)d.layout_options.starts=d.layout_options.starts.map(n=>n===oldId?newId:n);
+  if(d.analysis?.network?.unknowns)d.analysis.network.unknowns=d.analysis.network.unknowns.map(n=>n===oldId?newId:n);
   for(const role of ["region","volume","surface","transfer","annotation"]) for(const obj of list(role)) {
     if(obj.links) obj.links=obj.links.map(l=>l===`node:${oldId}`?`node:${newId}`:l);
   }
@@ -1182,6 +1286,7 @@ function openPhysicalPopover(sel) {
   h+='<details><summary>Descriptive associations</summary><p>Associations do not add balance terms.</p>';
   h+=relationshipPicker("Network objects","links",["node","branch","source"].flatMap(role=>list(role).map((o,index)=>({value:o.id?role+":"+o.id:role+":@"+index,label:o.label||o.id||role+" "+(index+1)}))),el.links||[])+ '</details>';
   h+=`<p class="ed-hint">Label position: ${el.label_offset?'Manual':'Automatic'}</p><div class="ed-row"><button data-act="auto-label">Auto position label</button><button data-act="delete" class="ed-danger">Delete</button></div>`;
+  h += `<button type="button" data-assignment-open>Physics and document options…</button>`;
   pop.innerHTML=h;pop.hidden=false;placePopover(sel);
 }
 
@@ -2232,6 +2337,7 @@ document.addEventListener("copy",e=>{
       else add("node",nodeById(id));
     }
     if(role==="volume") {
+      if(obj.storage_relation?.branch)add("branch",list("branch").find(b=>b.id===obj.storage_relation.branch));
       for(const id of obj.regions||[]) add("region",list("region").find(r=>r.id===id));
       for(const s of list("surface").filter(s=>s.volume===obj.id)) add("surface",s);
     }
@@ -2245,6 +2351,10 @@ document.addEventListener("copy",e=>{
   for(const sel of S.selection.length?S.selection:[S.sel]) add(sel.role,element(sel));
   const data=Object.fromEntries([...chosen].map(([role,objects])=>[COLLECTION[role],[...objects]]));
   data.units=S.data.units||{};
+  data.network_basis=S.data.network_basis||{};
+  const copiedNodes=new Set(data.nodes.map(n=>n.id));
+  data.cases=(S.data.cases||[]).filter(g=>g.nodes.every(n=>copiedNodes.has(n)));
+  data.layout_options={starts:(S.data.layout_options?.starts||[]).filter(n=>copiedNodes.has(n))};
   if(data.branches.some(b=>b.from==="rail" || b.to==="rail")) data.rail=S.data.rail;
   const payload={type:"thermodraw-selection",origin:S.file.id,data};
   e.clipboardData.setData("text/plain",JSON.stringify(payload));e.preventDefault();
@@ -2262,6 +2372,7 @@ document.addEventListener("paste",async e=>{
   try {
     const data=structuredClone(payload.data),candidate=JSON.parse(snapshot());
     const generation=S.generation,revision=S.revision;
+    if(JSON.stringify(data.network_basis||{})!==JSON.stringify(candidate.network_basis||{}))throw Error('Match the network basis and reference size before pasting');
     const count=raw===pastedText?pasteCount+1:1,shift=20*count;
     const ids=new Map(),physical=new Set(["region","volume","surface","transfer","annotation"]);
     const allPhysical=new Set([...physical].flatMap(role=>list(role).map(o=>o.id)));
@@ -2285,12 +2396,18 @@ document.addEventListener("paste",async e=>{
       if(obj.regions) obj.regions=obj.regions.map(id=>physicalId("region",id));
       if(obj.volume) obj.volume=physicalId("volume",obj.volume);
       if(obj.surface) obj.surface=physicalId("surface",obj.surface);
+      if(obj.storage_relation?.branch)obj.storage_relation.branch=physicalId("branch",obj.storage_relation.branch);
       if(obj.links) obj.links=obj.links.flatMap(link=>{
         const split=link.indexOf(":"),role=link.slice(0,split);
         return ids.has(link)?[`${role}:${ids.get(link)}`]:payload.origin===S.file.id && list(role).some(o=>`${role}:${o.id}`===link)?[link]:[];
       });
       candidate[key] ||= [];selection.push({role,index:candidate[key].length});candidate[key].push(obj);
     }
+    for(const group of data.cases||[]) {
+      const used=new Set((candidate.cases||[]).map(g=>g.id));let id=group.id,i=1;while(used.has(id))id=group.id+'_copy'+i++;
+      (candidate.cases||=[]).push({...group,id,nodes:group.nodes.map(n=>physicalId('node',n))});
+    }
+    if(data.layout_options?.starts?.length){candidate.layout_options||={};(candidate.layout_options.starts||=[]).push(...data.layout_options.starts.map(n=>physicalId('node',n)));}
     candidate.units ||= {};
     for(const [key,value] of Object.entries(data.units||{})) {
       if(candidate.units[key]!=null && JSON.stringify(candidate.units[key])!==JSON.stringify(value)) throw new Error(`Different ${key} units; match the diagram units before pasting`);
@@ -2394,9 +2511,12 @@ $("ed-component-tools").addEventListener('click',e=>{
 menu.addEventListener("click",e=>{if(e.target.dataset.sketch) armSketch(e.target.dataset.sketch);});
 // Escape closes the component drawer before changing canvas state.
 document.addEventListener('keydown',e=>{
-  if(e.key==='Escape' && document.body.classList.contains('ed-components-open') && window.matchMedia('(max-width: 820px)').matches) {showComponents(false);e.preventDefault();e.stopImmediatePropagation();$("ed-sketch").focus();}
+  if(e.key==='Escape' && !solveOpen && !e.target.closest('dialog') && document.body.classList.contains('ed-components-open') && window.matchMedia('(max-width: 820px)').matches) {showComponents(false);e.preventDefault();e.stopImmediatePropagation();$("ed-sketch").focus();}
 },true);
-window.matchMedia('(max-width: 820px)').addEventListener('change',e=>showComponents(!e.matches));
+window.matchMedia('(max-width: 820px)').addEventListener('change',e=>{
+  if(panelView==='Properties'&&S.sel || panelView==='Solve'&&solveOpen)setPanelView(panelView,true);
+  else showComponents(!e.matches);
+});
 if(!window.matchMedia('(max-width: 820px)').matches) document.body.classList.add('ed-components-open');
 else $("ed-sketch").setAttribute('aria-expanded','false');
 function relationshipPicker(label,key,choices,selected) {
@@ -2412,7 +2532,7 @@ pop.addEventListener("change",e=>{
   const raw=e.target.type==="checkbox"?e.target.checked:e.target.value;
   const bounded={width:[10,Infinity],height:[10,Infinity],start:[0,1],end:[0,1],length:[1,Infinity]};
   let error='';if(bounded[f] && (raw==='' || !Number.isFinite(Number(raw)) || Number(raw)<bounded[f][0] || Number(raw)>bounded[f][1])) error='Enter a number between '+bounded[f][0]+' and '+bounded[f][1]+'.';
-  const current=element(S.sel);if(f==='start' && Number(raw)>=current.end || f==='end' && Number(raw)<=current.start) error='Start must be before end.';
+  const current=element(S.sel);if(current.storage_relation && (f==='storage'||f==='steady'&&raw))error='Switch to Manual storage power before changing this input.';if(f==='start' && Number(raw)>=current.end || f==='end' && Number(raw)<=current.start) error='Start must be before end.';
   pop.querySelector('[data-property-error]')?.remove();e.target.removeAttribute('aria-invalid');
   if(error) {e.target.setAttribute('aria-invalid','true');const note=document.createElement('p');note.dataset.propertyError='';note.className='ed-danger';note.textContent=error;e.target.after(note);return;}
   edit(()=>{
@@ -2563,6 +2683,7 @@ function openPopover(sel, fresh = false) {
     h += `<div class="ed-row"><button type="button" data-act="delete" class="ed-danger">Delete</button></div>`;
   }
   h += `<p class="ed-hint">Label position: ${el.label_offset?'Manual':'Automatic'}</p><div class="ed-row"><button type="button" data-act="auto-label">Auto position label</button></div>`;
+  h += `<button type="button" data-assignment-open>Physics and document options…</button>`;
   pop.innerHTML = h;
   const advanced=document.createElement('details');advanced.innerHTML='<summary>Advanced metadata</summary>';
   for(const input of pop.querySelectorAll('input[data-field="id"]'))advanced.appendChild(input.closest('label'));
@@ -2810,6 +2931,9 @@ pop.addEventListener("click", (e) => {
 // A field edit while typing coalesces into one undo step per field.
 let typing = null;
 function applyField(sel, f, raw, live = false) {
+  if(sel.role==='source' && f==='value' && Number.isFinite(Number(raw)) && Number(raw)<0 && !(Number(element(sel)?.value)<0)) {toast('Use a positive magnitude and choose the source direction.');return;}
+  if(sel.role==='branch' && f==='value' && element(sel)?.derivation) {toast('Edit the physical inputs or switch the derivation to Manual value.');return;}
+  if(sel.role==='volume' && f==='storage' && element(sel)?.storage_relation) {toast('Edit the storage relation or switch to Manual storage power.');return;}
   if(f==='symbol-position') {
     const hit=symbolHit(sel);
     edit(()=>{const el=element(sel);if(raw==='automatic')delete el.at;else if(hit)el.at=[...hit.at];});
@@ -2827,6 +2951,7 @@ function applyField(sel, f, raw, live = false) {
       if(sel.role!=="node") {
         if(!value || list(sel.role).some(x=>x!==e && x.id===value)) return;
         const old=e.id;e.id=value;
+        if(sel.role==='branch')for(const v of d.control_volumes||[])if(v.storage_relation?.branch===old)v.storage_relation.branch=value;
         if(old) for(const role of ["region","volume","surface","transfer","annotation"]) for(const obj of list(role)) {
           obj.links=(obj.links||[]).map(l=>l===`${sel.role}:${old}`?`${sel.role}:${value}`:l);
         }
@@ -2954,6 +3079,7 @@ $("ed-settings").addEventListener("click", () => {
   h += field("Temperature",selectBox('unit:T',T.unit,['°C','°F','K']));
   h += `<details><summary>Advanced temperature settings</summary>`+field("Temperature meaning", selectBox("scale", T.scale || "", ["", "absolute", "rise"], {"": "Unspecified (legacy)",absolute:'Actual temperature',rise:'Temperature difference'}))+`<p>Actual temperature: 32 °F = 273.15 K. A difference of 18 °F = 10 K. Unspecified retains the file’s original meaning.</p></details>`;
   h += `<p data-unit-error role="alert"></p>`;
+  h += `<button type="button" data-assignment-open>Physics and document options…</button>`;
   pop.innerHTML = h;
   pop.hidden = false;
   underButton(pop, $("ed-settings"));
@@ -3652,6 +3778,9 @@ window.addEventListener("resize", () => { if (S.sel && !pop.hidden) placePopover
 // Explicit physics analysis uses the same inspector and document transactions.
 
 function reconcileAnalysis() {
+  const ids=new Set(S.data.nodes.map(n=>n.id));
+  if(S.data.cases)S.data.cases=S.data.cases.map(g=>({...g,nodes:g.nodes.filter(n=>ids.has(n))})).filter(g=>g.nodes.length);
+  if(S.data.layout_options?.starts)S.data.layout_options.starts=S.data.layout_options.starts.filter(n=>ids.has(n));
   const a=S.data?.analysis;if(!a) return;
   if(a.network) a.network.unknowns=(a.network.unknowns||[]).filter(id=>S.data.nodes.some(n=>n.id===id && (!n.kind || n.kind==="free")));
   for(const [id,t] of Object.entries(a.volumes||{})) {
@@ -3693,6 +3822,8 @@ function positionSolveFloat(el,row=null) {
 function physicsUnits(r) {
   const q=r.quantity||r.field;
   const units={T:['K','°C','°F','C','F'],R:['K/W','K/kW'],P:['W','kW','mW'],q:['W','kW','mW'],rate:['W','kW','mW'],generation:['W','kW','mW'],storage:['W','kW','mW'],area:['m²','cm²','mm²'],flux:['W/m²','kW/m²','W/cm²'],'q″':['W/m²','kW/m²','W/cm²'],C:['J/K','kJ/K'],mdot:['kg/s','g/s'],cp:['J/kg·K','kJ/kg·K']};
+  const kind=solveSession?.data.network_basis?.kind;
+  if(['R','q','P'].includes(q)&&['area','length'].includes(kind)&&['branch','source'].includes(r.role)){const ref=kind==='area'?'m²':'m';return [...new Set([r.unit,...(q==='R'?[`K*${ref}/W`,`K*${ref}/kW`]:[`W/${ref}`,`kW/${ref}`])])];}
   return [...new Set([r.unit,...(units[q]||[])])];
 }
 function renderValueFloat() {
@@ -3703,14 +3834,15 @@ function renderValueFloat() {
   let h=`<div class="ed-panel-head"><h3>${escapeHtml(r.label)}</h3><button data-value-close aria-label="Close value editor">×</button></div>`;
   if(siblings.length>1) h+=`<label>Quantity <select data-value-quantity>${siblings.map(v=>`<option value="${v.key}" ${v.key===r.key?'selected':''}>${escapeHtml(v.field)}</option>`).join('')}</select></label>`;
   h+='<div class="ed-value-modes" role="group" aria-label="Use as">';
-  for(const [key,label] of [['known','Known'],['unknown','Unknown'],['override','Override']]) h+=`<button data-physics-mode="${key}" aria-pressed="${mode===key}" ${key==='unknown'&&reason||key==='override'&&r.locked?'disabled':''}>${label}</button>`;
+  for(const [key,label] of [['known','Known'],['unknown','Unknown'],['override','Override']]) h+=`<button data-physics-mode="${key}" aria-pressed="${mode===key}" ${key==='unknown'&&reason||key==='override'&&(r.locked||r.derived)?'disabled':''}>${label}</button>`;
   h+='</div>';
   if(reason) h+=`<p class="ed-value-restriction">${escapeHtml(reason)}</p>`;
   if(solveSession.notice) h+=`<p class="ed-physics-error" role="alert">${escapeHtml(solveSession.notice)}</p>`;
-  if(!r.unknown) h+=`<label>Value <input data-physics-number aria-invalid="${!numericPhysics(r.value)}" value="${escapeHtml(r.value??'')}" ${r.locked?'disabled':''} placeholder="Enter a number"></label>`;
-  h+=`<label>Unit <select data-physics-unit ${r.locked||r.unknown?'disabled':''}>${physicsUnits(r).map(u=>`<option ${u===r.unit?'selected':''}>${escapeHtml(u)}</option>`).join('')}</select></label>`;
+  if(!r.unknown) h+=`<label>Value <input data-physics-number aria-invalid="${!numericPhysics(r.value)}" value="${escapeHtml(r.value??'')}" ${r.locked||r.derived?'disabled':''} placeholder="Enter a number"></label>`;
+  h+=`<label>Unit <select data-physics-unit ${r.locked||r.derived||r.unknown?'disabled':''}>${physicsUnits(r).map(u=>`<option ${u===r.unit?'selected':''}>${escapeHtml(u)}</option>`).join('')}</select></label>`;
   if(!r.unknown&&!numericPhysics(r.value)) h+='<p class="ed-physics-error">Enter a numeric value to use this input.</p>';
   if(r.overridden) h+=`<p>Saved: ${escapeHtml(fmtPhysics(r.original))} ${escapeHtml(r.unit)}</p>`;
+  if(['branch','volume'].includes(r.role)) h+='<button data-scenario-derivation>Edit derivation inputs</button>';
   if(r.overridden||r.unknown) h+='<button data-session-reset-field>Restore saved value</button>';
   if(r.calculated) {h+=`<p class="ed-solve-success">✓ Calculated: ${fmtPhysics(r.calculated.value)} ${escapeHtml(r.unit)}</p>`;if(numericPhysics(r.original)) h+=`<p>Saved: ${fmtPhysics(r.original)} · Difference: ${fmtPhysics(r.calculated.value-Number(r.original))} ${escapeHtml(r.unit)}</p>`;}
   const changed=valueFloat.dataset.key!==r.key||valueFloat.hidden;
@@ -3820,11 +3952,12 @@ function physicalValues() {
     const unknown=role==='branch'?field==='value'&&(a.network?.resistance_unknowns||[]).includes(id||index):role==='node'?(a.network?.unknowns||[]).includes(id):target?.id===id && target?.field===field;
     const entity=role==='branch'?'branch':role==='node'?'node':role==='volume'?'volume':'transfer';
     const calculated=(physicsReview?.result.updates||[]).find(u=>u.entity===entity && (role==='branch'?u.index===index:u.id===id) && u.field===field);
+    const derived=role==='branch'&&field==='value'&&!!obj.derivation || role==='volume'&&field==='storage'&&!!obj.storage_relation;
     const value=locked?0:obj[field];
     const original=solveSession?.base[COLLECTION[role]]?.[index]?.[field];
     const overridden=numericPhysics(value)&&numericPhysics(original)?Math.abs(Number(value)-Number(original))>Number.EPSILON*8*Math.max(1,Math.abs(Number(original))):String(value??'')!==String(original??'');
     const numeric=value!=null && String(value).trim()!=='' && Number.isFinite(Number(value));
-    rows.push({key:`${role}:${index}:${field}`,role,index,field,label,unit,quantity,eligible,reason,volume,locked,id,value,
+    rows.push({key:`${role}:${index}:${field}`,role,index,field,label,unit,quantity,eligible,reason,volume,locked,derived,id,value,
       state:calculated?'Calculated':unknown?'Unknown':!numeric?'Missing':overridden?'Override':'Known',unknown,calculated,original,overridden});
   };
   const unit=q=>typeof d.units?.[q]==='object'?d.units[q].unit:d.units?.[q]||'';
@@ -3844,7 +3977,7 @@ function physicalValues() {
     if(b.kind==='stream') {for(const f of ['mdot','cp']) add('branch',i,f,`${name} · ${f}`,unit(f),f,false,'Stream solving is not supported. These are drawing inputs.');return;}
     const q=b.kind==='cap'?'C':b.kind==='flow'?'q':'R';
     add('branch',i,'value',`${name} · ${q}`,unit(q),q,q==='R',q==='R'?'Select Unknown to calculate this resistance from temperatures and independent heat rates.':q==='C'?'Capacitance has zero storage rate only under the steady-state assumption.':'Supply this value; this milestone solves temperatures, not network resistances or powers.');
-    if(b.rate!=null) add('branch',i,'rate',`${name} · supplied rate`,unit('q'),'q',false,'This is a supplied per-item rate assertion.');
+    if(b.rate!=null) add('branch',i,'rate',`${name} · supplied rate`,unit('q'),'q',false,'This is a supplied rate assertion for the whole branch or repeated group.');
   });
   d.sources.forEach((s,i)=>{const q=s.kind==='diss'?'P':s.kind==='flux'?'q″':'q';add('source',i,'value',`${s.label||s.id||s.to||s.from} · ${q}`,unit(q),q,false,s.kind==='flux'?'Network flux has no physical area; use a control-surface transfer for flux analysis.':'Supply network power; it cannot be selected as an unknown.');});
   (d.control_volumes||[]).forEach((v,i)=>{add('volume',i,'generation',`${v.label||v.id} · generation`,v.unit||'W',null,true,'',v.id);add('volume',i,'storage',`${v.label||v.id} · storage`,v.unit||'W',null,!v.steady,v.steady?'Steady state fixes storage at zero.':'Storage is signed: positive means accumulation.',v.id,!!v.steady);});
@@ -3885,6 +4018,7 @@ function choosePhysics(key) {
   solveValue=key;solveSession.valueEditorOpen=true;valueNavigator.hidden=true;analysisPanel();
 }
 function unknownReason(r) {
+  if(r.derived) return 'This value is owned by a derivation. Switch to Manual value in derivation inputs before selecting Unknown.';
   if(!r.eligible) return r.reason||'This value must be supplied.';
   const other=solveSession.data.analysis?.volumes?.[r.volume];
   if(other && !(other.id===r.id && other.field===r.field)) return 'Only one unknown can be solved per control volume. Another value is unknown; make it known before choosing this one.';
@@ -4052,6 +4186,8 @@ function analysisPanel(preserveValueFocus=false) {
   if(result) {
     h+=`<h3>${solveSession.operation==='check'?(result.status==='solved'?'Supplied values balance':assessment?.systems.some(s=>!['solved','balanced','inconsistent','unbalanced'].includes(s.status))?'Cannot check these values':'Supplied values do not balance'):result.status==='solved'?(result.updates.length?'Ready to apply':'Checks passed'):result.status==='not-configured'?'Choose values to solve':escapeHtml(result.status.replaceAll('-',' '))}</h3>`;
     for(const u of result.updates) {const row=rows.find(r=>(u.entity==='branch'?r.role==='branch'&&r.index===u.index:r.id===u.id) && r.field===u.field),comparison=physicsReview.comparisons?.find(c=>c.entity===u.entity&&(u.entity==='branch'?c.index===u.index:c.id===u.id)&&c.field===u.field);h+=`<p class="ed-answer">${escapeHtml(row?.label||u.id)}<br>Drawing: ${escapeHtml(fmtPhysics(comparison?.original))}<br><strong>Calculated: ${fmtPhysics(u.value)} ${escapeHtml(u.unit)}</strong>${comparison?.difference==null?'':`<br>Difference: ${fmtPhysics(comparison.difference)} ${escapeHtml(u.unit)}`}</p>`;}
+    if(result.coverage?.diagnostics) h+=`<p class="ed-solve-message">${escapeHtml(result.coverage.diagnostics.map(x=>typeof x==='string'?x:x.message).join('; '))}</p>`;
+    h+=`<p>Assertion tolerance: ${100*(working.analysis?.tolerance?.relative??.01)}%; absolute ${working.analysis?.tolerance?.absolute_w??.001} W. Numerical solver residual checks are separate.</p>`;
     for(const r of [...result.components,...result.volumes]) {
       for(const message of r.diagnostics) h+=`<p class="ed-solve-message">${escapeHtml(message)}</p>`;
       if(!result.updates.length) for(const [id,residual] of Object.entries(r.residuals_w||{})) h+=`<p>${escapeHtml(working.nodes.find(n=>n.id===id)?.label||id)}: ${fmtPhysics(Math.abs(residual))} W ${residual>=0?'excess input':'excess output'}; allowed mismatch ${fmtPhysics(r.tolerances_w?.[id])} W</p>`;
@@ -4108,6 +4244,7 @@ document.addEventListener('change',async e=>{
   const input=e.target,r=physicalValues().find(r=>r.key===solveValue);
   if(input.hasAttribute('data-value-quantity')) {choosePhysics(input.value);return;}
   if(input.hasAttribute('data-value-filter')) {renderNavigator();return;}
+  if(input.hasAttribute('data-volume-steady') && input.checked && solveSession.data.control_volumes[Number(input.dataset.volumeSteady)].storage_relation){input.checked=false;toast('Switch to Manual storage power before selecting steady state.');return;}
   if(input.hasAttribute('data-volume-steady')) {sessionEdit(d=>{const v=d.control_volumes[Number(input.dataset.volumeSteady)];v.steady=input.checked;if(v.steady) delete v.storage;if(v.steady && d.analysis?.volumes?.[v.id]?.field==='storage') delete d.analysis.volumes[v.id];});return;}
   if(solveSession.stale) return;
   if(input.dataset.sessionSystem) {const ids=new Set(solveSession.systems??solveSession.assessment.systems.map(s=>s.id));if(input.checked) ids.add(input.dataset.sessionSystem);else ids.delete(input.dataset.sessionSystem);solveSession.systems=[...ids];sessionEdit(()=>{});return;}
@@ -4121,6 +4258,7 @@ document.addEventListener('change',async e=>{
   }
   if(input.hasAttribute('data-analysis-steady')) {sessionEdit(d=>{d.analysis||={};d.analysis.network||={unknowns:[]};d.analysis.network.steady=input.value==='steady';});return;}
   if(!r) return;
+  if(input.hasAttribute('data-physics-number') && (r.derived || r.role==='source'&&Number(input.value)<0&&!(Number(r.value)<0))){input.value=String(r.value??'');toast(r.derived?'Edit derivation inputs to change this value.':'Use a positive magnitude and an explicit source direction.');return;}
   if(input.hasAttribute('data-physics-use')) {setPhysicsUse(r,input.value);return;}
   sessionEdit(d=>{
     const obj=d[COLLECTION[r.role]][r.index];d.analysis||={};
@@ -4289,7 +4427,7 @@ function installMiniPickers() {
   }
   function open(field,button) {
     owner=field;start=field.selectionStart??field.value.length;end=field.selectionEnd??start;
-    const key=field.dataset.field||field.dataset.physical||'',isUnit=key.startsWith('unit:'),integer=key==='count',notation=['label','sub'].includes(key);
+    const key=field.hasAttribute('data-run-text')?'label':field.dataset.field||field.dataset.physical||'',isUnit=key.startsWith('unit:'),integer=key==='count',notation=['label','sub'].includes(key);
     const quantity=isUnit?key.slice(5):null;
     picker.replaceChildren();
     const search=document.createElement('input');search.type='search';search.placeholder='Find a symbol or unit';search.setAttribute('aria-label','Search picker');picker.appendChild(search);
@@ -4314,10 +4452,10 @@ function installMiniPickers() {
     const help=document.createElement('p');help.textContent='Inserts at the caret. Prefixes apply to the selected unit token. Escape closes; Undo restores inserted text.';picker.appendChild(help);
     const done=document.createElement('button');done.textContent='Close';done.onclick=close;picker.appendChild(done);
     search.oninput=()=>{for(const [b,text]of entries)b.hidden=!text.includes(search.value.toLowerCase());};
-    picker.hidden=false;underButton(picker,button);search.focus();
+    (field.closest('dialog')||document.body).appendChild(picker);picker.hidden=false;underButton(picker,button);search.focus();
   }
   function attach(root) {
-    for(const field of root.querySelectorAll('input[data-field],input[data-physical],input[data-physics-number],select[data-field="unit:T"]')) {
+    for(const field of root.querySelectorAll('input[data-field],input[data-physical],input[data-physics-number],input[data-run-text],select[data-field="unit:T"]')) {
       if(field.dataset.picker || field.readOnly || field.type==='checkbox' || ['count','angle','id'].includes(field.dataset.field))continue;
       field.dataset.picker='true';const b=document.createElement('button');b.type='button';b.className='ed-picker-button';b.textContent='⌨';b.setAttribute('aria-label','Open notation picker');b.title='Units and scientific notation';
       b.onpointerdown=e=>e.preventDefault();b.onclick=()=>open(field,b);
@@ -4333,6 +4471,7 @@ function installMiniPickers() {
     }
   }
   for(const root of [pop,valueFloat]) {new MutationObserver(()=>attach(root)).observe(root,{childList:true,subtree:true});attach(root);}
+  new MutationObserver(()=>{for(const root of document.querySelectorAll('.ed-assignment-dialog'))attach(root);}).observe(document.body,{childList:true,subtree:true});
   picker.onkeydown=e=>{if(e.key==='Escape'){e.preventDefault();e.stopPropagation();close();}};
   document.addEventListener('pointerdown',e=>{if(!picker.hidden && !picker.contains(e.target) && !e.target.closest('.ed-picker-button'))picker.hidden=true;});
 }
@@ -4391,6 +4530,7 @@ function dockInspector(sel) {
     const actions=pop.querySelector('[data-group-actions]');if(actions)footer.prepend(actions);
     // Physical relationships are already grouped semantically.
     for(const e of [...pop.querySelectorAll('fieldset,.ed-error,[data-budget],[data-review-budget]')])sections.get('Properties').appendChild(e);
+    const assignment=pop.querySelector('[data-assignment-open]');if(assignment)footer.prepend(assignment);
     pop.replaceChildren(header,nav,...sections.values(),footer);
     for(const [name,section] of sections){const help=document.createElement('button');help.type='button';help.className='ed-section-help';help.textContent='Help';help.onclick=()=>{
       let text=section.querySelector('.ed-section-explanation');if(text){text.remove();return;}
@@ -4479,3 +4619,7 @@ function installEditIcons(container){
 document.addEventListener('pointerdown',()=>document.body.classList.remove('ed-keyboard-navigation'),true);
 document.addEventListener('keydown',e=>{if(e.key==='Tab')document.body.classList.add('ed-keyboard-navigation');},true);
 new ResizeObserver(()=>document.documentElement.style.setProperty('--ed-toolbar-height',$('ed-top').getBoundingClientRect().height+'px')).observe($('ed-top'));
+
+pop.addEventListener("click", e=>{if(e.target.closest("[data-assignment-open]"))openAssignmentOptions(S.sel);});
+
+document.addEventListener('click',e=>{if(e.target.closest('[data-scenario-derivation]')) {const r=physicalValues().find(r=>r.key===solveValue);if(r)openAssignmentOptions({role:r.role,index:r.index},true);}});

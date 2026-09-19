@@ -165,8 +165,9 @@ power balance and a frost storage balance. Each uses the existing rectangular
 homework drawing. The hot plate solves to 199.942206 C; oven input is 1834.53 kW.
 
 This milestone solves constant-resistance networks, including identifiable resistance unknowns and one linear
-energy-balance unknown per volume. It does not derive resistance from material properties, convection or
-radiation laws, infer mass-carried energy from mass flow, solve stream branches,
+energy-balance unknown per volume. Explicit fixed-coefficient resistance and capacity derivations
+are supported as described in [Assignment workflows](assignment-workflows.md). It does not infer
+coefficients or radiation laws, infer mass-carried energy from mass flow, solve stream branches,
 integrate transients, find melting times, or couple multiple volume unknowns.
 Unsupported network streams and network flux without physical area are explicit
 diagnostics. General graph solving does not imply general automatic graph layout;
@@ -285,3 +286,7 @@ Missing/symbolic inputs and nonfinite numeric strings are never evidence of
 balance. The legacy checker reports unchecked inputs as notes (use `--strict`
 to make notes fail a gate). Numerical overflow cannot produce a successful
 analysis result. Physics analysis reports contain no NaN or Infinity values.
+
+## Assignment options in 1.1
+
+Open **Physics and document options** from Units or an object’s Properties to set network basis, check policy, compact layout, case grouping, structured labels, and physical derivations. See [assignment workflows](assignment-workflows.md) for the JSON/API contracts and limits. Each conversion or applied relation is one Undo step.

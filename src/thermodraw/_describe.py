@@ -196,6 +196,9 @@ class Description:
     # readers noted a source on the wrong node would leave it byte-identical.
     sources: List[Tuple[int, str, str, bool]] = field(default_factory=list)
     physical: Dict[str, Any] = field(default_factory=dict)
+    network_basis: Dict[str, Any] = field(default_factory=dict)
+    cases: List[Dict[str, Any]] = field(default_factory=list)
+    temperature_reference: Optional[str] = None
 
     def text(self):
         out = [f"{self.source}: canvas {self.canvas[0]:.0f} x "
@@ -239,8 +242,13 @@ class Description:
                 out.append(f"  {len(self.pieces)} pieces, not one network")
         if self.scale:
             what = "absolute" if self.scale == "absolute" \
-                else "rise above ambient"
+                else "rise above " + (self.temperature_reference or 'reference')
             out += ["", f"temperatures: {what}, in {self.temperature_unit}"]
+        if self.network_basis:
+            ref_basis=self.network_basis
+            out += ['', 'network basis: '+ref_basis.get('kind','total') + (f"; reference {ref_basis['value']} {ref_basis['unit']}" if ref_basis.get('kind') in ('area','length') else '')]
+        if self.cases:
+            out += ['', 'declared cases:']+[f"  {g['id']}: {', '.join(g['nodes'])}" for g in self.cases]
         if self.nodes:
             out += ["", "nodes:"]
             out += [f"  {i:<14.14s} {k:<8s} at ({x:.0f}, {y:.0f})"
@@ -253,11 +261,14 @@ class Description:
             out += [l.text() for l in self.lines]
         if self.physical:
             import json
-            out += ["", "physical model:", json.dumps(self.physical, ensure_ascii=True, indent=2)]
+            out += ["", "physical model:", json.dumps(self.physical, ensure_ascii=False, indent=2)]
         return "\n".join(out)
 
     def to_dict(self):
         return {
+            **({'network_basis':self.network_basis} if self.network_basis else {}),
+            **({'cases':self.cases} if self.cases else {}),
+            **({'temperature_reference':self.temperature_reference} if self.temperature_reference else {}),
             **({"physical": self.physical} if self.physical else {}),
             "source": self.source,
             "canvas": list(self.canvas),
@@ -416,6 +427,7 @@ def describe(diagram, size: Optional[Sequence[float]] = None,
     sources = [(i, p.ends[0], p.symbol.key, bool(p.outward))   # keys = kinds
                for i, p in enumerate(kept) if p.symbol is not None]
     return Description(
+        network_basis=diagram.network_basis, cases=diagram.cases, temperature_reference=diagram.temperature_reference,
         physical={key: value for key, value in diagram.to_dict().items()
                   if key in M.COLLECTIONS},
         source=source,

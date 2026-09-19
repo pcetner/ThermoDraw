@@ -34,6 +34,96 @@ def _refuse(exc: Exception) -> Dict[str, Any]:
     return {"error": str(exc)}
 
 
+def assignment_info(data):
+    """Structured inputs and evaluated equations for the contextual inspector."""
+    from .derivations import evaluate, INPUTS, FORMULAS
+    from ._compact import components
+    try:
+        d=Diagram.from_dict(data)
+        _,reports,errors=evaluate(d)
+        return {'inputs':INPUTS,'formulas':FORMULAS,'derivations':reports,
+                'diagnostics':errors,'components':components(d)}
+    except (ValueError,TypeError) as exc:return _refuse(exc)
+
+
+def assignment_edit(data, operation, payload):
+    """Prepare a validated document edit; the browser owns commit, stale guard and Undo."""
+    import copy
+    from ._extensions import convert_basis, network_scale
+    from ._compact import relayout, components
+    from ._physical import number
+    from .derivations import evaluate
+    from ._analysis import solve_physics
+    try:
+        d=Diagram.from_dict(data)
+        if operation=='basis':d=convert_basis(d,payload)
+        elif operation=='layout':
+            d.layout_options=payload['settings']
+            if payload.get('apply'):d=relayout(d,payload.get('node'))
+        elif operation=='policy':
+            d.analysis.update(check_policy=payload['policy'],tolerance=payload['tolerance'])
+        elif operation=='case':
+            ids=payload['nodes']
+            d.cases=[g for g in d.cases if not set(g['nodes'])&set(ids)]
+            if payload.get('id'):d.cases.append(payload)
+        elif operation=='reference':
+            d.scale=payload['scale'] or None
+            d.temperature_reference=payload.get('reference') or None
+        elif operation=='correct-source':
+            i=payload['index'];s=d.sources[i];n=number(s.value)
+            if n is None or n>=0:raise ValueError('Select a source with a negative numeric magnitude')
+            drawn=next(p for p in layout(d) if p.role=='source' and p.index==i and p.symbol is not None)
+            node=s.node;outward=s.outward
+            if s.kind!='flux':
+                n*=network_scale(d,'P' if s.kind=='diss' else 'q')/network_scale(d,'q')
+                s.kind='flow'
+            s.value=-n
+            s.source=None if outward else node;s.target=node if outward else None
+            s.at=list(drawn.at);s.angle=(drawn.angle+180)%360
+        elif operation=='rate':
+            d.branches[payload['index']].rate_convention='signed' if payload['signed'] else None
+        elif operation in ('calculate-rate','apply-rate'):
+            i=payload['index'];b=d.branches[i]
+            scenario=copy.deepcopy(d)
+            scenario.analysis.setdefault('network',{'steady':True,'unknowns':[n.id for n in d.nodes if n.kind=='free' and n.value in (None,'')]})
+            scenario.branches[i].rate=None
+            result=solve_physics(scenario,check_supplied=True)
+            component=next((c for c in result.components if b.source in c['nodes']),None)
+            if component is None or component['status']!='solved':
+                raise ValueError('Cannot calculate this rate: '+str(component['diagnostics'] if component else result.coverage))
+            rates: List[Dict[str, Any]] = component['branch_rates']
+            rate=next(r for r in rates if r.get('index')==i)
+            value=rate['watts']/network_scale(d,'q')
+            if operation=='calculate-rate':return {'value':value,'unit':d.units.get('q','W'),'watts':rate['watts'],'from':b.source,'to':b.target}
+            b.rate=value if b.rate_convention=='signed' else abs(value)
+        elif operation=='derivation':
+            b=d.branches[payload['index']];b.derivation=payload.get('derivation')
+            if b.derivation:
+                targets=d.analysis.get('network',{}).get('resistance_unknowns',[])
+                if payload['index'] in targets or b.id is not None and b.id in targets:
+                    if not payload.get('replace_unknown'): raise ValueError('Explicitly switch from an unknown resistance to a derivation')
+                    d.analysis['network']['resistance_unknowns']=[t for t in targets if t!=payload['index'] and t!=b.id]
+        elif operation=='storage':
+            v=d.control_volumes[payload['index']]
+            v.storage_relation=payload.get('relation')
+            if v.storage_relation:v.steady=False;v.storage=None
+        elif operation=='labels':
+            collections: Dict[str, Any] = {'node':d.nodes,'branch':d.branches,'source':d.sources,'region':d.regions,'volume':d.control_volumes,'surface':d.control_surfaces,'transfer':d.transfers,'annotation':d.annotations}
+            obj=collections[payload['role']][payload['index']]
+            obj.label_runs=payload.get('runs')
+            if obj.label_runs is not None:obj.label=''.join(r['text'] for r in obj.label_runs)
+            if hasattr(obj,'show_label'):obj.show_label=payload.get('show',True)
+            if hasattr(obj,'label_inside'):obj.label_inside=payload.get('inside',False)
+        else:raise ValueError('Unknown assignment edit')
+        d.validate()
+        if operation in ('derivation','storage'):
+            d,_,errors=evaluate(d)
+            if errors:raise ValueError('; '.join(e['where']+': '+e['message'] for e in errors))
+        return {'document':d.to_dict()}
+    except (ValueError,TypeError,KeyError,IndexError,OverflowError,ZeroDivisionError) as exc:
+        return _refuse(exc)
+
+
 def _hit(p, element: str, bounds: Sequence[float]) -> Dict[str, Any]:
     x0, y0, x1, y1 = bounds
     out: Dict[str, Any] = {
@@ -99,6 +189,7 @@ def scene(data: Dict[str, Any], notation: str = "boxes",
     composed = _render.compose(drawn, label_adornments=reserved)
     report = _check.check(diagram, physics=physics, _scene=composed, _placements_override=drawn)
     from ._physical import budgets
+    from .derivations import evaluate
     hit_map = _hits(drawn, composed)
     findings = report.to_dict()['findings']
     for finding in findings:
@@ -138,7 +229,7 @@ def scene(data: Dict[str, Any], notation: str = "boxes",
         "adornments": [{"role": r.owner.role, "index": r.owner.index,
                          "bounds": r.adornment, "clear": r.clear}
                         for r in composed.rects if r.adornment],
-        "budgets": budgets(diagram),
+        "budgets": budgets(evaluate(diagram)[0]),
     }
 
 

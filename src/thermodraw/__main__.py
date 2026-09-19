@@ -101,12 +101,12 @@ def _strict(report):
 
 def do_check(args):
     report = check(_load(args.diagram), size=args.size, source=args.diagram,
-                   physics=args.physics)
+                   physics=args.physics, check_policy=args.check_policy)
     if args.strict:
         report = _strict(report)
     out = _soften(sys.stdout)
     if args.json:
-        json.dump(report.to_dict(), out, indent=2, ensure_ascii=False)
+        json.dump(report.to_dict(), out, indent=2, ensure_ascii=True)
         out.write("\n")
     elif args.quiet:
         for finding in report.findings:
@@ -122,7 +122,7 @@ def do_describe(args):
     description = describe(_load(args.diagram), size=args.size,
                            source=args.diagram)
     if args.json:
-        json.dump(description.to_dict(), out, indent=2, ensure_ascii=False)
+        json.dump(description.to_dict(), out, indent=2, ensure_ascii=True)
         out.write("\n")
     else:
         print(description.text(), file=out)
@@ -187,10 +187,10 @@ def do_solve_physics(args):
         if args.apply:
             if not args.out or not assessment["applied"]:
                 raise DiagramError("--apply requires --out and a successful scenario proposal")
-            save(json.dumps(assessment["applied"], indent=2, ensure_ascii=False), args.out)
+            save(json.dumps(assessment["applied"], indent=2, ensure_ascii=True), args.out)
         elif args.out:
-            save(json.dumps(assessment, indent=2, ensure_ascii=False), args.out)
-        _soften(sys.stdout).write(json.dumps(assessment, indent=2, ensure_ascii=False) + "\n")
+            save(json.dumps(assessment, indent=2, ensure_ascii=True), args.out)
+        _soften(sys.stdout).write(json.dumps(assessment, indent=2, ensure_ascii=True) + "\n")
         return 0 if assessment["status"] == "solved" else 1
     result = solve_physics(diagram)
     if args.apply:
@@ -200,9 +200,9 @@ def do_solve_physics(args):
             raise DiagramError("no calculated values are available to apply")
         save(result.apply(diagram).to_json(), args.out)
     elif args.out:
-        save(json.dumps(result.to_dict(), indent=2, ensure_ascii=False), args.out)
+        save(json.dumps(result.to_dict(), indent=2, ensure_ascii=True), args.out)
     if args.json:
-        _soften(sys.stdout).write(json.dumps(result.to_dict(), indent=2, ensure_ascii=False) + "\n")
+        _soften(sys.stdout).write(json.dumps(result.to_dict(), indent=2, ensure_ascii=True) + "\n")
     else:
         print("Physics: " + result.status)
         for report in result.components + result.volumes:
@@ -227,6 +227,7 @@ def main(argv=None):
     c.add_argument("--quiet", action="store_true",
                    help="findings only, no summary line; silent when there "
                         "is nothing at all to report")
+    c.add_argument("--check-policy", choices=("legacy", "analysis"), help="temporary physics-check tolerance policy")
     c.add_argument("--physics", action="store_true",
                    help="also ask whether the stated numbers close at each "
                         "node")

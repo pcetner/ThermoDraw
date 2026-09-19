@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "thermodraw"
-version = "1.0.0"
+version = "1.1.0"
 description = "Thermal network diagrams for Python"
 readme = "README.md"
 requires-python = ">=3.10"

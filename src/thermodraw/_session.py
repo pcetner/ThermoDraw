@@ -7,10 +7,10 @@ from ._analysis_types import AssessmentReport, ValidAssessmentReport
 from ._analysis import fingerprint, solve_physics, resistance_index
 from .model import Diagram, DiagramError
 from ._physical import number
-from ._units import temperature, unit_scale
+from ._units import temperature, unit_scale, parse_unit
 
-EDITABLE = {"nodes": {"value"}, "branches": {"value", "rate", "mdot", "cp"},
-            "sources": {"value"}, "control_volumes": {"generation", "storage", "steady"},
+EDITABLE = {"nodes": {"value"}, "branches": {"value", "rate", "mdot", "cp", "derivation"},
+            "sources": {"value"}, "control_volumes": {"generation", "storage", "steady", "storage_relation"},
             "transfers": {"rate", "flux"}, "control_surfaces": {"area"}}
 
 
@@ -23,7 +23,15 @@ def convert_value(value, source_unit, target_unit, quantity, scale=None):
         try: result = temperature(n, source_unit, target_unit, scale)
         except ValueError as exc: raise DiagramError(str(exc)) from exc
     else:
-        try: result = n * unit_scale(source_unit, quantity) / unit_scale(target_unit, quantity)
+        try:
+            if quantity in ('R','q','P','rate'):
+                expected = ('K/W','K*m/W','K*m²/W') if quantity=='R' else ('W','W/m','W/m²')
+                source_scale,source_dim=parse_unit(source_unit)
+                target_scale,target_dim=parse_unit(target_unit)
+                if source_dim!=target_dim or source_dim not in [parse_unit(u)[1] for u in expected]:
+                    raise ValueError('source and target units must have matching resistance or rate dimensions')
+                result=n*source_scale/target_scale
+            else: result = n * unit_scale(source_unit, quantity) / unit_scale(target_unit, quantity)
         except (ValueError, KeyError, OverflowError) as exc:
             raise DiagramError("Unsupported unit conversion for " + quantity + ': ' + str(exc)) from exc
     if not math.isfinite(result):
@@ -89,10 +97,25 @@ def assess_physics(original: Union[Diagram, Dict[str, Any]],
     states = [r["status"] for r in result.components + result.volumes]
     result.status = ("not-configured" if not states else "solved" if all(s in ("solved", "balanced") for s in states)
                      else "partial" if any(s in ("solved", "balanced") for s in states) else "not-solved")
-    calculated = result.apply(effective) if result.updates else copy.deepcopy(effective)
+    from .derivations import evaluate
+    calculated = result.apply(effective) if result.updates else evaluate(effective)[0]
     proposal = copy.deepcopy(base)
     issues = [{"system": key, "status": r["status"], "message": message, "nodes": r.get("nodes", []), "volume": r.get("id")}
               for key, r in reports if key in selected for message in r["diagnostics"]]
+    # Capacity is evaluated independently of steady network paths, but an
+    # override shared by several storage budgets must apply with every consumer.
+    good_capacities, blocked_capacities = set(), set()
+    for old,new in zip(base.branches,effective.branches):
+        if new.kind!='cap' or not new.id: continue
+        consumers={v.id for v in effective.control_volumes if (v.storage_relation or {}).get('branch')==new.id}
+        changed=(old.value,old.derivation)!=(new.value,new.derivation)
+        if consumers and consumers <= good_volumes:
+            good_capacities.add(new.id)
+        elif consumers and changed:
+            blocked_capacities.add(new.id)
+            good_volumes-=consumers
+            issues.append({'status':'application-limited',
+                           'message':'Applying capacitance '+new.id+' requires all dependent storage budgets to be selected and successful.'})
     # Global unit/steady declarations cannot be applied to just part of a network.
     global_change = base.units != effective.units or base.scale != effective.scale or base.analysis.get("network", {}).get("steady") != effective.analysis.get("network", {}).get("steady")
     all_network_good = all(key in selected and r["status"] == "solved" for key, r in reports if key.startswith("network:"))
@@ -102,17 +125,20 @@ def assess_physics(original: Union[Diagram, Dict[str, Any]],
     if all_network_good:
         proposal.units = copy.deepcopy(effective.units)
         proposal.scale = effective.scale
-    tolerance_changed = base.analysis.get("tolerance", {}) != effective.analysis.get("tolerance", {})
+    tolerance_changed = (base.analysis.get("tolerance", {}) != effective.analysis.get("tolerance", {}) or base.analysis.get("check_policy", "legacy") != effective.analysis.get("check_policy", "legacy"))
     all_systems_good = bool(reports) and all(
         key in selected and r["status"] in ("solved", "balanced") for key, r in reports)
     if tolerance_changed:
         if all_systems_good:
+            if "check_policy" in effective.analysis: proposal.analysis["check_policy"] = effective.analysis["check_policy"]
+            else: proposal.analysis.pop("check_policy", None)
             if "tolerance" in effective.analysis:
                 proposal.analysis["tolerance"] = copy.deepcopy(effective.analysis["tolerance"])
             else:
                 proposal.analysis.pop("tolerance", None)
         else:
             good_nodes, good_volumes = set(), set()
+            good_capacities=set()
             issues.append({"status": "application-limited", "message":
                            "Applying shared tolerances requires every system to be selected and successful. Results remain available for copying."})
     changes = []
@@ -121,8 +147,8 @@ def assess_physics(original: Union[Diagram, Dict[str, Any]],
             if collection == "nodes":
                 allowed = old.id in good_nodes
             elif collection == "branches":
-                ends = {old.source, old.target}
-                allowed = ends <= good_nodes
+                ends = {old.source, old.target}-{'rail'}
+                allowed = (ends <= good_nodes or old.id in good_capacities) and old.id not in blocked_capacities
             elif collection == "sources":
                 allowed = old.node in good_nodes
             elif collection == "control_volumes":

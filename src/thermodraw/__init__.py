@@ -37,7 +37,10 @@ from .model import Branch, Diagram, DiagramError, Node, Rail, Source
 from .model import Region, ControlVolume, ControlSurface, Transfer, Annotation
 from .symbols import SYMBOLS, Symbol
 
-__version__ = "1.0.0"
+from .derivations import derive_resistance, derive_capacity, derive_storage
+from ._extensions import convert_basis
+
+__version__ = "1.1.0"
 __all__ = [
     # the data
     "Diagram", "Node", "Branch", "Source", "Rail", "DiagramError",
@@ -56,4 +59,5 @@ __all__ = [
     "save", "theme",
     # still public, for placing one symbol at a time
     "symbols", "core", "model", "io",
+    "derive_resistance", "derive_capacity", "derive_storage", "convert_basis",
 ]

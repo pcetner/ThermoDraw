@@ -1,0 +1,48 @@
+{
+  "title": "HW3 2.11 — glass assertion",
+  "units": {
+    "T": {
+      "unit": "°C",
+      "scale": "rise"
+    },
+    "R": "K/W",
+    "q": "W"
+  },
+  "nodes": [
+    {
+      "id": "n0",
+      "label": "Inner surface",
+      "kind": "fixed",
+      "value": 90
+    },
+    {
+      "id": "n1",
+      "label": "Outer reference",
+      "kind": "fixed",
+      "value": 0
+    }
+  ],
+  "branches": [
+    {
+      "id": "r0",
+      "from": "n0",
+      "to": "n1",
+      "kind": "cond",
+      "value": 0.078125,
+      "rate": 1000
+    }
+  ],
+  "analysis": {
+    "network": {
+      "steady": true,
+      "unknowns": []
+    },
+    "check_policy": "legacy"
+  },
+  "temperature_reference": "outer surface",
+  "layout_options": {
+    "max_width": 640,
+    "wrap": true,
+    "stack": true
+  }
+}
